@@ -1,10 +1,11 @@
 import { Component, input } from '@angular/core';
 import { Publication } from '../features/publications/models/publication.model';
+import { RouterLink } from '@angular/router';
 
 @Component({
   selector: 'app-publication-card',
   standalone: true,
-  imports: [],
+  imports: [RouterLink],
   templateUrl: './publication-card.html',
   styleUrl: './publication-card.scss'
 })
@@ -51,7 +52,6 @@ export class PublicationCard {
   }
 
   onImageError(event: Event): void {
-    console.log('Fallback ejecutado')
     const image = event.target as HTMLImageElement;
 
     image.onerror = null;

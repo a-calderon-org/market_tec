@@ -119,18 +119,18 @@
 
           <button
             class="filter-option"
-            [class.filter-option--active]="selectedCategory() === 'alquileres'"
+            [class.filter-option--active]="selectedCategory() === 'alquiler'"
             type="button"
-            (click)="selectCategory('alquileres')"
+            (click)="selectCategory('alquiler')"
           >
             Alquileres
           </button>
 
           <button
             class="filter-option"
-            [class.filter-option--active]="selectedCategory() === 'tutorias'"
+            [class.filter-option--active]="selectedCategory() === 'tutoria'"
             type="button"
-            (click)="selectCategory('tutorias')"
+            (click)="selectCategory('tutoria')"
           >
             Tutorías
           </button>
@@ -146,6 +146,7 @@
               <input
                 type="number"
                 min="0"
+                step="1"
                 placeholder="₡ 5000"
                 [value]="minPrice() ?? ''"
                 (input)="onMinPriceChange($event)"
@@ -158,6 +159,7 @@
               <input
                 type="number"
                 min="0"
+                step="1"
                 placeholder="₡ 200000"
                 [value]="maxPrice() ?? ''"
                 (input)="onMaxPriceChange($event)"
