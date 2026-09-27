@@ -13,8 +13,8 @@
         No fue posible cargar la publicación solicitada.
       </p>
 
-      <a routerLink="/">
-        ← Volver a publicaciones
+      <a [routerLink]="backRoute()">
+        ← {{ backLabel() }}
       </a>
     </div>
   }
@@ -32,21 +32,33 @@
 
         <span>›</span>
 
-        <span>
-          {{ formatCategory(item.categoria) }}
-        </span>
+        @if (fromMyPublications()) {
+          <a routerLink="/mis-publicaciones">
+            Mis Publicaciones
+          </a>
 
-        <span>›</span>
+          <span>›</span>
 
-        <span>
-          {{ formatCategory(item.subcategoria) }}
-        </span>
+          <strong>
+            {{ item.titulo }}
+          </strong>
+        } @else {
+          <span>
+            {{ formatCategory(item.categoria) }}
+          </span>
 
-        <span>›</span>
+          <span>›</span>
 
-        <strong>
-          {{ item.titulo }}
-        </strong>
+          <span>
+            {{ formatCategory(item.subcategoria) }}
+          </span>
+
+          <span>›</span>
+
+          <strong>
+            {{ item.titulo }}
+          </strong>
+        }
       </nav>
 
       <header class="publication-header">

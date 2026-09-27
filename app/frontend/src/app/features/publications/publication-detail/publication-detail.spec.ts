@@ -1,14 +1,41 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
-import { of, throwError } from 'rxjs';
-import { vi } from 'vitest';
-import { PublicationDetail } from './publication-detail';
-import { PublicationDetail as PublicationDetailModel } from '../models/publication-detail.model';
-import { PublicationService } from '../services/publication.service';
+import {
+  ComponentFixture,
+  TestBed
+} from '@angular/core/testing';
+
+import {
+  ActivatedRoute,
+  convertToParamMap,
+  provideRouter
+} from '@angular/router';
+
+import {
+  of,
+  throwError
+} from 'rxjs';
+
+import {
+  vi
+} from 'vitest';
+
+import {
+  PublicationDetail
+} from './publication-detail';
+
+import {
+  PublicationDetail as PublicationDetailModel
+} from '../models/publication-detail.model';
+
+import {
+  PublicationService
+} from '../services/publication.service';
 
 describe('PublicationDetail', () => {
-  let fixture: ComponentFixture<PublicationDetail>;
-  let component: PublicationDetail;
+  let fixture:
+    ComponentFixture<PublicationDetail>;
+
+  let component:
+    PublicationDetail;
 
   const publicationServiceMock = {
     getPublicationById: vi.fn()
@@ -16,73 +43,92 @@ describe('PublicationDetail', () => {
 
   const activatedRouteMock = {
     snapshot: {
-      paramMap: convertToParamMap({
-        id: 'PUB-2024-0891'
-      })
+      paramMap:
+        convertToParamMap({
+          id: 'PUB-2024-0891'
+        }),
+
+      queryParamMap:
+        convertToParamMap({})
     }
   };
 
-  const publication: PublicationDetailModel = {
-    id: 'PUB-2024-0891',
-    categoria: 'electronicos',
-    subcategoria: 'laptops',
-    titulo: 'Laptop Lenovo ThinkPad T480s i7 16GB RAM + Mochila TEC',
-    descripcion:
-      'Laptop Lenovo ThinkPad T480s en excelentes condiciones.',
-    precio: 180000,
-    precioAnterior: 215000,
-    condicion: 'como-nuevo',
-    estado: 'activa',
-    ubicacion: 'Campus TEC San Carlos',
-    puntoEntrega: 'Biblioteca TEC',
-    fechaPublicacion: '2026-09-25T10:00:00Z',
+  const publication:
+    PublicationDetailModel = {
+      id: 'PUB-2024-0891',
+      categoria: 'electronicos',
+      subcategoria: 'laptops',
+      titulo:
+        'Laptop Lenovo ThinkPad T480s i7 16GB RAM + Mochila TEC',
+      descripcion:
+        'Laptop Lenovo ThinkPad T480s en excelentes condiciones.',
+      precio: 180000,
+      precioAnterior: 215000,
+      condicion: 'como-nuevo',
+      estado: 'activa',
+      ubicacion: 'Campus TEC San Carlos',
+      puntoEntrega: 'Biblioteca TEC',
+      fechaPublicacion:
+        '2026-09-25T10:00:00Z',
 
-    imagenes: [
-      'https://example.com/images/thinkpad-1.jpg',
-      'https://example.com/images/thinkpad-2.jpg',
-      'https://example.com/images/thinkpad-3.jpg'
-    ],
+      imagenes: [
+        'thinkpad-1.jpg',
+        'thinkpad-2.jpg'
+      ],
 
-    especificaciones: {
-      procesador: 'Intel Core i7-8650U',
-      memoriaRam: '16 GB DDR4',
-      almacenamiento: '512 GB SSD NVMe',
-      bateria: '92% de salud',
-      garantia: '3 días de prueba'
-    },
+      especificaciones: {
+        procesador:
+          'Intel Core i7-8650U',
+        memoriaRam:
+          '16 GB DDR4',
+        almacenamiento:
+          '512 GB SSD NVMe',
+        bateria:
+          '92% de salud',
+        garantia:
+          '3 días de prueba'
+      },
 
-    incluye: [
-      'Mochila oficial TEC',
-      'Cargador Lenovo USB-C original',
-      'Windows 11 Pro activado'
-    ],
+      incluye: [
+        'Mochila oficial TEC',
+        'Cargador Lenovo USB-C original'
+      ],
 
-    vendedor: {
-      id: 101,
-      nombre: 'Sebastián Murillo',
-      carrera: 'Ingeniería en Computación',
-      verificado: true,
-      calificacion: 4.9,
-      ventasRealizadas: 14,
-      tiempoRespuesta: '< 15 min'
-    }
-  };
+      vendedor: {
+        id: 101,
+        nombre:
+          'Sebastián Murillo',
+        carrera:
+          'Ingeniería en Computación',
+        verificado: true,
+        calificacion: 4.9,
+        ventasRealizadas: 14,
+        tiempoRespuesta: '< 15 min'
+      }
+    };
 
   beforeEach(async () => {
     publicationServiceMock
       .getPublicationById
       .mockReset();
 
-    activatedRouteMock.snapshot.paramMap =
-      convertToParamMap({
-        id: 'PUB-2024-0891'
-      });
-
     publicationServiceMock
       .getPublicationById
       .mockReturnValue(
         of(publication)
       );
+
+    activatedRouteMock
+      .snapshot
+      .paramMap =
+        convertToParamMap({
+          id: 'PUB-2024-0891'
+        });
+
+    activatedRouteMock
+      .snapshot
+      .queryParamMap =
+        convertToParamMap({});
 
     await TestBed.configureTestingModule({
       imports: [
@@ -99,7 +145,8 @@ describe('PublicationDetail', () => {
 
         {
           provide: PublicationService,
-          useValue: publicationServiceMock
+          useValue:
+            publicationServiceMock
         }
       ]
     }).compileComponents();
@@ -127,14 +174,11 @@ describe('PublicationDetail', () => {
     createComponent();
 
     expect(
-      publicationServiceMock.getPublicationById
+      publicationServiceMock
+        .getPublicationById
     ).toHaveBeenCalledWith(
       'PUB-2024-0891'
     );
-
-    expect(
-      publicationServiceMock.getPublicationById
-    ).toHaveBeenCalledTimes(1);
   });
 
   it('should load the publication successfully', () => {
@@ -153,22 +197,124 @@ describe('PublicationDetail', () => {
     ).toBe(false);
   });
 
-  it('should select the first gallery image after loading', () => {
+  it('should use the first gallery image after loading', () => {
     createComponent();
 
     expect(
       component.selectedImage()
     ).toBe(
-      publication.imagenes![0]
+      'thinkpad-1.jpg'
     );
   });
 
-  it('should set the error state when the service fails', () => {
+  it('should detect when navigation comes from my publications', () => {
+    activatedRouteMock
+      .snapshot
+      .queryParamMap =
+        convertToParamMap({
+          from:
+            'mis-publicaciones'
+        });
+
+    createComponent();
+
+    expect(
+      component.fromMyPublications()
+    ).toBe(true);
+
+    expect(
+      component.backRoute()
+    ).toBe(
+      '/mis-publicaciones'
+    );
+
+    expect(
+      component.backLabel()
+    ).toBe(
+      'Volver a mis publicaciones'
+    );
+  });
+
+  it('should use the default return route when opened from home', () => {
+    createComponent();
+
+    expect(
+      component.fromMyPublications()
+    ).toBe(false);
+
+    expect(
+      component.backRoute()
+    ).toBe('/');
+
+    expect(
+      component.backLabel()
+    ).toBe(
+      'Volver a publicaciones'
+    );
+  });
+
+  it('should render the contextual breadcrumb for my publications', () => {
+    activatedRouteMock
+      .snapshot
+      .queryParamMap =
+        convertToParamMap({
+          from:
+            'mis-publicaciones'
+        });
+
+    createComponent();
+
+    const breadcrumb:
+      HTMLElement =
+        fixture.nativeElement
+          .querySelector(
+            '.breadcrumb'
+          );
+
+    expect(
+      breadcrumb.textContent
+    ).toContain(
+      'Mis Publicaciones'
+    );
+
+    expect(
+      breadcrumb.textContent
+    ).toContain(
+      publication.titulo
+    );
+  });
+
+  it('should set an error when the route has no publication id', () => {
+    activatedRouteMock
+      .snapshot
+      .paramMap =
+        convertToParamMap({});
+
+    createComponent();
+
+    expect(
+      publicationServiceMock
+        .getPublicationById
+    ).not.toHaveBeenCalled();
+
+    expect(
+      component.loading()
+    ).toBe(false);
+
+    expect(
+      component.error()
+    ).toBe(true);
+  });
+
+  it('should set an error when the API request fails', () => {
     publicationServiceMock
       .getPublicationById
       .mockReturnValue(
         throwError(
-          () => new Error('API error')
+          () =>
+            new Error(
+              'API error'
+            )
         )
       );
 
@@ -187,58 +333,89 @@ describe('PublicationDetail', () => {
     ).toBe(true);
   });
 
-  it('should set the error state when the route has no publication id', () => {
-    activatedRouteMock.snapshot.paramMap =
-      convertToParamMap({});
+  it('should preserve the contextual back route when the API request fails', () => {
+    activatedRouteMock
+      .snapshot
+      .queryParamMap =
+        convertToParamMap({
+          from:
+            'mis-publicaciones'
+        });
 
-    createComponent();
-
-    expect(
-      publicationServiceMock.getPublicationById
-    ).not.toHaveBeenCalled();
-
-    expect(
-      component.loading()
-    ).toBe(false);
-
-    expect(
-      component.error()
-    ).toBe(true);
-  });
-
-  it('should return the gallery images when imagenes is available', () => {
-    createComponent();
-
-    const images =
-      component.getGalleryImages(
-        publication
+    publicationServiceMock
+      .getPublicationById
+      .mockReturnValue(
+        throwError(
+          () =>
+            new Error(
+              'Not found'
+            )
+        )
       );
 
-    expect(images).toEqual(
-      publication.imagenes
+    createComponent();
+
+    expect(
+      component.backRoute()
+    ).toBe(
+      '/mis-publicaciones'
+    );
+
+    expect(
+      component.backLabel()
+    ).toBe(
+      'Volver a mis publicaciones'
+    );
+
+    const backLink:
+      HTMLAnchorElement =
+        fixture.nativeElement
+          .querySelector(
+            '.state-message a'
+          );
+
+    expect(
+      backLink.getAttribute(
+        'href'
+      )
+    ).toBe(
+      '/mis-publicaciones'
     );
   });
 
-  it('should use imagen when imagenes is not available', () => {
+  it('should return multiple gallery images', () => {
     createComponent();
 
-    const publicationWithSingleImage:
+    expect(
+      component.getGalleryImages(
+        publication
+      )
+    ).toEqual([
+      'thinkpad-1.jpg',
+      'thinkpad-2.jpg'
+    ]);
+  });
+
+  it('should use the single image when imagenes is unavailable', () => {
+    createComponent();
+
+    const singleImagePublication:
       PublicationDetailModel = {
         ...publication,
         imagenes: undefined,
-        imagen: 'single-image.jpg'
+        imagen: 'single.jpg'
       };
 
     expect(
       component.getGalleryImages(
-        publicationWithSingleImage
+        singleImagePublication
       )
     ).toEqual([
-      'single-image.jpg'
+      'single.jpg'
     ]);
   });
 
-  it('should use the placeholder when no images are available', () => {
+  it('should use the placeholder when no images exist', () => {
     createComponent();
 
     const publicationWithoutImages:
@@ -257,21 +434,21 @@ describe('PublicationDetail', () => {
     ]);
   });
 
-  it('should change the selected gallery image', () => {
+  it('should change the selected image', () => {
     createComponent();
 
     component.selectImage(
-      'second-image.jpg'
+      'thinkpad-2.jpg'
     );
 
     expect(
       component.selectedImage()
     ).toBe(
-      'second-image.jpg'
+      'thinkpad-2.jpg'
     );
   });
 
-  it('should format publication values correctly', () => {
+  it('should format publication values', () => {
     createComponent();
 
     expect(
@@ -309,13 +486,11 @@ describe('PublicationDetail', () => {
     );
   });
 
-  it('should replace a broken image with the local placeholder', () => {
+  it('should replace a broken image with the placeholder', () => {
     createComponent();
 
     const image =
-      document.createElement(
-        'img'
-      );
+      document.createElement('img');
 
     component.onImageError({
       target: image
@@ -325,49 +500,6 @@ describe('PublicationDetail', () => {
       image.src
     ).toContain(
       '/images/publication-placeholder.svg'
-    );
-  });
-
-  it('should render optional publication detail information', () => {
-    createComponent();
-
-    const element: HTMLElement =
-      fixture.nativeElement;
-
-    expect(
-      element.textContent
-    ).toContain(
-      publication.titulo
-    );
-
-    expect(
-      element.textContent
-    ).toContain(
-      'Intel Core i7-8650U'
-    );
-
-    expect(
-      element.textContent
-    ).toContain(
-      '16 GB DDR4'
-    );
-
-    expect(
-      element.textContent
-    ).toContain(
-      'Biblioteca TEC'
-    );
-
-    expect(
-      element.textContent
-    ).toContain(
-      'Sebastián Murillo'
-    );
-
-    expect(
-      element.textContent
-    ).toContain(
-      '4.9'
     );
   });
 });

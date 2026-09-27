@@ -15,12 +15,27 @@ export class PublicationDetail implements OnInit {
   private readonly publicationService = inject(PublicationService);
 
   readonly publication = signal<PublicationDetailModel | null>(null);
-  readonly selectedImage = signal<string>('/images/publication-placeholder.svg');
+  readonly selectedImage = signal<string>(
+    '/images/publication-placeholder.svg'
+  );
+
+  readonly backRoute = signal('/');
+  readonly fromMyPublications = signal(false);
+  readonly backLabel = signal('Volver a publicaciones');
 
   readonly loading = signal(true);
   readonly error = signal(false);
 
   ngOnInit(): void {
+    const source =
+      this.route.snapshot.queryParamMap.get('from');
+
+    if (source === 'mis-publicaciones') {
+      this.fromMyPublications.set(true);
+      this.backRoute.set('/mis-publicaciones');
+      this.backLabel.set('Volver a mis publicaciones');
+    }
+
     const publicationId =
       this.route.snapshot.paramMap.get('id');
 
@@ -63,7 +78,9 @@ export class PublicationDetail implements OnInit {
       });
   }
 
-  getGalleryImages(publication: PublicationDetailModel): string[] {
+  getGalleryImages(
+    publication: PublicationDetailModel
+  ): string[] {
     if (
       publication.imagenes &&
       publication.imagenes.length > 0
