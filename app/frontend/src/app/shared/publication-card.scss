@@ -1,0 +1,129 @@
+.publication-card {
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #e7e8ef;
+  border-radius: 14px;
+  box-shadow: 0 2px 8px rgb(20 30 55 / 4%);
+}
+
+.publication-card__image-container {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: #eef0f6;
+}
+
+.publication-card__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.publication-card__badges {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: flex;
+  gap: 6px;
+}
+
+.badge {
+  padding: 5px 9px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: #fff;
+  border-radius: 999px;
+}
+
+.badge--category {
+  color: #fff;
+  background: #00628f;
+}
+
+.publication-card__favorite {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+
+  width: 36px;
+  height: 36px;
+
+  font-size: 1.25rem;
+
+  background: rgb(255 255 255 / 90%);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.publication-card__content {
+  padding: 14px;
+}
+
+.publication-card__price-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.publication-card__price {
+  color: #00628f;
+  font-size: 1.25rem;
+}
+
+.publication-card__date {
+  color: #686b76;
+  font-size: 0.78rem;
+}
+
+.publication-card__title {
+  margin: 8px 0 5px;
+
+  overflow: hidden;
+
+  font-size: 1.05rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.publication-card__description {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+
+  color: #626572;
+  font-size: 0.82rem;
+  line-height: 1.4;
+
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.publication-card__seller {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 12px 0;
+
+  font-size: 0.78rem;
+}
+
+.publication-card__verified {
+  padding: 3px 6px;
+  color: #00628f;
+  background: #dff1ff;
+  border-radius: 5px;
+}
+
+.publication-card__details {
+  width: 100%;
+  padding: 10px;
+
+  color: #fff;
+  font-weight: 600;
+
+  background: #5047e5;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}

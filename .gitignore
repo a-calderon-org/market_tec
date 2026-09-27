@@ -11,6 +11,9 @@ dist/
 .env
 .env.local
 
+#Angular local evironment
+app/frontend/src/environments/environment.ts
+
 # macOS
 .DS_Store
 

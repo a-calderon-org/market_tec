@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <rect width="800" height="600" fill="#eef0f6"></rect>
+  <g fill="none" stroke="#8b93a7" stroke-width="20">
+    <rect x="230" y="160" width="340" height="240" rx="20"></rect>
+    <path d="M270 350l90-90 70 70 50-50 70 70"></path>
+    <circle cx="460" cy="235" r="30"></circle>
+  </g>
+  <text x="400" y="470" text-anchor="middle" font-family="Arial, sans-serif" font-size="32" fill="#687084">
+    MarketTec
+  </text>
+</svg>
