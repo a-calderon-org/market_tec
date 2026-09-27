@@ -1,0 +1,64 @@
+<article class="publication-card">
+  <div class="publication-card__image-container">
+    <img
+      class="publication-card__image"
+      [src]="publication().imagen"
+      [alt]="publication().titulo"
+      (error)="onImageError($event)"
+    >
+
+    <div class="publication-card__badges">
+      <span class="badge badge--category">
+        {{ publication().categoria }}
+      </span>
+
+      @if (publication().condicion) {
+        <span class="badge">
+          {{ formatCondition(publication().condicion) }}
+        </span>
+      }
+    </div>
+
+    <button
+      class="publication-card__favorite"
+      type="button"
+      aria-label="Guardar publicación"
+    >
+      ♡
+    </button>
+  </div>
+
+  <div class="publication-card__content">
+    <div class="publication-card__price-row">
+      <strong class="publication-card__price">
+        ₡{{ formatPrice(publication().precio) }}
+      </strong>
+
+      <span class="publication-card__date">
+        {{ formatRelativeDate(publication().fechaPublicacion) }}
+      </span>
+    </div>
+
+    <h2 class="publication-card__title">
+      {{ publication().titulo }}
+    </h2>
+
+    <p class="publication-card__description">
+      {{ publication().descripcion }}
+    </p>
+
+    <div class="publication-card__seller">
+      <span>{{ publication().vendedor.nombre }}</span>
+
+      @if (publication().vendedor.verificado) {
+        <span class="publication-card__verified">
+          TEC Verificado
+        </span>
+      }
+    </div>
+
+    <button class="publication-card__details" type="button">
+      Ver detalles →
+    </button>
+  </div>
+</article>

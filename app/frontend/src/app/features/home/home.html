@@ -1,0 +1,261 @@
+<main class="home">
+  <header class="home__header">
+    <div class="home__header-content">
+      <div>
+        <p class="home__breadcrumb">
+          Inicio › <strong>Explorar</strong>
+        </p>
+
+        <h1>Explorar publicaciones en Campus San Carlos</h1>
+
+        <p class="home__result-summary">
+          <span class="status-dot"></span>
+          Mostrando {{ totalRecords() }} publicaciones encontradas en la comunidad TEC
+        </p>
+      </div>
+
+      <div class="home__security-message">
+        Transacciones 100% presenciales en zonas seguras del campus
+      </div>
+    </div>
+  </header>
+
+  <section class="home__content">
+    <section class="toolbar">
+      <div class="toolbar__top">
+        <label class="search">
+          <span>⌕</span>
+
+          <input
+            type="search"
+            placeholder="Buscar publicaciones..."
+            [value]="searchTerm()"
+            (input)="onSearch($event)"
+          >
+        </label>
+
+        <select
+          class="sort-button"
+          [value]="sortBy()"
+          (change)="onSortChange($event)"
+        >
+          <option value="recent">
+            Más recientes
+          </option>
+
+          <option value="price-asc">
+            Precio: menor a mayor
+          </option>
+
+          <option value="price-desc">
+            Precio: mayor a menor
+          </option>
+        </select>
+
+        <div class="view-toggle">
+          <button
+            type="button"
+            aria-label="Vista en cuadrícula"
+          >
+            ▦
+          </button>
+
+          <button
+            type="button"
+            aria-label="Vista en lista"
+          >
+            ☷
+          </button>
+        </div>
+      </div>
+
+      <div class="toolbar__filters">
+        <span>
+          Filtros activos
+        </span>
+
+        <button
+          type="button"
+          (click)="resetFilters()"
+        >
+          Limpiar todos los filtros
+        </button>
+      </div>
+    </section>
+
+    <div class="marketplace">
+      <aside class="filters">
+        <div class="filters__title">
+          <h2>Filtros</h2>
+
+          <button
+            type="button"
+            (click)="resetFilters()"
+          >
+            Restablecer
+          </button>
+        </div>
+
+        <section class="filters__section">
+          <h3>Categoría principal</h3>
+
+          <button
+            class="filter-option"
+            [class.filter-option--active]="selectedCategory() === null"
+            type="button"
+            (click)="selectCategory(null)"
+          >
+            Todas las categorías
+          </button>
+
+          <button
+            class="filter-option"
+            [class.filter-option--active]="selectedCategory() === 'electronicos'"
+            type="button"
+            (click)="selectCategory('electronicos')"
+          >
+            Electrónicos
+          </button>
+
+          <button
+            class="filter-option"
+            [class.filter-option--active]="selectedCategory() === 'alquileres'"
+            type="button"
+            (click)="selectCategory('alquileres')"
+          >
+            Alquileres
+          </button>
+
+          <button
+            class="filter-option"
+            [class.filter-option--active]="selectedCategory() === 'tutorias'"
+            type="button"
+            (click)="selectCategory('tutorias')"
+          >
+            Tutorías
+          </button>
+        </section>
+
+        <section class="filters__section">
+          <h3>Rango de precio</h3>
+
+          <div class="price-range">
+            <label>
+              <span>Mínimo</span>
+
+              <input
+                type="number"
+                min="0"
+                placeholder="₡ 5000"
+                [value]="minPrice() ?? ''"
+                (input)="onMinPriceChange($event)"
+              >
+            </label>
+
+            <label>
+              <span>Máximo</span>
+
+              <input
+                type="number"
+                min="0"
+                placeholder="₡ 200000"
+                [value]="maxPrice() ?? ''"
+                (input)="onMaxPriceChange($event)"
+              >
+            </label>
+          </div>
+        </section>
+
+        <p class="filters__hint">
+          Los filtros se aplican automáticamente.
+        </p>
+      </aside>
+
+      <section class="results">
+        @if (loading()) {
+          <div class="state-message">
+            Cargando publicaciones...
+          </div>
+        }
+
+        @if (error()) {
+          <div class="state-message state-message--error">
+            <p>
+              No fue posible cargar las publicaciones.
+            </p>
+
+            <button
+              type="button"
+              (click)="loadPublications()"
+            >
+              Reintentar
+            </button>
+          </div>
+        }
+
+        @if (!loading() && !error()) {
+          @if (publications().length > 0) {
+            <div class="publication-grid">
+              @for (
+                publication of publications();
+                track publication.id
+              ) {
+                <app-publication-card
+                  [publication]="publication"
+                />
+              }
+            </div>
+
+            <footer class="pagination">
+              <span>
+                Mostrar
+                <strong>
+                  {{ pageSize() }} por página
+                </strong>
+                de {{ totalRecords() }} publicaciones
+              </span>
+
+              <nav
+                class="pagination__controls"
+                aria-label="Paginación"
+              >
+                <button
+                  type="button"
+                  disabled
+                >
+                  ‹ Anterior
+                </button>
+
+                <button
+                  class="pagination__page pagination__page--active"
+                  type="button"
+                >
+                  {{ page() }}
+                </button>
+
+                <button
+                  type="button"
+                >
+                  Siguiente ›
+                </button>
+              </nav>
+            </footer>
+          } @else {
+            <div class="state-message">
+              <p>
+                No se encontraron publicaciones con los filtros seleccionados.
+              </p>
+
+              <button
+                type="button"
+                (click)="resetFilters()"
+              >
+                Limpiar filtros
+              </button>
+            </div>
+          }
+        }
+      </section>
+    </div>
+  </section>
+</main>
