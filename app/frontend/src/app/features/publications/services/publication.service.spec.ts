@@ -1,19 +1,45 @@
-import { TestBed } from '@angular/core/testing';
-import { firstValueFrom, of } from 'rxjs';
-import { vi } from 'vitest';
-import { ApiClientService } from '../../../core/api/api-client.service';
-import { Publication } from '../models/publication.model';
-import { PublicationDetail } from '../models/publication-detail.model';
-import { PublicationService } from './publication.service';
+import {
+  TestBed
+} from '@angular/core/testing';
+
+import {
+  firstValueFrom,
+  of
+} from 'rxjs';
+
+import {
+  vi
+} from 'vitest';
+
+import {
+  ApiClientService
+} from '../../../core/api/api-client.service';
+
+import {
+  Publication
+} from '../models/publication.model';
+
+import {
+  PublicationDetail
+} from '../models/publication-detail.model';
+
+import {
+  UserPublication
+} from '../models/my-publications.model';
+
+import {
+  PublicationService
+} from './publication.service';
 
 describe('PublicationService', () => {
-  let service: PublicationService;
+  let service:
+    PublicationService;
 
   const apiClientMock = {
     get: vi.fn()
   };
 
-  const publicationsResponse = {
+  const publicationList = {
     totalRecords: 1,
     page: 1,
     pageSize: 12,
@@ -23,18 +49,22 @@ describe('PublicationService', () => {
         id: 'PUB-2024-0891',
         categoria: 'electronicos',
         subcategoria: 'laptops',
-        titulo: 'Lenovo ThinkPad T480s',
-        descripcion: 'Laptop en excelente estado',
+        titulo: 'Lenovo ThinkPad',
+        descripcion:
+          'Laptop en excelente estado',
         precio: 145000,
         condicion: 'como-nuevo',
-        ubicacion: 'Campus TEC San Carlos',
+        ubicacion:
+          'Campus TEC San Carlos',
         imagen: 'lenovo.jpg',
-        fechaPublicacion: '2026-09-25T10:00:00',
+        fechaPublicacion:
+          '2026-09-25T10:00:00',
         estado: 'activa',
 
         vendedor: {
           id: 101,
-          nombre: 'Sebastián Murillo',
+          nombre:
+            'Sebastián Murillo',
           carrera: 'Computación',
           verificado: true
         }
@@ -47,26 +77,40 @@ describe('PublicationService', () => {
       id: 'PUB-2024-0891',
       categoria: 'electronicos',
       subcategoria: 'laptops',
-      titulo: 'Lenovo ThinkPad T480s',
-      descripcion: 'Laptop en excelente estado',
+      titulo: 'Lenovo ThinkPad',
+      descripcion:
+        'Laptop en excelente estado',
       precio: 180000,
-      precioAnterior: 215000,
       condicion: 'como-nuevo',
       estado: 'activa',
-      ubicacion: 'Campus TEC San Carlos',
-      puntoEntrega: 'Biblioteca TEC',
-      fechaPublicacion: '2026-09-25T10:00:00Z',
-
-      imagenes: [
-        'thinkpad-1.jpg'
-      ],
+      ubicacion:
+        'Campus TEC San Carlos',
+      fechaPublicacion:
+        '2026-09-25T10:00:00Z',
 
       vendedor: {
         id: 101,
-        nombre: 'Sebastián Murillo',
+        nombre:
+          'Sebastián Murillo',
         carrera: 'Computación',
         verificado: true
       }
+    };
+
+  const userPublication:
+    UserPublication = {
+      id: 'PUB-2024-0891',
+      titulo: 'Lenovo ThinkPad',
+      categoria: 'electronicos',
+      subcategoria: 'laptops',
+      precio: 180000,
+      condicion: 'como-nuevo',
+      estado: 'activa',
+      ubicacion:
+        'Campus TEC San Carlos',
+      imagen: 'lenovo.jpg',
+      fechaPublicacion:
+        '2026-09-20T10:00:00Z'
     };
 
   beforeEach(() => {
@@ -96,7 +140,7 @@ describe('PublicationService', () => {
   it('should request the publications list', async () => {
     apiClientMock.get
       .mockReturnValue(
-        of(publicationsResponse)
+        of(publicationList)
       );
 
     const response =
@@ -113,7 +157,7 @@ describe('PublicationService', () => {
     expect(
       response
     ).toEqual(
-      publicationsResponse
+      publicationList
     );
   });
 
@@ -140,6 +184,41 @@ describe('PublicationService', () => {
       response
     ).toEqual(
       publicationDetail
+    );
+  });
+
+  it('should request publications for a user', async () => {
+    const responseMock = {
+      totalRecords: 1,
+      page: 1,
+      pageSize: 10,
+      items: [
+        userPublication
+      ]
+    };
+
+    apiClientMock.get
+      .mockReturnValue(
+        of(responseMock)
+      );
+
+    const response =
+      await firstValueFrom(
+        service.getUserPublications(
+          'USR-001'
+        )
+      );
+
+    expect(
+      apiClientMock.get
+    ).toHaveBeenCalledWith(
+      '/usuarios/USR-001/publicaciones'
+    );
+
+    expect(
+      response
+    ).toEqual(
+      responseMock
     );
   });
 });

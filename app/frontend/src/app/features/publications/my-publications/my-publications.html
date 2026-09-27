@@ -1,0 +1,422 @@
+<main class="my-publications">
+  <div class="my-publications__container">
+
+    <nav class="breadcrumb">
+      <a routerLink="/">
+        Inicio
+      </a>
+
+      <span>›</span>
+
+      <strong>
+        Mis Publicaciones
+      </strong>
+    </nav>
+
+    <header class="page-header">
+      <div>
+        <div class="page-header__title">
+          <h1>
+            Mis Publicaciones
+          </h1>
+
+          <span>
+            {{ totalRecords() }} registros
+          </span>
+        </div>
+
+        <p>
+          Administra y consulta tus publicaciones
+          dentro de la comunidad estudiantil del
+          TEC Campus San Carlos.
+        </p>
+      </div>
+    </header>
+
+    @if (loading()) {
+      <div class="state-message">
+        Cargando tus publicaciones...
+      </div>
+    }
+
+    @if (error()) {
+      <div class="state-message state-message--error">
+        <p>
+          No fue posible cargar tus publicaciones.
+        </p>
+
+        <button
+          type="button"
+          (click)="loadPublications()"
+        >
+          Reintentar
+        </button>
+      </div>
+    }
+
+    @if (!loading() && !error()) {
+
+      <section class="summary-grid">
+
+        <article class="summary-card">
+          <span class="summary-card__label">
+            Publicaciones registradas
+          </span>
+
+          <strong>
+            {{ totalRecords() }}
+          </strong>
+
+          <p>
+            Registros asociados a tu cuenta
+          </p>
+        </article>
+
+        <article class="summary-card">
+          <span class="summary-card__label">
+            Publicaciones activas
+          </span>
+
+          <strong>
+            {{ activeCount() }}
+          </strong>
+
+          <p>
+            Actualmente visibles en el catálogo
+          </p>
+        </article>
+
+        <article class="summary-card">
+          <span class="summary-card__label">
+            En pausa
+          </span>
+
+          <strong>
+            {{ pausedCount() }}
+          </strong>
+
+          <p>
+            Publicaciones temporalmente pausadas
+          </p>
+        </article>
+
+        <article class="summary-card">
+          <span class="summary-card__label">
+            Vendidas
+          </span>
+
+          <div class="summary-card__value">
+            <strong>
+              {{ soldCount() }}
+            </strong>
+
+            @if (soldRevenue() > 0) {
+              <span>
+                ₡{{ formatPrice(soldRevenue()) }}
+              </span>
+            }
+          </div>
+
+          <p>
+            Publicaciones marcadas como vendidas
+          </p>
+        </article>
+
+      </section>
+
+      <section class="publications-panel">
+
+        <div class="panel-toolbar">
+
+          <div class="status-tabs">
+            <button
+              type="button"
+              [class.status-tabs__button--active]="
+                selectedStatus() === 'all'
+              "
+              (click)="selectStatus('all')"
+            >
+              Todas
+              <span>
+                {{ totalRecords() }}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              [class.status-tabs__button--active]="
+                selectedStatus() === 'activa'
+              "
+              (click)="selectStatus('activa')"
+            >
+              Activas
+              <span>
+                {{ activeCount() }}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              [class.status-tabs__button--active]="
+                selectedStatus() === 'pausada'
+              "
+              (click)="selectStatus('pausada')"
+            >
+              En pausa
+              <span>
+                {{ pausedCount() }}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              [class.status-tabs__button--active]="
+                selectedStatus() === 'vendida'
+              "
+              (click)="selectStatus('vendida')"
+            >
+              Vendidas
+              <span>
+                {{ soldCount() }}
+              </span>
+            </button>
+          </div>
+
+          <div class="panel-toolbar__filters">
+
+            <label class="search">
+              <span>⌕</span>
+
+              <input
+                type="search"
+                placeholder="Buscar en mis publicaciones..."
+                [value]="searchTerm()"
+                (input)="onSearch($event)"
+              >
+            </label>
+
+            <select
+              [value]="selectedCategory() ?? ''"
+              (change)="onCategoryChange($event)"
+            >
+              <option value="">
+                Todas las categorías
+              </option>
+
+              @for (
+                category of categories();
+                track category
+              ) {
+                <option [value]="category">
+                  {{ formatLabel(category) }}
+                </option>
+              }
+            </select>
+
+            <select
+              [value]="sortBy()"
+              (change)="onSortChange($event)"
+            >
+              <option value="recent">
+                Más recientes
+              </option>
+
+              <option value="oldest">
+                Más antiguas
+              </option>
+
+              <option value="price-asc">
+                Menor precio
+              </option>
+
+              <option value="price-desc">
+                Mayor precio
+              </option>
+            </select>
+
+          </div>
+        </div>
+
+        @if (publications().length > 0) {
+
+          <div class="table-wrapper">
+            <table class="publications-table">
+              <thead>
+                <tr>
+                  <th>Publicación</th>
+                  <th>Precio</th>
+                  <th>Estado</th>
+                  <th>Ubicación</th>
+                  <th>Fecha</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                @for (
+                  publication of publications();
+                  track publication.id
+                ) {
+                  <tr>
+
+                    <td>
+                      <div class="publication-cell">
+                        <img
+                          [src]="publication.imagen"
+                          [alt]="publication.titulo"
+                          (error)="onImageError($event)"
+                        >
+
+                        <div>
+                          <div class="publication-cell__meta">
+                            <span>
+                              {{ formatLabel(publication.categoria) }}
+                            </span>
+
+                            <small>
+                              {{ publication.id }}
+                            </small>
+                          </div>
+
+                          <strong>
+                            {{ publication.titulo }}
+                          </strong>
+
+                          <small>
+                            {{ formatLabel(publication.subcategoria) }}
+                          </small>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td>
+                      <strong class="price">
+                        ₡{{ formatPrice(publication.precio) }}
+                      </strong>
+                    </td>
+
+                    <td>
+                      <span
+                        class="status"
+                        [class.status--active]="
+                          publication.estado === 'activa'
+                        "
+                        [class.status--paused]="
+                          publication.estado === 'pausada'
+                        "
+                        [class.status--sold]="
+                          publication.estado === 'vendida'
+                        "
+                      >
+                        {{ formatStatus(publication.estado) }}
+                      </span>
+                    </td>
+
+                    <td>
+                      {{ publication.ubicacion }}
+                    </td>
+
+                    <td>
+                      {{ formatDate(publication.fechaPublicacion) }}
+                    </td>
+
+                    <td>
+                      <a
+                        class="view-action"
+                        [routerLink]="[
+                          '/publicaciones',
+                          publication.id
+                        ]"
+                        [queryParams]="{
+                          from: 'mis-publicaciones'
+                        }"
+                      >
+                        Ver
+                      </a>
+                    </td>
+
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+
+          <footer class="panel-footer">
+            <span>
+              Mostrando
+              <strong>
+                {{ publications().length }}
+              </strong>
+              de
+              <strong>
+                {{ totalRecords() }}
+              </strong>
+              publicaciones registradas
+            </span>
+
+            <div class="pagination">
+              <button
+                type="button"
+                disabled
+              >
+                ‹ Anterior
+              </button>
+
+              <button
+                class="pagination__active"
+                type="button"
+              >
+                {{ page() }}
+              </button>
+
+              <button
+                type="button"
+                [disabled]="
+                  totalRecords() <= pageSize()
+                "
+              >
+                Siguiente ›
+              </button>
+            </div>
+          </footer>
+
+        } @else {
+
+          <div class="empty-state">
+            <h2>
+              No se encontraron publicaciones
+            </h2>
+
+            <p>
+              No hay registros que coincidan con
+              los filtros seleccionados.
+            </p>
+
+            <button
+              type="button"
+              (click)="resetFilters()"
+            >
+              Limpiar filtros
+            </button>
+          </div>
+
+        }
+      </section>
+
+      <section class="catalog-notice">
+        <div>
+          <strong>
+            Reglamento de caducidad del catálogo TEC
+          </strong>
+
+          <p>
+            Mantén actualizada la información de tus
+            publicaciones y coordina las entregas
+            únicamente mediante canales verificados.
+          </p>
+        </div>
+      </section>
+
+    }
+  </div>
+</main>

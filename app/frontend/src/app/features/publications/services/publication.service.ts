@@ -4,6 +4,7 @@ import { PublicationDetail } from '../models/publication-detail.model';
 import { ApiClientService } from '../../../core/api/api-client.service';
 import { PaginatedResponse } from '../../../shared/paginated-response.model';
 import { Publication } from '../models/publication.model';
+import { UserPublication } from '../models/my-publications.model';
 
 @Injectable({
   providedIn: 'root'
@@ -20,6 +21,14 @@ export class PublicationService {
   getPublicationById(id: string): Observable<PublicationDetail> {
     return this.apiClient.get<PublicationDetail>(
       `/publicaciones/${id}`
+    );
+  }
+
+  getUserPublications(
+    userId: string
+  ): Observable<PaginatedResponse<UserPublication>> {
+    return this.apiClient.get<PaginatedResponse<UserPublication>>(
+      `/usuarios/${userId}/publicaciones`
     );
   }
 }
