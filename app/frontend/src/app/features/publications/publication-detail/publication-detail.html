@@ -1,0 +1,483 @@
+<main class="publication-detail">
+  @if (loading()) {
+    <div class="state-message">
+      Cargando publicación...
+    </div>
+  }
+
+  @if (error()) {
+    <div class="state-message state-message--error">
+      <h2>Publicación no disponible</h2>
+
+      <p>
+        No fue posible cargar la publicación solicitada.
+      </p>
+
+      <a routerLink="/">
+        ← Volver a publicaciones
+      </a>
+    </div>
+  }
+
+  @if (!loading() && !error() && publication(); as item) {
+    <div class="publication-detail__container">
+
+      <nav
+        class="breadcrumb"
+        aria-label="Navegación"
+      >
+        <a routerLink="/">
+          Inicio
+        </a>
+
+        <span>›</span>
+
+        <span>
+          {{ formatCategory(item.categoria) }}
+        </span>
+
+        <span>›</span>
+
+        <span>
+          {{ formatCategory(item.subcategoria) }}
+        </span>
+
+        <span>›</span>
+
+        <strong>
+          {{ item.titulo }}
+        </strong>
+      </nav>
+
+      <header class="publication-header">
+        <div class="publication-header__badges">
+          <span class="badge badge--category">
+            {{ formatCategory(item.categoria) }}
+          </span>
+
+          @if (item.condicion) {
+            <span class="badge badge--condition">
+              {{ formatCondition(item.condicion) }}
+            </span>
+          }
+
+          <span class="badge">
+            {{ formatRelativeDate(item.fechaPublicacion) }}
+          </span>
+
+          <span class="badge">
+            {{ item.ubicacion }}
+          </span>
+        </div>
+
+        <h1>
+          {{ item.titulo }}
+        </h1>
+
+        <p>
+          {{ item.descripcion }}
+        </p>
+      </header>
+
+      <div class="publication-layout">
+
+        <div class="publication-layout__main">
+
+          <section class="gallery-card">
+            <div class="gallery-card__main">
+              <img
+                class="gallery-card__image"
+                [src]="selectedImage()"
+                [alt]="item.titulo"
+                (error)="onImageError($event)"
+              >
+
+              <span class="gallery-card__label">
+                Imagen principal
+              </span>
+            </div>
+
+            @if (getGalleryImages(item).length > 1) {
+              <div class="gallery-card__thumbnails">
+                @for (
+                  image of getGalleryImages(item);
+                  track image
+                ) {
+                  <button
+                    class="gallery-card__thumbnail"
+                    [class.gallery-card__thumbnail--active]="
+                      selectedImage() === image
+                    "
+                    type="button"
+                    (click)="selectImage(image)"
+                  >
+                    <img
+                      [src]="image"
+                      [alt]="item.titulo"
+                      (error)="onImageError($event)"
+                    >
+                  </button>
+                }
+              </div>
+            }
+          </section>
+
+          @if (item.especificaciones; as specs) {
+            <section class="content-card">
+              <div class="section-heading">
+                <div>
+                  <h2>
+                    Ficha técnica esencial
+                  </h2>
+
+                  <p>
+                    Características principales de la publicación.
+                  </p>
+                </div>
+
+                @if (item.vendedor.verificado) {
+                  <span class="verified-badge">
+                    TEC Verificado
+                  </span>
+                }
+              </div>
+
+              <div class="specification-grid">
+                <article class="specification-item">
+                  <span>
+                    Procesador
+                  </span>
+
+                  <strong>
+                    {{ specs.procesador }}
+                  </strong>
+                </article>
+
+                <article class="specification-item">
+                  <span>
+                    Memoria RAM
+                  </span>
+
+                  <strong>
+                    {{ specs.memoriaRam }}
+                  </strong>
+                </article>
+
+                <article class="specification-item">
+                  <span>
+                    Almacenamiento
+                  </span>
+
+                  <strong>
+                    {{ specs.almacenamiento }}
+                  </strong>
+                </article>
+
+                <article class="specification-item">
+                  <span>
+                    Batería
+                  </span>
+
+                  <strong>
+                    {{ specs.bateria }}
+                  </strong>
+                </article>
+
+                <article class="specification-item specification-item--wide">
+                  <span>
+                    Garantía
+                  </span>
+
+                  <strong>
+                    {{ specs.garantia }}
+                  </strong>
+                </article>
+              </div>
+
+              @if (item.incluye?.length) {
+                <div class="included">
+                  <h3>
+                    Incluye
+                  </h3>
+
+                  <div class="included__items">
+                    @for (
+                      included of item.incluye!;
+                      track included
+                    ) {
+                      <span>
+                        ✓ {{ included }}
+                      </span>
+                    }
+                  </div>
+                </div>
+              }
+            </section>
+          }
+
+          <section class="content-card">
+            <div class="section-heading">
+              <div>
+                <h2>
+                  Información de la publicación
+                </h2>
+
+                <p>
+                  Información general proporcionada por el servicio.
+                </p>
+              </div>
+            </div>
+
+            <div class="information-grid">
+              <article class="information-item">
+                <span>
+                  Categoría
+                </span>
+
+                <strong>
+                  {{ formatCategory(item.categoria) }}
+                </strong>
+              </article>
+
+              <article class="information-item">
+                <span>
+                  Subcategoría
+                </span>
+
+                <strong>
+                  {{ formatCategory(item.subcategoria) }}
+                </strong>
+              </article>
+
+              <article class="information-item">
+                <span>
+                  Condición
+                </span>
+
+                <strong>
+                  {{ formatCondition(item.condicion) }}
+                </strong>
+              </article>
+
+              <article class="information-item">
+                <span>
+                  Estado
+                </span>
+
+                <strong>
+                  {{ formatCategory(item.estado) }}
+                </strong>
+              </article>
+
+              <article class="information-item">
+                <span>
+                  Ubicación
+                </span>
+
+                <strong>
+                  {{ item.ubicacion }}
+                </strong>
+              </article>
+
+              <article class="information-item">
+                <span>
+                  Publicado
+                </span>
+
+                <strong>
+                  {{ formatDate(item.fechaPublicacion) }}
+                </strong>
+              </article>
+
+              @if (item.puntoEntrega) {
+                <article class="information-item information-item--wide">
+                  <span>
+                    Punto de entrega
+                  </span>
+
+                  <strong>
+                    {{ item.puntoEntrega }}
+                  </strong>
+                </article>
+              }
+            </div>
+          </section>
+
+          <section class="content-card">
+            <div class="section-heading">
+              <div>
+                <h2>
+                  Descripción
+                </h2>
+
+                <p>
+                  Detalles proporcionados por el vendedor.
+                </p>
+              </div>
+            </div>
+
+            <p class="description">
+              {{ item.descripcion }}
+            </p>
+          </section>
+        </div>
+
+        <aside class="sidebar">
+
+          <section class="price-card">
+            <span class="price-card__label">
+              Precio
+            </span>
+
+            <strong class="price-card__price">
+              ₡{{ formatPrice(item.precio) }}
+            </strong>
+
+            @if (item.precioAnterior) {
+              <span class="price-card__previous">
+                ₡{{ formatPrice(item.precioAnterior) }}
+              </span>
+            }
+
+            <div class="price-card__location">
+              <span>●</span>
+
+              <span>
+                {{ item.ubicacion }}
+              </span>
+            </div>
+
+            @if (item.puntoEntrega) {
+              <div class="price-card__delivery">
+                <span>
+                  Punto de entrega
+                </span>
+
+                <strong>
+                  {{ item.puntoEntrega }}
+                </strong>
+              </div>
+            }
+
+            <div class="publication-status">
+              <span>
+                Estado
+              </span>
+
+              <strong>
+                {{ formatCategory(item.estado) }}
+              </strong>
+            </div>
+          </section>
+
+          <section class="seller-card">
+            <span class="seller-card__label">
+              Publicado por
+            </span>
+
+            <div class="seller-card__profile">
+              <div class="seller-card__avatar">
+                {{ item.vendedor.nombre.charAt(0) }}
+              </div>
+
+              <div class="seller-card__identity">
+                <strong>
+                  {{ item.vendedor.nombre }}
+                </strong>
+
+                <span>
+                  {{ item.vendedor.carrera }}
+                </span>
+              </div>
+            </div>
+
+            @if (item.vendedor.verificado) {
+              <div class="seller-card__verified">
+                <span class="seller-card__check">
+                  ✓
+                </span>
+
+                <div>
+                  <strong>
+                    Estudiante TEC verificado
+                  </strong>
+
+                  <small>
+                    Identidad verificada por la plataforma
+                  </small>
+                </div>
+              </div>
+            }
+
+            @if (
+              item.vendedor.calificacion !== undefined ||
+              item.vendedor.ventasRealizadas !== undefined ||
+              item.vendedor.tiempoRespuesta
+            ) {
+              <div class="seller-card__stats">
+                @if (
+                  item.vendedor.calificacion !== undefined
+                ) {
+                  <div>
+                    <span>Calificación</span>
+
+                    <strong>
+                      ★ {{ item.vendedor.calificacion }}
+                    </strong>
+                  </div>
+                }
+
+                @if (
+                  item.vendedor.ventasRealizadas !== undefined
+                ) {
+                  <div>
+                    <span>Ventas realizadas</span>
+
+                    <strong>
+                      {{ item.vendedor.ventasRealizadas }}
+                    </strong>
+                  </div>
+                }
+
+                @if (item.vendedor.tiempoRespuesta) {
+                  <div>
+                    <span>Tiempo de respuesta</span>
+
+                    <strong>
+                      {{ item.vendedor.tiempoRespuesta }}
+                    </strong>
+                  </div>
+                }
+              </div>
+            }
+          </section>
+
+          <section class="security-card">
+            <strong>
+              Seguridad en Campus San Carlos
+            </strong>
+
+            <p>
+              Coordina la entrega presencialmente dentro de
+              zonas seguras del campus.
+            </p>
+          </section>
+
+        </aside>
+      </div>
+
+      <footer class="publication-metadata">
+        <span>
+          Publicación:
+          <strong>
+            {{ item.id }}
+          </strong>
+        </span>
+
+        <span>
+          MarketTec · Campus San Carlos
+        </span>
+      </footer>
+    </div>
+  }
+</main>

@@ -1,6 +1,6 @@
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-
+import { PublicationDetail } from '../models/publication-detail.model';
 import { ApiClientService } from '../../../core/api/api-client.service';
 import { PaginatedResponse } from '../../../shared/paginated-response.model';
 import { Publication } from '../models/publication.model';
@@ -17,8 +17,8 @@ export class PublicationService {
     );
   }
 
-  getPublicationById(id: string): Observable<Publication> {
-    return this.apiClient.get<Publication>(
+  getPublicationById(id: string): Observable<PublicationDetail> {
+    return this.apiClient.get<PublicationDetail>(
       `/publicaciones/${id}`
     );
   }

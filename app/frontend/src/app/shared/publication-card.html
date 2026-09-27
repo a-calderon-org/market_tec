@@ -57,8 +57,11 @@
       }
     </div>
 
-    <button class="publication-card__details" type="button">
+    <a
+      class="publication-card__details"
+      [routerLink]="['/publicaciones', publication().id]"
+    >
       Ver detalles →
-    </button>
+    </a>
   </div>
 </article>
