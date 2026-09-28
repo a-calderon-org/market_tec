@@ -368,9 +368,11 @@ describe('Home', () => {
       .toBe('PUB-001');
   });
   it('should render a link to my publications', () => {
-    publicationServiceMock.getPublications.mockReturnValue(
-      of(apiResponse)
-    );
+    publicationServiceMock
+      .getPublications
+      .mockReturnValue(
+        of(apiResponse)
+      );
 
     createComponent();
 
@@ -378,7 +380,7 @@ describe('Home', () => {
       HTMLAnchorElement =
         fixture.nativeElement
           .querySelector(
-            '.home-action'
+            '.home-action--publications'
           );
 
     expect(
@@ -397,6 +399,40 @@ describe('Home', () => {
       link.textContent
     ).toContain(
       'Mis Publicaciones'
+    );
+  });
+  it('should render a link to the profile', () => {
+    publicationServiceMock
+      .getPublications
+      .mockReturnValue(
+        of(apiResponse)
+      );
+
+    createComponent();
+
+    const link:
+      HTMLAnchorElement =
+        fixture.nativeElement
+          .querySelector(
+            '.home-action--profile'
+          );
+
+    expect(
+      link
+    ).toBeTruthy();
+
+    expect(
+      link.getAttribute(
+        'href'
+      )
+    ).toBe(
+      '/perfil'
+    );
+
+    expect(
+      link.textContent
+    ).toContain(
+      'Mi Perfil'
     );
   });
 });

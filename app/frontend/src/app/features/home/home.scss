@@ -201,6 +201,31 @@
   transform: translateX(3px);
 }
 
+.home__navigation-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+
+  width: 100%;
+}
+
+.home-action--secondary {
+  color: #00628f;
+
+  background: #fff;
+  border: 1px solid #bfd9e7;
+  box-shadow: none;
+}
+
+.home-action--secondary:hover {
+  color: #004f74;
+
+  background: #edf7fb;
+  border-color: #9fc8da;
+  box-shadow: none;
+}
+
 /* =========================
    Main content
    ========================= */

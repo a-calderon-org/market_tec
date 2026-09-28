@@ -29,9 +29,11 @@
 
             <span>
               Mostrando
+
               <strong>
                 {{ totalRecords() }}
               </strong>
+
               publicaciones encontradas en la comunidad TEC
             </span>
           </p>
@@ -50,26 +52,55 @@
             </span>
           </div>
 
-          <a
-            class="home-action"
-            routerLink="/mis-publicaciones"
-          >
-            <span class="home-action__icon">
-              ▣
-            </span>
+          <div class="home__navigation-actions">
 
-            <span>
-              Mis Publicaciones
-            </span>
+            <a
+              class="
+                home-action
+                home-action--secondary
+                home-action--profile
+              "
+              routerLink="/perfil"
+            >
+              <span class="home-action__icon">
+                ◉
+              </span>
 
-            <span class="home-action__arrow">
-              →
-            </span>
-          </a>
+              <span>
+                Mi Perfil
+              </span>
+
+              <span class="home-action__arrow">
+                →
+              </span>
+            </a>
+
+            <a
+              class="
+                home-action
+                home-action--publications
+              "
+              routerLink="/mis-publicaciones"
+            >
+              <span class="home-action__icon">
+                ▣
+              </span>
+
+              <span>
+                Mis Publicaciones
+              </span>
+
+              <span class="home-action__arrow">
+                →
+              </span>
+            </a>
+
+          </div>
 
         </div>
 
       </div>
+
     </div>
   </header>
 
@@ -139,7 +170,9 @@
     <div class="marketplace">
       <aside class="filters">
         <div class="filters__title">
-          <h2>Filtros</h2>
+          <h2>
+            Filtros
+          </h2>
 
           <button
             type="button"
@@ -150,11 +183,15 @@
         </div>
 
         <section class="filters__section">
-          <h3>Categoría principal</h3>
+          <h3>
+            Categoría principal
+          </h3>
 
           <button
             class="filter-option"
-            [class.filter-option--active]="selectedCategory() === null"
+            [class.filter-option--active]="
+              selectedCategory() === null
+            "
             type="button"
             (click)="selectCategory(null)"
           >
@@ -163,7 +200,9 @@
 
           <button
             class="filter-option"
-            [class.filter-option--active]="selectedCategory() === 'electronicos'"
+            [class.filter-option--active]="
+              selectedCategory() === 'electronicos'
+            "
             type="button"
             (click)="selectCategory('electronicos')"
           >
@@ -172,7 +211,9 @@
 
           <button
             class="filter-option"
-            [class.filter-option--active]="selectedCategory() === 'alquiler'"
+            [class.filter-option--active]="
+              selectedCategory() === 'alquiler'
+            "
             type="button"
             (click)="selectCategory('alquiler')"
           >
@@ -181,7 +222,9 @@
 
           <button
             class="filter-option"
-            [class.filter-option--active]="selectedCategory() === 'tutoria'"
+            [class.filter-option--active]="
+              selectedCategory() === 'tutoria'
+            "
             type="button"
             (click)="selectCategory('tutoria')"
           >
@@ -190,11 +233,15 @@
         </section>
 
         <section class="filters__section">
-          <h3>Rango de precio</h3>
+          <h3>
+            Rango de precio
+          </h3>
 
           <div class="price-range">
             <label>
-              <span>Mínimo</span>
+              <span>
+                Mínimo
+              </span>
 
               <input
                 type="number"
@@ -207,7 +254,9 @@
             </label>
 
             <label>
-              <span>Máximo</span>
+              <span>
+                Máximo
+              </span>
 
               <input
                 type="number"
@@ -282,7 +331,10 @@
                 </button>
 
                 <button
-                  class="pagination__page pagination__page--active"
+                  class="
+                    pagination__page
+                    pagination__page--active
+                  "
                   type="button"
                 >
                   {{ page() }}
@@ -298,7 +350,8 @@
           } @else {
             <div class="state-message">
               <p>
-                No se encontraron publicaciones con los filtros seleccionados.
+                No se encontraron publicaciones
+                con los filtros seleccionados.
               </p>
 
               <button
