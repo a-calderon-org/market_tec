@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { Profile } from './profile';
@@ -12,6 +12,9 @@ describe('Profile', () => {
 
   let component:
     Profile;
+
+  let router:
+    Router;
 
   const user:
     User = {
@@ -85,6 +88,16 @@ describe('Profile', () => {
         ]
       })
       .compileComponents();
+
+    router =
+      TestBed.inject(
+        Router
+      );
+
+    vi.spyOn(
+      router,
+      'navigate'
+    ).mockResolvedValue(true);
 
     fixture =
       TestBed.createComponent(
@@ -299,5 +312,15 @@ describe('Profile', () => {
     expect(
       component.user()
     ).toBeNull();
+  });
+
+  it('should navigate to login when logging out', () => {
+    component.logout();
+
+    expect(
+      router.navigate
+    ).toHaveBeenCalledWith(
+      ['/login']
+    );
   });
 });

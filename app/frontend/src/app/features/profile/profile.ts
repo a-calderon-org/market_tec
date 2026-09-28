@@ -1,6 +1,6 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { UpdateUser, User } from './models/user.model';
 import { UserService } from './services/user.service';
@@ -29,6 +29,9 @@ export class Profile implements OnInit {
     signal<User | null>(
       null
     );
+
+  private readonly router =
+    inject(Router)
 
   readonly loading =
     signal(true);
@@ -369,6 +372,12 @@ export class Profile implements OnInit {
 
     return (
       'No fue posible actualizar el perfil. Inténtalo nuevamente.'
+    );
+  }
+
+  logout(): void {
+    void this.router.navigate(
+      ['/login']
     );
   }
 }

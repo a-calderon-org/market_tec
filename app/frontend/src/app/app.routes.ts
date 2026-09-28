@@ -5,11 +5,16 @@ import { MyPublications } from './features/publications/my-publications/my-publi
 import { PublicationCreate } from './features/publications/publication-create/publication-create';
 import { Profile } from './features/profile/profile';
 import { Messenger } from './features/messenger/messenger';
+import { Login } from './features/auth/login';
 
 export const routes: Routes = [
   {
     path: '',
     component: Home
+  },
+  {
+    path: 'login',
+    component: Login
   },
   {
     path: 'perfil',

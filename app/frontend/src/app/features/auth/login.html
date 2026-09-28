@@ -1,0 +1,332 @@
+<main class="login">
+  <section class="login-card">
+
+    <header class="login-brand">
+
+      <div class="login-brand__identity">
+
+        <div class="login-brand__icon">
+          ▥
+        </div>
+
+        <div>
+          <div class="login-brand__title">
+            <strong>
+              Tec Digital
+            </strong>
+
+            <span>
+              SC
+            </span>
+          </div>
+
+          <small>
+            Campus San Carlos
+          </small>
+        </div>
+
+      </div>
+
+      <div class="login-brand__welcome">
+
+        <h1>
+          Bienvenido a MarketTec
+        </h1>
+
+        <p>
+          Compra, vende y encuentra servicios
+          dentro de la comunidad TEC San Carlos.
+        </p>
+
+        <div class="login-brand__tec">
+          <strong>
+            Tec Digital
+          </strong>
+
+          <span>
+            SC
+          </span>
+        </div>
+
+      </div>
+
+    </header>
+
+    <button
+      class="institutional-button"
+      type="button"
+      disabled
+      title="
+        El acceso institucional externo
+        no está disponible en Phase I
+      "
+    >
+      <span class="institutional-button__google">
+        G
+      </span>
+
+      <span>
+        Continuar con correo institucional
+      </span>
+    </button>
+
+    <div class="login-divider">
+      <span></span>
+
+      <p>
+        o con credenciales TEC
+      </p>
+
+      <span></span>
+    </div>
+
+    @if (error()) {
+      <div class="login-feedback">
+        <span>
+          !
+        </span>
+
+        <p>
+          {{ errorMessage() }}
+        </p>
+      </div>
+    }
+
+    <form
+      class="login-form"
+      [formGroup]="loginForm"
+      (ngSubmit)="submit()"
+    >
+
+      <label class="form-field">
+
+        <span class="form-field__label">
+          Correo Institucional
+        </span>
+
+        <div
+          class="input-control"
+          [class.input-control--error]="
+            isControlInvalid(
+              'correo'
+            )
+          "
+        >
+          <span class="input-control__icon">
+            @
+          </span>
+
+          <input
+            type="email"
+            formControlName="correo"
+            autocomplete="username"
+            placeholder="ejemplo@estudiantec.cr"
+          >
+        </div>
+
+        @if (
+          hasEmailError(
+            'required'
+          )
+        ) {
+          <small class="field-error">
+            El correo institucional es obligatorio.
+          </small>
+        }
+
+        @if (
+          hasEmailError(
+            'email'
+          )
+        ) {
+          <small class="field-error">
+            Ingresa un correo electrónico válido.
+          </small>
+        }
+
+        @if (
+          hasEmailError(
+            'institutionalEmail'
+          ) &&
+          !hasEmailError(
+            'email'
+          )
+        ) {
+          <small class="field-error">
+            Utiliza tu cuenta
+            @estudiantec.cr o @tec.ac.cr.
+          </small>
+        }
+
+        @if (
+          !isControlInvalid(
+            'correo'
+          )
+        ) {
+          <small class="form-field__help">
+            ⓘ Usa tu cuenta
+            @estudiantec.cr o @tec.ac.cr
+          </small>
+        }
+
+      </label>
+
+      <label class="form-field">
+
+        <div class="form-field__heading">
+          <span class="form-field__label">
+            Contraseña única
+          </span>
+
+          <button
+            class="forgot-password"
+            type="button"
+            disabled
+            title="
+              Recuperación de contraseña
+              no disponible en Phase I
+            "
+          >
+            ¿Olvidaste tu contraseña?
+          </button>
+        </div>
+
+        <div
+          class="input-control"
+          [class.input-control--error]="
+            isControlInvalid(
+              'password'
+            )
+          "
+        >
+          <span class="input-control__icon">
+            ♙
+          </span>
+
+          <input
+            [type]="
+              showPassword()
+                ? 'text'
+                : 'password'
+            "
+            formControlName="password"
+            autocomplete="current-password"
+            placeholder="••••••••"
+          >
+
+          <button
+            class="password-toggle"
+            type="button"
+            (click)="
+              togglePasswordVisibility()
+            "
+            [attr.aria-label]="
+              showPassword()
+                ? 'Ocultar contraseña'
+                : 'Mostrar contraseña'
+            "
+          >
+            @if (showPassword()) {
+              ◉
+            } @else {
+              ◎
+            }
+          </button>
+        </div>
+
+        @if (
+          loginForm.controls
+            .password
+            .hasError(
+              'required'
+            ) &&
+          isControlInvalid(
+            'password'
+          )
+        ) {
+          <small class="field-error">
+            La contraseña es obligatoria.
+          </small>
+        }
+
+        @if (
+          loginForm.controls
+            .password
+            .hasError(
+              'minlength'
+            ) &&
+          isControlInvalid(
+            'password'
+          )
+        ) {
+          <small class="field-error">
+            La contraseña debe tener
+            al menos 8 caracteres.
+          </small>
+        }
+
+      </label>
+
+      <label class="remember-session">
+
+        <input
+          type="checkbox"
+          formControlName="rememberSession"
+        >
+
+        <span>
+          Mantener sesión iniciada
+        </span>
+
+      </label>
+
+      <button
+        class="login-submit"
+        type="submit"
+        [disabled]="
+          submitting()
+        "
+      >
+        @if (submitting()) {
+          <span>
+            Ingresando...
+          </span>
+        } @else {
+          <span class="login-submit__icon">
+            ↪
+          </span>
+
+          <span>
+            Ingresar a MarketTec
+          </span>
+        }
+      </button>
+
+    </form>
+
+    <footer class="login-footer">
+
+      <div>
+        <span>
+          ♧
+        </span>
+
+        <span>
+          Campus San Carlos
+        </span>
+      </div>
+
+      <div>
+        <span>
+          ¿Necesitas ayuda?
+        </span>
+
+        <strong>
+          Soporte Estudiantil
+        </strong>
+      </div>
+
+    </footer>
+
+  </section>
+</main>
