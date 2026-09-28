@@ -1,23 +1,7 @@
-export interface Seller {
-  id: number;
-  nombre: string;
-  carrera: string;
-  verificado: boolean;
-}
-
-export interface Publication {
-  id: string;
-  categoria: string;
-  subcategoria: string;
-  titulo: string;
-  descripcion: string;
-  precio: number;
-  condicion: string | null;
-  ubicacion: string;
-  imagen: string;
-  fechaPublicacion: string;
-  estado: string;
-  vendedor: Seller;
+export interface ChatLastMessage {
+  texto: string;
+  fecha: string;
+  enviadoPorMi: boolean;
 }
 
 export interface ChatParticipant {
@@ -34,16 +18,21 @@ export interface ChatPublication {
   precio: number;
 }
 
-export interface LastMessage {
-  texto: string;
-  fecha: string;
-  enviadoPorMi: boolean;
-}
-
 export interface Chat {
   id: string;
   participante: ChatParticipant;
   publicacion: ChatPublication;
-  ultimoMensaje: LastMessage;
+  ultimoMensaje: ChatLastMessage;
   mensajesNoLeidos: number;
+}
+
+export interface SendMessage {
+  texto: string;
+}
+
+export interface SessionMessage {
+  id: string;
+  texto: string;
+  fecha: string;
+  enviadoPorMi: boolean;
 }

@@ -367,6 +367,7 @@ describe('Home', () => {
     expect(component.publications()[0].id)
       .toBe('PUB-001');
   });
+
   it('should render a link to my publications', () => {
     publicationServiceMock
       .getPublications
@@ -401,6 +402,7 @@ describe('Home', () => {
       'Mis Publicaciones'
     );
   });
+
   it('should render a link to the profile', () => {
     publicationServiceMock
       .getPublications
@@ -433,6 +435,41 @@ describe('Home', () => {
       link.textContent
     ).toContain(
       'Mi Perfil'
+    );
+  });
+
+  it('should render a link to messages', () => {
+    publicationServiceMock
+      .getPublications
+      .mockReturnValue(
+        of(apiResponse)
+      );
+
+    createComponent();
+
+    const link:
+      HTMLAnchorElement =
+        fixture.nativeElement
+          .querySelector(
+            '.home-action--messages'
+          );
+
+    expect(
+      link
+    ).toBeTruthy();
+
+    expect(
+      link.getAttribute(
+        'href'
+      )
+    ).toBe(
+      '/mensajes'
+    );
+
+    expect(
+      link.textContent
+    ).toContain(
+      'Mensajes'
     );
   });
 });
