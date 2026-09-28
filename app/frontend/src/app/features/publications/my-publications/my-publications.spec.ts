@@ -468,4 +468,32 @@ describe('MyPublications', () => {
       component.publications()
     ).toEqual([]);
   });
+  it('should render a link to create a new publication', () => {
+    createComponent();
+
+    const link:
+      HTMLAnchorElement =
+        fixture.nativeElement
+          .querySelector(
+            '.page-header__create'
+          );
+
+    expect(
+      link
+    ).toBeTruthy();
+
+    expect(
+      link.getAttribute(
+        'href'
+      )
+    ).toBe(
+      '/publicaciones/nueva'
+    );
+
+    expect(
+      link.textContent
+    ).toContain(
+      'Nueva publicación'
+    );
+  });
 });

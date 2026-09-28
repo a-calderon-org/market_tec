@@ -3,11 +3,15 @@ import { PublicationCard } from '../../shared/publication-card';
 import { Publication } from '../publications/models/publication.model';
 import { PublicationService } from '../publications/services/publication.service';
 import { HomeFilterService, HomeSortOption } from './services/home-filter.service';
+import { RouterLink } from '@angular/router';
 
 @Component({
   selector: 'app-home',
   standalone: true,
-  imports: [PublicationCard],
+  imports: [
+    PublicationCard,
+    RouterLink
+  ],
   templateUrl: './home.html',
   styleUrl: './home.scss'
 })
