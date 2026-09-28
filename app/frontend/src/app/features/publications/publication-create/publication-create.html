@@ -1,0 +1,537 @@
+<main class="publication-create">
+  <div class="publication-create__container">
+
+    <header class="creation-header">
+      <nav
+        class="breadcrumb"
+        aria-label="Navegación"
+      >
+        <a routerLink="/">
+          Inicio
+        </a>
+
+        <span>›</span>
+
+        <a routerLink="/mis-publicaciones">
+          Mis Publicaciones
+        </a>
+
+        <span>›</span>
+
+        <strong>
+          Nueva Publicación
+        </strong>
+      </nav>
+
+      <span class="creation-header__autosave">
+        Los cambios permanecen durante esta sesión
+      </span>
+    </header>
+
+    <section class="progress-card">
+      <div class="progress-card__header">
+        <div class="progress-card__step">
+          <span class="progress-card__number">
+            3
+          </span>
+
+          <strong>
+            Detalles de la Publicación
+          </strong>
+        </div>
+
+        <span>
+          Paso 3 de 4 · Vista previa siguiente
+        </span>
+      </div>
+
+      <div class="progress-card__track">
+        <div class="progress-card__bar"></div>
+      </div>
+    </section>
+
+    <div class="publication-create__layout">
+
+      <form
+        class="publication-form"
+        [formGroup]="form"
+        (ngSubmit)="submit()"
+      >
+
+        <!-- Categoría -->
+        <section class="form-card category-card">
+          <h2>
+            Categoría
+          </h2>
+
+          <div class="category-options">
+
+            <button
+              type="button"
+              class="category-option"
+              [class.category-option--active]="
+                form.controls.categoria.value === 'electronicos'
+              "
+              (click)="selectCategory('electronicos')"
+            >
+              <span>▣</span>
+              Electrónicos
+            </button>
+
+            <button
+              type="button"
+              class="category-option"
+              [class.category-option--active]="
+                form.controls.categoria.value === 'alquiler'
+              "
+              (click)="selectCategory('alquiler')"
+            >
+              <span>⌂</span>
+              Alquiler
+            </button>
+
+            <button
+              type="button"
+              class="category-option"
+              [class.category-option--active]="
+                form.controls.categoria.value === 'tutoria'
+              "
+              (click)="selectCategory('tutoria')"
+            >
+              <span>◇</span>
+              Tutoría
+            </button>
+
+          </div>
+        </section>
+
+        <!-- Información principal -->
+        <section class="form-card">
+
+          <div class="form-field">
+            <label for="publication-title">
+              Título de la publicación
+              <span class="required">*</span>
+            </label>
+
+            <input
+              id="publication-title"
+              type="text"
+              formControlName="titulo"
+              maxlength="100"
+              placeholder="Ej. Monitor Dell UltraSharp 27” 4K USB-C"
+            >
+
+            @if (isControlInvalid('titulo')) {
+              <small class="field-error">
+                Ingresa un título entre 5 y 100 caracteres.
+              </small>
+            }
+          </div>
+
+          <div class="form-field">
+            <label for="publication-subcategory">
+              Subcategoría
+              <span class="required">*</span>
+            </label>
+
+            <input
+              id="publication-subcategory"
+              type="text"
+              formControlName="subcategoria"
+              maxlength="50"
+              placeholder="Ej. monitores, laptops, programación..."
+            >
+
+            @if (isControlInvalid('subcategoria')) {
+              <small class="field-error">
+                Ingresa una subcategoría válida.
+              </small>
+            }
+          </div>
+
+          <div class="form-row">
+
+            <div class="form-field">
+              <label for="publication-price">
+                Precio (₡ CRC)
+                <span class="required">*</span>
+              </label>
+
+              <div class="input-with-prefix">
+                <span>₡</span>
+
+                <input
+                  id="publication-price"
+                  type="number"
+                  min="1"
+                  step="1"
+                  formControlName="precio"
+                  (input)="onPriceInput($event)"
+                >
+              </div>
+
+              @if (isControlInvalid('precio')) {
+                <small class="field-error">
+                  El precio debe ser mayor que cero.
+                </small>
+              }
+            </div>
+
+            <div class="form-field">
+              <label for="publication-location">
+                Punto de entrega en TEC SC
+                <span class="required">*</span>
+              </label>
+
+              <input
+                id="publication-location"
+                type="text"
+                formControlName="ubicacion"
+                maxlength="100"
+                placeholder="Ej. Biblioteca TEC"
+              >
+
+              @if (isControlInvalid('ubicacion')) {
+                <small class="field-error">
+                  Indica un punto de entrega.
+                </small>
+              }
+            </div>
+
+          </div>
+
+          <!-- Condición -->
+          <div class="form-field">
+            <span class="form-field__label">
+              Condición del artículo
+              <span class="required">*</span>
+            </span>
+
+            <div class="condition-options">
+
+              <button
+                type="button"
+                class="condition-option"
+                [class.condition-option--active]="
+                  form.controls.condicion.value === 'nuevo'
+                "
+                (click)="selectCondition('nuevo')"
+              >
+                Nuevo
+              </button>
+
+              <button
+                type="button"
+                class="condition-option"
+                [class.condition-option--active]="
+                  form.controls.condicion.value === 'como-nuevo'
+                "
+                (click)="selectCondition('como-nuevo')"
+              >
+                Como nuevo
+              </button>
+
+              <button
+                type="button"
+                class="condition-option"
+                [class.condition-option--active]="
+                  form.controls.condicion.value === 'buen-estado'
+                "
+                (click)="selectCondition('buen-estado')"
+              >
+                Buen estado
+              </button>
+
+              <button
+                type="button"
+                class="condition-option"
+                [class.condition-option--active]="
+                  form.controls.condicion.value === 'para-repuesto'
+                "
+                (click)="selectCondition('para-repuesto')"
+              >
+                Para repuesto
+              </button>
+
+            </div>
+          </div>
+
+          <!-- Fotografías -->
+          <div class="form-field">
+            <div class="image-section__header">
+              <span class="form-field__label">
+                Fotografías
+              </span>
+
+              <span>
+                {{ images().length }} / {{ maxImages }} subidas
+              </span>
+            </div>
+
+            <div class="image-grid">
+
+              @for (
+                image of images();
+                track image.id
+              ) {
+                <article
+                  class="image-preview"
+                  [class.image-preview--cover]="
+                    isCoverImage(image.id)
+                  "
+                >
+                  <img
+                    [src]="image.previewUrl"
+                    [alt]="image.name"
+                  >
+
+                  @if (isCoverImage(image.id)) {
+                    <span class="image-preview__cover">
+                      Portada
+                    </span>
+                  }
+
+                  <button
+                    type="button"
+                    class="image-preview__remove"
+                    aria-label="Eliminar fotografía"
+                    (click)="removeImage(image.id)"
+                  >
+                    ×
+                  </button>
+
+                  @if (!isCoverImage(image.id)) {
+                    <button
+                      type="button"
+                      class="image-preview__set-cover"
+                      (click)="setCoverImage(image.id)"
+                    >
+                      Usar como portada
+                    </button>
+                  }
+                </article>
+              }
+
+              @if (remainingImages() > 0) {
+                <button
+                  type="button"
+                  class="image-add"
+                  (click)="fileInput.click()"
+                >
+                  <span class="image-add__icon">
+                    ⊞
+                  </span>
+
+                  <span>
+                    + Añadir
+                  </span>
+                </button>
+              }
+
+            </div>
+
+            <input
+              #fileInput
+              class="image-input"
+              type="file"
+              accept="image/*"
+              multiple
+              (change)="onImagesSelected($event)"
+            >
+
+            <small class="field-hint">
+              Puedes seleccionar hasta 5 imágenes. Las fotografías
+              se utilizan únicamente como vista previa durante esta sesión.
+            </small>
+          </div>
+
+          <!-- Descripción -->
+          <div class="form-field">
+            <label for="publication-description">
+              Descripción breve
+              <span class="required">*</span>
+            </label>
+
+            <textarea
+              id="publication-description"
+              rows="5"
+              maxlength="600"
+              formControlName="descripcion"
+              placeholder="Describe el estado, características principales y cualquier detalle importante..."
+            ></textarea>
+
+            <div class="description-meta">
+              @if (isControlInvalid('descripcion')) {
+                <small class="field-error">
+                  La descripción debe tener al menos 10 caracteres.
+                </small>
+              } @else {
+                <small>
+                  Describe claramente lo que estás ofreciendo.
+                </small>
+              }
+
+              <small>
+                {{ form.controls.descripcion.value.length }} / 600
+              </small>
+            </div>
+          </div>
+
+          @if (error()) {
+            <div class="form-message form-message--error">
+              {{ errorMessage() }}
+            </div>
+          }
+
+          @if (success()) {
+            <div class="form-message form-message--success">
+              Publicación creada correctamente.
+            </div>
+          }
+
+          <!-- Acciones -->
+          <footer class="form-actions">
+
+            <a
+              class="form-actions__back"
+              routerLink="/mis-publicaciones"
+            >
+              ← Atrás
+            </a>
+
+            <button
+              type="button"
+              class="form-actions__draft"
+              disabled
+              title="Disponible cuando se implemente persistencia de borradores"
+            >
+              Guardar borrador
+            </button>
+
+            <button
+              type="submit"
+              class="form-actions__submit"
+              [disabled]="submitting()"
+            >
+              @if (submitting()) {
+                Publicando...
+              } @else {
+                Crear publicación →
+              }
+            </button>
+
+          </footer>
+
+        </section>
+      </form>
+
+      <!-- Vista previa -->
+      <aside class="live-preview">
+
+        <header class="live-preview__header">
+          <div>
+            <span class="status-dot"></span>
+
+            <strong>
+              Vista Previa en Vivo
+            </strong>
+          </div>
+
+          <span>
+            Feed Campus
+          </span>
+        </header>
+
+        <article class="preview-card">
+
+          <div class="preview-card__image-wrapper">
+            <img
+              class="preview-card__image"
+              [src]="
+                coverImage()?.previewUrl ??
+                '/images/publication-placeholder.svg'
+              "
+              [alt]="
+                formValue().titulo ||
+                'Vista previa de la publicación'
+              "
+            >
+
+            <div class="preview-card__badges">
+              <span class="preview-badge preview-badge--category">
+                {{ formatLabel(formValue().categoria) }}
+              </span>
+
+              <span class="preview-badge">
+                {{ formatLabel(formValue().condicion) }}
+              </span>
+            </div>
+          </div>
+
+          <div class="preview-card__content">
+
+            <div class="preview-card__price-row">
+              <strong>
+                ₡ {{ formatPrice(formValue().precio || 0) }}
+              </strong>
+
+              <span>
+                Negociable
+              </span>
+            </div>
+
+            <h2>
+              @if (formValue().titulo) {
+                {{ formValue().titulo }}
+              } @else {
+                Título de la publicación
+              }
+            </h2>
+
+            <div class="preview-card__location">
+              <span>⌖</span>
+
+              <span>
+                @if (formValue().ubicacion) {
+                  {{ formValue().ubicacion }}
+                } @else {
+                  Punto de entrega
+                }
+              </span>
+            </div>
+
+            <div class="preview-card__seller">
+              <div class="preview-card__avatar">
+                U
+              </div>
+
+              <strong>
+                Usuario TEC
+              </strong>
+
+              <span>
+                Estudiante TEC
+              </span>
+            </div>
+
+          </div>
+        </article>
+
+        <div class="preview-note">
+          <strong>
+            Vista previa local
+          </strong>
+
+          <p>
+            La publicación se mostrará aquí conforme completes
+            el formulario. Las imágenes seleccionadas todavía
+            no se almacenan de forma permanente.
+          </p>
+        </div>
+
+      </aside>
+
+    </div>
+  </div>
+</main>

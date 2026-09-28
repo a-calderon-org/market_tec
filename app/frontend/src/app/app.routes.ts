@@ -1,7 +1,8 @@
 import { Routes } from '@angular/router';
-import { MyPublications } from './features/publications/my-publications/my-publications';
 import { Home } from './features/home/home';
 import { PublicationDetail } from './features/publications/publication-detail/publication-detail';
+import { MyPublications } from './features/publications/my-publications/my-publications';
+import { PublicationCreate } from './features/publications/publication-create/publication-create';
 
 export const routes: Routes = [
   {
@@ -9,12 +10,12 @@ export const routes: Routes = [
     component: Home
   },
   {
-    path: 'publicaciones/:id',
-    component: PublicationDetail
-  },
-  {
     path: 'mis-publicaciones',
     component: MyPublications
+  },
+  {
+    path: 'publicaciones/nueva',
+    component: PublicationCreate
   },
   {
     path: 'publicaciones/:id',

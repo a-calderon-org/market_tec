@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
-
+import { provideRouter } from '@angular/router';
 import { Home } from './home';
 import { Publication } from '../publications/models/publication.model';
 import { PublicationService } from '../publications/services/publication.service';
@@ -68,6 +68,8 @@ describe('Home', () => {
     await TestBed.configureTestingModule({
       imports: [Home],
       providers: [
+        provideRouter([]),
+
         {
           provide: PublicationService,
           useValue: publicationServiceMock
@@ -364,5 +366,37 @@ describe('Home', () => {
 
     expect(component.publications()[0].id)
       .toBe('PUB-001');
+  });
+  it('should render a link to my publications', () => {
+    publicationServiceMock.getPublications.mockReturnValue(
+      of(apiResponse)
+    );
+
+    createComponent();
+
+    const link:
+      HTMLAnchorElement =
+        fixture.nativeElement
+          .querySelector(
+            '.home-action'
+          );
+
+    expect(
+      link
+    ).toBeTruthy();
+
+    expect(
+      link.getAttribute(
+        'href'
+      )
+    ).toBe(
+      '/mis-publicaciones'
+    );
+
+    expect(
+      link.textContent
+    ).toContain(
+      'Mis Publicaciones'
+    );
   });
 });

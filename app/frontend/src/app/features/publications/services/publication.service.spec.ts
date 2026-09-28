@@ -1,42 +1,19 @@
-import {
-  TestBed
-} from '@angular/core/testing';
-
-import {
-  firstValueFrom,
-  of
-} from 'rxjs';
-
-import {
-  vi
-} from 'vitest';
-
-import {
-  ApiClientService
-} from '../../../core/api/api-client.service';
-
-import {
-  Publication
-} from '../models/publication.model';
-
-import {
-  PublicationDetail
-} from '../models/publication-detail.model';
-
-import {
-  UserPublication
-} from '../models/my-publications.model';
-
-import {
-  PublicationService
-} from './publication.service';
+import { TestBed } from '@angular/core/testing';
+import { firstValueFrom, of } from 'rxjs';
+import { vi } from 'vitest';
+import { ApiClientService } from '../../../core/api/api-client.service';
+import { Publication } from '../models/publication.model';
+import { PublicationDetail } from '../models/publication-detail.model';
+import { UserPublication } from '../models/my-publications.model';
+import { PublicationService } from './publication.service';
 
 describe('PublicationService', () => {
   let service:
     PublicationService;
 
   const apiClientMock = {
-    get: vi.fn()
+    get: vi.fn(),
+    post: vi.fn()
   };
 
   const publicationList = {
@@ -115,6 +92,7 @@ describe('PublicationService', () => {
 
   beforeEach(() => {
     apiClientMock.get.mockReset();
+    apiClientMock.post.mockReset();
 
     TestBed.configureTestingModule({
       providers: [
@@ -219,6 +197,49 @@ describe('PublicationService', () => {
       response
     ).toEqual(
       responseMock
+    );
+  });
+
+  it('should create a publication', async () => {
+    const publication = {
+      categoria:
+        'electronicos',
+
+      subcategoria:
+        'monitores',
+
+      titulo:
+        'Monitor Dell UltraSharp',
+
+      descripcion:
+        'Monitor en excelente estado.',
+
+      precio:
+        195000,
+
+      condicion:
+        'como-nuevo',
+
+      ubicacion:
+        'Biblioteca TEC'
+    };
+
+    apiClientMock.post =
+      vi.fn().mockReturnValue(
+        of(void 0)
+      );
+
+    await firstValueFrom(
+      service.createPublication(
+        publication
+      )
+    );
+
+    expect(
+      apiClientMock.post
+    ).toHaveBeenCalledWith(
+      '/publicaciones',
+      publication
     );
   });
 });
