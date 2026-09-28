@@ -3,11 +3,16 @@ import { Home } from './features/home/home';
 import { PublicationDetail } from './features/publications/publication-detail/publication-detail';
 import { MyPublications } from './features/publications/my-publications/my-publications';
 import { PublicationCreate } from './features/publications/publication-create/publication-create';
+import { Profile } from './features/profile/profile';
 
 export const routes: Routes = [
   {
     path: '',
     component: Home
+  },
+  {
+    path: 'perfil',
+    component: Profile
   },
   {
     path: 'mis-publicaciones',

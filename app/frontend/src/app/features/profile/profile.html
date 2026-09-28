@@ -1,0 +1,514 @@
+<main class="profile">
+
+  <header class="profile__topbar">
+    <div class="profile__topbar-inner">
+
+      <a
+        class="profile__back"
+        routerLink="/"
+        aria-label="Volver al inicio"
+      >
+        ←
+      </a>
+
+      <div class="profile__brand">
+        <span class="profile__brand-icon">
+          ✦
+        </span>
+
+        <strong>
+          MarketTec
+        </strong>
+      </div>
+
+      <h1>
+        Perfil
+      </h1>
+
+    </div>
+  </header>
+
+  <div class="profile__container">
+
+    @if (loading()) {
+      <section class="state-card">
+        Cargando perfil...
+      </section>
+    }
+
+    @if (error()) {
+      <section
+        class="
+          state-card
+          state-card--error
+        "
+      >
+        <h2>
+          No fue posible cargar el perfil
+        </h2>
+
+        <p>
+          Ocurrió un problema al consultar
+          la información del usuario.
+        </p>
+
+        <button
+          type="button"
+          (click)="loadUser()"
+        >
+          Reintentar
+        </button>
+      </section>
+    }
+
+    @if (
+      !loading() &&
+      !error() &&
+      user();
+      as currentUser
+    ) {
+
+      <!-- =========================
+           Profile identity
+           ========================= -->
+
+      <section class="profile-hero">
+
+        <div class="avatar">
+
+          @if (
+            !imageFailed() &&
+            currentUser.fotoPerfil
+          ) {
+            <img
+              [src]="
+                currentUser.fotoPerfil
+              "
+              [alt]="fullName()"
+              (error)="onImageError()"
+            >
+          } @else {
+            <div class="avatar__fallback">
+              {{ initials() }}
+            </div>
+          }
+
+          <span class="avatar__badge">
+            ✓
+          </span>
+
+        </div>
+
+        <h2>
+          {{ fullName() }}
+        </h2>
+
+        <p class="profile-hero__username">
+          @{{ currentUser.nombreUsuario }}
+        </p>
+
+        <div class="profile-hero__status">
+          <span>
+            ✓
+          </span>
+
+          <span>
+            Usuario TEC
+            @if (
+              currentUser.verificado
+            ) {
+              verificado
+            }
+            ·
+            {{
+              formatStatus(
+                currentUser.estado
+              )
+            }}
+          </span>
+        </div>
+
+        <button
+          class="profile-hero__photo"
+          type="button"
+          disabled
+          title="
+            La edición de fotografía
+            no está disponible en
+            Phase I
+          "
+        >
+          ◉
+          Cambiar foto
+        </button>
+
+      </section>
+
+      <!-- =========================
+           Personal information
+           ========================= -->
+
+      <section class="profile-card">
+
+        <header class="profile-card__header">
+          <div>
+            <span class="section-icon">
+              ♙
+            </span>
+
+            <h2>
+              1. Datos personales
+            </h2>
+          </div>
+
+          <span class="profile-badge">
+            Perfil TEC
+          </span>
+        </header>
+
+        @if (saveSuccess()) {
+          <div
+            class="
+              feedback
+              feedback--success
+            "
+          >
+            ✓
+            {{ saveMessage() }}
+          </div>
+        }
+
+        @if (saveError()) {
+          <div
+            class="
+              feedback
+              feedback--error
+            "
+          >
+            !
+            {{ saveMessage() }}
+          </div>
+        }
+
+        <form
+          class="profile-form"
+          [formGroup]="profileForm"
+          (ngSubmit)="saveProfile()"
+        >
+
+          <div class="form-row">
+
+            <label>
+              <span>
+                Nombre
+              </span>
+
+              <input
+                type="text"
+                formControlName="nombre"
+                autocomplete="given-name"
+                [class.input--error]="
+                  isControlInvalid(
+                    'nombre'
+                  )
+                "
+              >
+
+              @if (
+                isControlInvalid(
+                  'nombre'
+                )
+              ) {
+                <small class="field-error">
+                  Ingresa un nombre válido.
+                </small>
+              }
+            </label>
+
+            <label>
+              <span>
+                Apellidos
+              </span>
+
+              <input
+                type="text"
+                formControlName="apellidos"
+                autocomplete="family-name"
+                [class.input--error]="
+                  isControlInvalid(
+                    'apellidos'
+                  )
+                "
+              >
+
+              @if (
+                isControlInvalid(
+                  'apellidos'
+                )
+              ) {
+                <small class="field-error">
+                  Ingresa los apellidos.
+                </small>
+              }
+            </label>
+
+          </div>
+
+          <label>
+            <span>
+              Nombre de usuario
+            </span>
+
+            <div class="input-with-icon">
+              <input
+                type="text"
+                formControlName="nombreUsuario"
+                autocomplete="username"
+                [class.input--error]="
+                  isControlInvalid(
+                    'nombreUsuario'
+                  )
+                "
+              >
+
+              @if (
+                !isControlInvalid(
+                  'nombreUsuario'
+                )
+              ) {
+                <span>
+                  ✓
+                </span>
+              }
+            </div>
+
+            @if (
+              isControlInvalid(
+                'nombreUsuario'
+              )
+            ) {
+              <small class="field-error">
+                Usa entre 3 y 40 caracteres.
+                Solo letras, números, punto,
+                guion y guion bajo.
+              </small>
+            }
+          </label>
+
+          <label>
+            <span>
+              Correo institucional
+            </span>
+
+            <div class="readonly-field">
+              <span class="readonly-field__icon">
+                🔒
+              </span>
+
+              <div>
+                <strong>
+                  {{ currentUser.correo }}
+                </strong>
+
+                <small>
+                  Vinculado a la cuenta TEC
+                </small>
+              </div>
+            </div>
+          </label>
+
+          <button
+            class="primary-button"
+            type="submit"
+            [disabled]="
+              profileForm.invalid ||
+              profileForm.pristine ||
+              saving()
+            "
+          >
+            @if (saving()) {
+              Guardando...
+            } @else {
+              ▣ Guardar cambios
+            }
+          </button>
+
+        </form>
+
+      </section>
+
+      <!-- =========================
+           Security
+           ========================= -->
+
+      <section class="profile-card">
+
+        <header class="profile-card__header">
+          <div>
+            <span class="section-icon">
+              ◇
+            </span>
+
+            <h2>
+              2. Seguridad y acceso
+            </h2>
+          </div>
+        </header>
+
+        <div class="security-notice">
+          <strong>
+            Cambio de contraseña
+          </strong>
+
+          <p>
+            Esta opción está temporalmente
+            no disponible porque el mock de
+            API Management no tiene
+            configurada correctamente la
+            operación de cambio de contraseña.
+          </p>
+        </div>
+
+        <div class="disabled-form">
+
+          <label>
+            <span>
+              Contraseña actual
+            </span>
+
+            <input
+              type="password"
+              placeholder="••••••••"
+              disabled
+            >
+          </label>
+
+          <label>
+            <span>
+              Nueva contraseña
+            </span>
+
+            <input
+              type="password"
+              placeholder="Mínimo 8 caracteres"
+              disabled
+            >
+          </label>
+
+          <label>
+            <span>
+              Confirmar nueva contraseña
+            </span>
+
+            <input
+              type="password"
+              placeholder="Repetir nueva contraseña"
+              disabled
+            >
+          </label>
+
+          <button
+            class="secondary-button"
+            type="button"
+            disabled
+          >
+            🔑 Actualizar contraseña
+          </button>
+
+        </div>
+
+      </section>
+
+      <!-- =========================
+           Account information
+           ========================= -->
+
+      <section class="profile-card">
+
+        <header class="profile-card__header">
+          <div>
+            <span class="section-icon">
+              ⚙
+            </span>
+
+            <h2>
+              3. Información de la cuenta
+            </h2>
+          </div>
+        </header>
+
+        <div class="account-grid">
+
+          <article>
+            <span>
+              Identificador
+            </span>
+
+            <strong>
+              {{ currentUser.id }}
+            </strong>
+          </article>
+
+          <article>
+            <span>
+              Estado
+            </span>
+
+            <strong>
+              {{
+                formatStatus(
+                  currentUser.estado
+                )
+              }}
+            </strong>
+          </article>
+
+          <article>
+            <span>
+              Cuenta verificada
+            </span>
+
+            <strong>
+              {{
+                currentUser.verificado
+                  ? 'Sí'
+                  : 'No'
+              }}
+            </strong>
+          </article>
+
+          <article>
+            <span>
+              Miembro desde
+            </span>
+
+            <strong>
+              {{
+                formatDate(
+                  currentUser.fechaRegistro
+                )
+              }}
+            </strong>
+          </article>
+
+        </div>
+
+        <div class="account-notice">
+          <span>
+            ⓘ
+          </span>
+
+          <p>
+            Tu correo institucional y la
+            verificación de la cuenta son
+            administrados por los servicios
+            del TEC.
+          </p>
+        </div>
+
+      </section>
+
+    }
+
+  </div>
+</main>
