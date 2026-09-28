@@ -1,0 +1,583 @@
+<main class="messenger">
+
+  <header class="messenger__header">
+
+    <nav
+      class="messenger__breadcrumb"
+      aria-label="Navegación"
+    >
+      <a routerLink="/">
+        MarketTec
+      </a>
+
+      <span>/</span>
+
+      <strong>
+        Mensajería y Negociación Segura
+      </strong>
+    </nav>
+
+    <div class="messenger__security">
+      <span></span>
+
+      Conexión protegida institucional
+      (@estudiantec.cr)
+    </div>
+
+  </header>
+
+  <section class="messenger__shell">
+
+    <aside class="chat-list">
+
+      <header class="chat-list__header">
+
+        <div class="chat-list__title">
+          <h1>
+            Mensajes
+          </h1>
+
+          @if (totalUnread() > 0) {
+            <span>
+              {{ totalUnread() }}
+              no leídos
+            </span>
+          }
+        </div>
+
+        <div class="chat-list__filters">
+
+          <button
+            type="button"
+            [class.chat-filter--active]="
+              !unreadOnly()
+            "
+            (click)="showAllChats()"
+          >
+            Todos
+          </button>
+
+          <button
+            type="button"
+            [class.chat-filter--active]="
+              unreadOnly()
+            "
+            (click)="showUnreadChats()"
+          >
+            No leídos
+          </button>
+
+        </div>
+
+      </header>
+
+      <label class="chat-search">
+        <span>⌕</span>
+
+        <input
+          type="search"
+          placeholder="Buscar en mensajes o publicaciones..."
+          [value]="searchTerm()"
+          (input)="onSearch($event)"
+        >
+      </label>
+
+      <div class="chat-list__content">
+
+        @if (loading()) {
+          <div class="chat-state">
+            Cargando conversaciones...
+          </div>
+        }
+
+        @if (error()) {
+          <div
+            class="
+              chat-state
+              chat-state--error
+            "
+          >
+            <p>
+              No fue posible cargar
+              las conversaciones.
+            </p>
+
+            <button
+              type="button"
+              (click)="loadChats()"
+            >
+              Reintentar
+            </button>
+          </div>
+        }
+
+        @if (
+          !loading() &&
+          !error()
+        ) {
+
+          @for (
+            chat of filteredChats();
+            track chat.id
+          ) {
+
+            <button
+              type="button"
+              class="chat-preview"
+              [class.chat-preview--active]="
+                selectedChatId() ===
+                chat.id
+              "
+              (click)="
+                selectChat(chat.id)
+              "
+            >
+
+              <div class="chat-preview__top">
+
+                <div
+                  class="
+                    participant-avatar
+                  "
+                >
+                  @if (
+                    !avatarFailed(
+                      chat.id
+                    )
+                  ) {
+                    <img
+                      [src]="
+                        chat.participante
+                          .fotoPerfil
+                      "
+                      [alt]="
+                        chat.participante
+                          .nombre
+                      "
+                      (error)="
+                        onAvatarError(
+                          chat.id
+                        )
+                      "
+                    >
+                  } @else {
+                    <span>
+                      {{
+                        getInitials(
+                          chat.participante
+                            .nombre
+                        )
+                      }}
+                    </span>
+                  }
+
+                  @if (
+                    chat.participante
+                      .verificado
+                  ) {
+                    <i></i>
+                  }
+                </div>
+
+                <div
+                  class="
+                    chat-preview__identity
+                  "
+                >
+                  <strong>
+                    {{
+                      chat.participante
+                        .nombre
+                    }}
+                  </strong>
+
+                  <small>
+                    Usuario TEC verificado
+                  </small>
+                </div>
+
+                <time>
+                  {{
+                    formatTime(
+                      chat.ultimoMensaje
+                        .fecha
+                    )
+                  }}
+                </time>
+
+              </div>
+
+              <div
+                class="
+                  chat-preview__publication
+                "
+              >
+
+                <img
+                  [src]="
+                    chat.publicacion.imagen
+                  "
+                  [alt]="
+                    chat.publicacion.titulo
+                  "
+                  (error)="
+                    onPublicationImageError(
+                      $event
+                    )
+                  "
+                >
+
+                <span>
+                  {{
+                    chat.publicacion.titulo
+                  }}
+                </span>
+
+                <strong>
+                  {{
+                    formatPrice(
+                      chat.publicacion.precio
+                    )
+                  }}
+                </strong>
+
+              </div>
+
+              <div
+                class="
+                  chat-preview__message
+                "
+              >
+                <span>
+                  @if (
+                    chat.ultimoMensaje
+                      .enviadoPorMi
+                  ) {
+                    Tú:
+                  }
+
+                  {{
+                    chat.ultimoMensaje.texto
+                  }}
+                </span>
+
+                @if (
+                  chat.mensajesNoLeidos >
+                  0
+                ) {
+                  <strong>
+                    {{
+                      chat.mensajesNoLeidos
+                    }}
+                  </strong>
+                }
+              </div>
+
+            </button>
+
+          } @empty {
+            <div class="chat-state">
+              No se encontraron
+              conversaciones.
+            </div>
+          }
+
+        }
+
+      </div>
+
+      <footer class="chat-list__footer">
+        <span>
+          ◈
+          Intercambios seguros dentro
+          del campus
+        </span>
+      </footer>
+
+    </aside>
+
+    <section class="conversation">
+
+      @if (
+        selectedChat();
+        as chat
+      ) {
+
+        <header class="conversation__header">
+
+          <div class="conversation__participant">
+
+            <div
+              class="
+                participant-avatar
+                participant-avatar--large
+              "
+            >
+              @if (
+                !avatarFailed(
+                  chat.id
+                )
+              ) {
+                <img
+                  [src]="
+                    chat.participante
+                      .fotoPerfil
+                  "
+                  [alt]="
+                    chat.participante
+                      .nombre
+                  "
+                  (error)="
+                    onAvatarError(
+                      chat.id
+                    )
+                  "
+                >
+              } @else {
+                <span>
+                  {{ selectedInitials() }}
+                </span>
+              }
+
+              @if (
+                chat.participante
+                  .verificado
+              ) {
+                <i></i>
+              }
+            </div>
+
+            <div>
+              <h2>
+                {{
+                  chat.participante
+                    .nombre
+                }}
+              </h2>
+
+              <p>
+                Usuario TEC verificado
+              </p>
+            </div>
+
+          </div>
+
+          <a
+            class="
+              conversation__publication
+            "
+            [routerLink]="[
+              '/publicaciones',
+              chat.publicacion.id
+            ]"
+          >
+            <img
+              [src]="
+                chat.publicacion.imagen
+              "
+              [alt]="
+                chat.publicacion.titulo
+              "
+              (error)="
+                onPublicationImageError(
+                  $event
+                )
+              "
+            >
+
+            <div>
+              <span>
+                Publicación asociada
+              </span>
+
+              <strong>
+                {{
+                  chat.publicacion.titulo
+                }}
+              </strong>
+
+              <small>
+                {{
+                  formatPrice(
+                    chat.publicacion.precio
+                  )
+                }}
+              </small>
+            </div>
+
+            <span>
+              ↗
+            </span>
+          </a>
+
+        </header>
+
+        <div class="conversation__safety">
+          <strong>
+            🛡 Consejo de seguridad:
+          </strong>
+
+          Realiza los intercambios
+          únicamente en lugares seguros
+          del campus y evita pagos
+          adelantados a cuentas externas.
+        </div>
+
+        <div class="conversation__messages">
+
+          <div class="history-notice">
+            El historial completo no está
+            disponible temporalmente.
+            Se muestra el último mensaje
+            proporcionado por API Management
+            y los mensajes enviados durante
+            esta sesión.
+          </div>
+
+          <article
+            class="message"
+            [class.message--mine]="
+              chat.ultimoMensaje
+                .enviadoPorMi
+            "
+          >
+
+            <span class="message__author">
+              {{
+                chat.ultimoMensaje
+                  .enviadoPorMi
+                  ? 'Tú'
+                  : chat.participante
+                      .nombre
+              }}
+            </span>
+
+            <div class="message__bubble">
+              {{
+                chat.ultimoMensaje.texto
+              }}
+            </div>
+
+            <time>
+              {{
+                formatTime(
+                  chat.ultimoMensaje
+                    .fecha
+                )
+              }}
+            </time>
+
+          </article>
+
+          @for (
+            message of
+              selectedSessionMessages();
+            track message.id
+          ) {
+
+            <article
+              class="
+                message
+                message--mine
+              "
+            >
+
+              <span
+                class="
+                  message__author
+                "
+              >
+                Tú
+              </span>
+
+              <div
+                class="
+                  message__bubble
+                "
+              >
+                {{ message.texto }}
+              </div>
+
+              <time>
+                {{
+                  formatTime(
+                    message.fecha
+                  )
+                }}
+              </time>
+
+            </article>
+
+          }
+
+        </div>
+
+        <footer class="composer">
+
+          @if (sendError()) {
+            <p class="composer__error">
+              {{ sendErrorMessage() }}
+            </p>
+          }
+
+          <form
+            [formGroup]="messageForm"
+            (ngSubmit)="sendMessage()"
+          >
+
+            <textarea
+              formControlName="texto"
+              rows="1"
+              maxlength="500"
+              placeholder="
+                Escribe un mensaje...
+              "
+            ></textarea>
+
+            <button
+              type="submit"
+              [disabled]="
+                sending() ||
+                messageForm.invalid ||
+                !messageForm.controls
+                  .texto.value.trim()
+              "
+              aria-label="Enviar mensaje"
+            >
+              @if (sending()) {
+                …
+              } @else {
+                ➤
+              }
+            </button>
+
+          </form>
+
+          <div class="composer__footer">
+            <span>
+              ● Transacción protegida
+              por Código de Ética TEC
+            </span>
+
+            <span>
+              Evita pagos adelantados
+              a cuentas externas
+            </span>
+          </div>
+
+        </footer>
+
+      } @else {
+
+        <div class="conversation__empty">
+          Selecciona una conversación
+          para comenzar.
+        </div>
+
+      }
+
+    </section>
+
+  </section>
+
+</main>

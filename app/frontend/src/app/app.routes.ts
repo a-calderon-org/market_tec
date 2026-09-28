@@ -4,6 +4,7 @@ import { PublicationDetail } from './features/publications/publication-detail/pu
 import { MyPublications } from './features/publications/my-publications/my-publications';
 import { PublicationCreate } from './features/publications/publication-create/publication-create';
 import { Profile } from './features/profile/profile';
+import { Messenger } from './features/messenger/messenger';
 
 export const routes: Routes = [
   {
@@ -25,5 +26,9 @@ export const routes: Routes = [
   {
     path: 'publicaciones/:id',
     component: PublicationDetail
+  },
+  {
+    path: 'mensajes',
+    component: Messenger
   }
 ];
