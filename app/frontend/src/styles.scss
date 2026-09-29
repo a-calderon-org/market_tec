@@ -19,8 +19,8 @@ body {
     Arial,
     sans-serif;
 
-  color: #172033;
-  background: #f8f7fc;
+  color: var(--text, #172033);
+  background: var(--page, #f8f7fc);
 }
 
 button,
@@ -28,4 +28,41 @@ input,
 select,
 textarea {
   font: inherit;
+}
+:root {
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --page: #101725;
+  --surface: #192334;
+  --surface-muted: #222e42;
+  --surface-overlay: rgb(25 35 52 / 95%);
+  --text: #edf2fa;
+  --text-muted: #b5c1d3;
+  --border: #40516a;
+  --accent-text: #9ccfff;
+  --accent-surface: #213b55;
+  --success-text: #79dfc0;
+  --success-surface: #183e37;
+  --danger-text: #ffaba8;
+  --danger-surface: #482b35;
+  --warning-text: #f5d28a;
+  --warning-surface: #443923;
+}
+
+button, input, select, textarea {
+  color: inherit;
+}
+
+:root[data-theme='dark'] input::placeholder,
+:root[data-theme='dark'] textarea::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent-text, #00628f);
+  outline-offset: 3px;
 }
