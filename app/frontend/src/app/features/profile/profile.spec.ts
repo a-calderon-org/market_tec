@@ -5,6 +5,7 @@ import { vi } from 'vitest';
 import { Profile } from './profile';
 import { User } from './models/user.model';
 import { UserService } from './services/user.service';
+import { GoogleAuthService } from '../auth/services/google-auth.service';
 
 describe('Profile', () => {
   let fixture:
@@ -77,6 +78,7 @@ describe('Profile', () => {
 
         providers: [
           provideRouter([]),
+          { provide: GoogleAuthService, useValue: { logout: vi.fn().mockResolvedValue(undefined) } },
 
           {
             provide:
@@ -314,8 +316,8 @@ describe('Profile', () => {
     ).toBeNull();
   });
 
-  it('should navigate to login when logging out', () => {
-    component.logout();
+  it('should navigate to login when logging out', async () => {
+    await component.logout();
 
     expect(
       router.navigate

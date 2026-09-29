@@ -1,7 +1,7 @@
 .publication-card {
   overflow: hidden;
-  background: #fff;
-  border: 1px solid #e7e8ef;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e7e8ef);
   border-radius: 14px;
   box-shadow: 0 2px 8px rgb(20 30 55 / 4%);
 }
@@ -10,7 +10,7 @@
   position: relative;
   aspect-ratio: 4 / 3;
   overflow: hidden;
-  background: #eef0f6;
+  background: var(--surface-muted, #eef0f6);
 }
 
 .publication-card__image {
@@ -31,7 +31,7 @@
   padding: 5px 9px;
   font-size: 0.75rem;
   font-weight: 600;
-  background: #fff;
+  background: var(--surface, #fff);
   border-radius: 999px;
 }
 
@@ -50,7 +50,7 @@
 
   font-size: 1.25rem;
 
-  background: rgb(255 255 255 / 90%);
+  background: var(--surface-overlay, rgb(255 255 255 / 90%));
   border: none;
   border-radius: 50%;
   cursor: pointer;
@@ -67,12 +67,12 @@
 }
 
 .publication-card__price {
-  color: #00628f;
+  color: var(--accent-text, #00628f);
   font-size: 1.25rem;
 }
 
 .publication-card__date {
-  color: #686b76;
+  color: var(--text-muted, #686b76);
   font-size: 0.78rem;
 }
 
@@ -91,7 +91,7 @@
   overflow: hidden;
   margin: 0;
 
-  color: #626572;
+  color: var(--text-muted, #626572);
   font-size: 0.82rem;
   line-height: 1.4;
 
@@ -110,8 +110,8 @@
 
 .publication-card__verified {
   padding: 3px 6px;
-  color: #00628f;
-  background: #dff1ff;
+  color: var(--accent-text, #00628f);
+  background: var(--accent-surface, #dff1ff);
   border-radius: 5px;
 }
 

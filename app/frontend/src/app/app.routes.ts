@@ -6,6 +6,7 @@ import { PublicationCreate } from './features/publications/publication-create/pu
 import { Profile } from './features/profile/profile';
 import { Messenger } from './features/messenger/messenger';
 import { Login } from './features/auth/login';
+import { authGuard } from './features/auth/auth.guard';
 
 export const routes: Routes = [
   {
@@ -18,14 +19,17 @@ export const routes: Routes = [
   },
   {
     path: 'perfil',
+    canActivate: [authGuard],
     component: Profile
   },
   {
     path: 'mis-publicaciones',
+    canActivate: [authGuard],
     component: MyPublications
   },
   {
     path: 'publicaciones/nueva',
+    canActivate: [authGuard],
     component: PublicationCreate
   },
   {
@@ -34,6 +38,7 @@ export const routes: Routes = [
   },
   {
     path: 'mensajes',
+    canActivate: [authGuard],
     component: Messenger
   }
 ];

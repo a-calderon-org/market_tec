@@ -4,6 +4,7 @@ import { Router, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { UpdateUser, User } from './models/user.model';
 import { UserService } from './services/user.service';
+import { GoogleAuthService } from '../auth/services/google-auth.service';
 
 @Component({
   selector: 'app-profile',
@@ -16,6 +17,7 @@ import { UserService } from './services/user.service';
   styleUrl: './profile.scss'
 })
 export class Profile implements OnInit {
+  private readonly googleAuth = inject(GoogleAuthService);
   private readonly formBuilder =
     inject(NonNullableFormBuilder);
 
@@ -375,9 +377,13 @@ export class Profile implements OnInit {
     );
   }
 
-  logout(): void {
-    void this.router.navigate(
-      ['/login']
-    );
+  async logout(): Promise<void> {
+    try {
+      await this.googleAuth.logout();
+      await this.router.navigate(['/login']);
+    } catch {
+      this.saveError.set(true);
+      this.saveMessage.set('No fue posible cerrar la sesión. Inténtalo nuevamente.');
+    }
   }
 }

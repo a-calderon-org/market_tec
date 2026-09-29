@@ -3,6 +3,8 @@ import { provideRouter, Router } from '@angular/router';
 import { vi } from 'vitest';
 import { Login } from './login';
 import { LoginService } from './services/login.service';
+import { GoogleAuthService } from './services/google-auth.service';
+import { HttpErrorResponse } from '@angular/common/http';
 
 describe('Login', () => {
   let fixture:
@@ -14,7 +16,13 @@ describe('Login', () => {
   let router:
     Router;
 
+  const googleAuth = {
+    renderButton: vi.fn().mockResolvedValue(undefined),
+    signIn: vi.fn().mockResolvedValue(undefined)
+  };
+
   beforeEach(async () => {
+    googleAuth.signIn.mockReset().mockResolvedValue(undefined);
     await TestBed
       .configureTestingModule({
         imports: [
@@ -23,7 +31,8 @@ describe('Login', () => {
 
         providers: [
           provideRouter([]),
-          LoginService
+          LoginService,
+          { provide: GoogleAuthService, useValue: googleAuth }
         ]
       })
       .compileComponents();
@@ -53,6 +62,23 @@ describe('Login', () => {
     expect(
       component
     ).toBeTruthy();
+  });
+
+  it('navigates only after the backend validates Google', async () => {
+    await component.signInWithGoogle('google-credential');
+    expect(googleAuth.signIn).toHaveBeenCalledWith('google-credential');
+    expect(router.navigate).toHaveBeenCalledWith(['/']);
+    expect(component.submitting()).toBe(false);
+  });
+
+  it('shows backend errors without navigating', async () => {
+    googleAuth.signIn.mockRejectedValueOnce(new HttpErrorResponse({
+      status: 401, error: { message: 'Credencial inválida.' }
+    }));
+    await component.signInWithGoogle('invalid');
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(component.errorMessage()).toBe('Credencial inválida.');
+    expect(component.submitting()).toBe(false);
   });
 
   it('should initialize with an empty form', () => {

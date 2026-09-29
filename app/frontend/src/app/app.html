@@ -1,1 +1,14 @@
+<div class="appearance-bar">
+  <button
+    class="theme-toggle"
+    type="button"
+    (click)="themeService.toggle()"
+    [attr.aria-pressed]="themeService.theme() === 'dark'"
+    aria-label="Modo oscuro"
+    [title]="themeService.theme() === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'"
+  >
+    <span aria-hidden="true">{{ themeService.theme() === 'dark' ? '☀' : '☾' }}</span>
+    {{ themeService.theme() === 'dark' ? 'Modo claro' : 'Modo oscuro' }}
+  </button>
+</div>
 <router-outlet />

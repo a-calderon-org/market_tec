@@ -52,23 +52,21 @@
 
     </header>
 
-    <button
-      class="institutional-button"
-      type="button"
-      disabled
-      title="
-        El acceso institucional externo
-        no está disponible en Phase I
-      "
-    >
-      <span class="institutional-button__google">
-        G
-      </span>
-
-      <span>
-        Continuar con correo institucional
-      </span>
-    </button>
+    <div class="google-access" [attr.aria-busy]="googleLoading() || submitting()">
+      <div #googleButton class="google-button" [hidden]="submitting()"></div>
+      @if (googleLoading()) {
+        <p class="google-login-note" role="status">Cargando Google...</p>
+      }
+      @if (submitting()) {
+        <p class="google-login-note" role="status">Verificando tu cuenta...</p>
+      }
+      @if (googleLoadError()) {
+        <button type="button" class="institutional-button" (click)="loadGoogleButton()">
+          Reintentar conexión con Google
+        </button>
+      }
+      <p class="google-login-note">Continúa con tu cuenta de Google.</p>
+    </div>
 
     <div class="login-divider">
       <span></span>
@@ -81,7 +79,7 @@
     </div>
 
     @if (error()) {
-      <div class="login-feedback">
+      <div class="login-feedback" role="alert">
         <span>
           !
         </span>
