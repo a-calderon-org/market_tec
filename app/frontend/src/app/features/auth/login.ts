@@ -1,10 +1,6 @@
-<<<<<<< Updated upstream
-import { Component, inject, signal } from '@angular/core';
-=======
 import { AfterViewInit, Component, ElementRef, ViewChild, effect, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { GoogleAuthService } from './services/google-auth.service';
->>>>>>> Stashed changes
 import { AbstractControl, NonNullableFormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { LoginService } from './services/login.service';
@@ -19,9 +15,6 @@ import { ThemeService } from '../../core/theme.service';
   templateUrl: './login.html',
   styleUrl: './login.scss'
 })
-<<<<<<< Updated upstream
-export class Login {
-=======
 export class Login implements AfterViewInit {
   private readonly googleAuth = inject(GoogleAuthService);
   private readonly themeService = inject(ThemeService);
@@ -84,7 +77,6 @@ export class Login implements AfterViewInit {
       this.submitting.set(false);
     }
   }
->>>>>>> Stashed changes
   private readonly loginService =
     inject(LoginService);
 

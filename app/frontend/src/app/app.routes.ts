@@ -5,10 +5,7 @@ import { MyPublications } from './features/publications/my-publications/my-publi
 import { PublicationCreate } from './features/publications/publication-create/publication-create';
 import { Messenger } from './features/messenger/messenger';
 import { Login } from './features/auth/login';
-<<<<<<< Updated upstream
-=======
 import { authGuard, guestGuard } from './features/auth/auth.guard';
->>>>>>> Stashed changes
 
 export const routes: Routes = [
   {
@@ -22,18 +19,13 @@ export const routes: Routes = [
     component: Login
   },
   {
-<<<<<<< Updated upstream
-    path: 'perfil',
-    component: Profile
-  },
-  {
-=======
->>>>>>> Stashed changes
     path: 'mis-publicaciones',
+    canActivate: [authGuard],
     component: MyPublications
   },
   {
     path: 'publicaciones/nueva',
+    canActivate: [authGuard],
     component: PublicationCreate
   },
   {
@@ -43,6 +35,7 @@ export const routes: Routes = [
   },
   {
     path: 'mensajes',
+    canActivate: [authGuard],
     component: Messenger
   },
   {

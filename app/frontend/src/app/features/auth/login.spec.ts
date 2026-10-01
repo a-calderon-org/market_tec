@@ -3,12 +3,9 @@ import { provideRouter, Router } from '@angular/router';
 import { vi } from 'vitest';
 import { Login } from './login';
 import { LoginService } from './services/login.service';
-<<<<<<< Updated upstream
-=======
 import { GoogleAuthService } from './services/google-auth.service';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ThemeService } from '../../core/theme.service';
->>>>>>> Stashed changes
 
 describe('Login', () => {
   let fixture:
@@ -20,13 +17,15 @@ describe('Login', () => {
   let router:
     Router;
 
+  const googleAuth = {
+    renderButton: vi.fn().mockResolvedValue(undefined),
+    signIn: vi.fn().mockResolvedValue(undefined)
+  };
+
   beforeEach(async () => {
-<<<<<<< Updated upstream
-=======
     localStorage.setItem('market-tec-theme', 'light');
     googleAuth.renderButton.mockReset().mockResolvedValue(undefined);
     googleAuth.signIn.mockReset().mockResolvedValue(undefined);
->>>>>>> Stashed changes
     await TestBed
       .configureTestingModule({
         imports: [
@@ -35,7 +34,8 @@ describe('Login', () => {
 
         providers: [
           provideRouter([]),
-          LoginService
+          LoginService,
+          { provide: GoogleAuthService, useValue: googleAuth }
         ]
       })
       .compileComponents();
@@ -67,8 +67,6 @@ describe('Login', () => {
     ).toBeTruthy();
   });
 
-<<<<<<< Updated upstream
-=======
   it('should show the simplified MarkeTEC welcome', () => {
     const element: HTMLElement = fixture.nativeElement;
 
@@ -116,8 +114,6 @@ describe('Login', () => {
     expect(component.errorMessage()).toBe('Credencial inválida.');
     expect(component.submitting()).toBe(false);
   });
-
->>>>>>> Stashed changes
   it('should initialize with an empty form', () => {
     expect(
       component.loginForm

@@ -14,11 +14,7 @@ import { UserService } from './services/user.service';
   styleUrl: './profile.scss'
 })
 export class Profile implements OnInit {
-<<<<<<< Updated upstream
-=======
   @Output() readonly closed = new EventEmitter<void>();
-
->>>>>>> Stashed changes
   private readonly formBuilder =
     inject(NonNullableFormBuilder);
 
@@ -379,13 +375,4 @@ export class Profile implements OnInit {
     );
   }
 
-<<<<<<< Updated upstream
-  logout(): void {
-    void this.router.navigate(
-      ['/login']
-    );
-  }
 }
-=======
-}
->>>>>>> Stashed changes

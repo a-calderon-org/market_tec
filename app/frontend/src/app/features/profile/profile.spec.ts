@@ -74,10 +74,6 @@ describe('Profile', () => {
 
         providers: [
           provideRouter([]),
-<<<<<<< Updated upstream
-
-=======
->>>>>>> Stashed changes
           {
             provide:
               UserService,
@@ -304,17 +300,4 @@ describe('Profile', () => {
     ).toBeNull();
   });
 
-<<<<<<< Updated upstream
-  it('should navigate to login when logging out', () => {
-    component.logout();
-
-    expect(
-      router.navigate
-    ).toHaveBeenCalledWith(
-      ['/login']
-    );
-  });
 });
-=======
-});
->>>>>>> Stashed changes
