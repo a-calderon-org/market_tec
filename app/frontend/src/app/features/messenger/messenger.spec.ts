@@ -1,5 +1,9 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import {
+  ActivatedRoute,
+  convertToParamMap,
+  provideRouter
+} from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { Chat } from './models/chat.model';
@@ -118,6 +122,13 @@ describe('Messenger', () => {
       vi.fn()
   };
 
+  const activatedRouteMock = {
+    snapshot: {
+      queryParamMap:
+        convertToParamMap({})
+    }
+  };
+
   beforeEach(async () => {
     chatServiceMock
       .getChats
@@ -138,6 +149,10 @@ describe('Messenger', () => {
         })
       );
 
+    activatedRouteMock.snapshot
+      .queryParamMap =
+        convertToParamMap({});
+
     await TestBed
       .configureTestingModule({
         imports: [
@@ -146,6 +161,14 @@ describe('Messenger', () => {
 
         providers: [
           provideRouter([]),
+
+          {
+            provide:
+              ActivatedRoute,
+
+            useValue:
+              activatedRouteMock
+          },
 
           {
             provide:
@@ -192,6 +215,29 @@ describe('Messenger', () => {
     ).toBe(
       'CHAT-001'
     );
+  });
+
+  it('should select the conversation requested by publication', () => {
+    activatedRouteMock.snapshot
+      .queryParamMap =
+        convertToParamMap({
+          publicacion:
+            'PUB-2024-0742',
+          vendedor:
+            'USR-003'
+        });
+
+    component.loadChats();
+
+    expect(
+      component.selectedChatId()
+    ).toBe(
+      'CHAT-002'
+    );
+
+    expect(
+      component.mobileConversationOpen()
+    ).toBe(true);
   });
 
   it('should preserve unread counts when selecting a chat', () => {

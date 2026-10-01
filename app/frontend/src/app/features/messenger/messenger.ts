@@ -1,6 +1,6 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Chat, SessionMessage } from './models/chat.model';
 import { ChatService } from './services/chat.service';
 
@@ -18,6 +18,9 @@ export class Messenger implements OnInit {
   private readonly chatService =
     inject(ChatService);
 
+  private readonly route =
+    inject(ActivatedRoute);
+
   private readonly formBuilder =
     inject(NonNullableFormBuilder);
 
@@ -26,6 +29,9 @@ export class Messenger implements OnInit {
 
   readonly selectedChatId =
     signal<string | null>(null);
+
+  readonly mobileConversationOpen =
+    signal(false);
 
   readonly searchTerm =
     signal('');
@@ -195,12 +201,46 @@ export class Messenger implements OnInit {
             response.items
           );
 
+          const requestedPublicationId =
+            this.route.snapshot
+              .queryParamMap
+              .get('publicacion');
+
+          const requestedSellerId =
+            this.route.snapshot
+              .queryParamMap
+              .get('vendedor');
+
+          const requestedChat =
+            response.items.find(
+              (chat) =>
+                chat.publicacion.id ===
+                  requestedPublicationId &&
+                (
+                  !requestedSellerId ||
+                  String(
+                    chat.participante.id
+                  ) ===
+                    requestedSellerId
+                )
+            );
+
+          if (requestedChat) {
+            this.selectedChatId.set(
+              requestedChat.id
+            );
+
+            this.mobileConversationOpen.set(
+              true
+            );
+          }
+
           if (
             response.items.length >
               0 &&
             !this.selectedChatId()
           ) {
-            this.selectChat(
+            this.selectedChatId.set(
               response.items[0].id
             );
           }
@@ -223,8 +263,18 @@ export class Messenger implements OnInit {
         chatId
     );
 
+    this.mobileConversationOpen.set(
+      true
+    );
+
     this.sendError.set(
         false
+    );
+  }
+
+  closeConversation(): void {
+    this.mobileConversationOpen.set(
+      false
     );
   }
 

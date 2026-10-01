@@ -1,31 +1,44 @@
 <main class="messenger">
-
-  <section class="messenger__shell">
-
-    <aside class="chat-list">
-
+  <section class="messenger__shell" aria-label="Centro de mensajes">
+    <aside
+      class="chat-list"
+      [class.chat-list--hidden]="mobileConversationOpen()"
+      aria-label="Conversaciones"
+    >
       <header class="chat-list__header">
-
         <div class="chat-list__title">
-          <h1>
-            Mensajes
-          </h1>
+          <div>
+            <span class="chat-list__eyebrow">Bandeja de entrada</span>
+            <h1>Mensajes</h1>
+          </div>
 
           @if (totalUnread() > 0) {
-            <span>
-              {{ totalUnread() }}
-              no leídos
+            <span class="chat-list__unread">
+              {{ totalUnread() }} sin leer
             </span>
           }
         </div>
 
-        <div class="chat-list__filters">
+        <label class="chat-search">
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="7"></circle>
+            <path d="m20 20-4-4"></path>
+          </svg>
 
+          <input
+            type="search"
+            aria-label="Buscar en mensajes o publicaciones"
+            placeholder="Buscar conversación o publicación"
+            [value]="searchTerm()"
+            (input)="onSearch($event)"
+          >
+        </label>
+
+        <div class="chat-list__filters" aria-label="Filtros de conversaciones">
           <button
             type="button"
-            [class.chat-filter--active]="
-              !unreadOnly()
-            "
+            [class.chat-filter--active]="!unreadOnly()"
+            [attr.aria-pressed]="!unreadOnly()"
             (click)="showAllChats()"
           >
             Todos
@@ -33,479 +46,222 @@
 
           <button
             type="button"
-            [class.chat-filter--active]="
-              unreadOnly()
-            "
+            [class.chat-filter--active]="unreadOnly()"
+            [attr.aria-pressed]="unreadOnly()"
             (click)="showUnreadChats()"
           >
             No leídos
           </button>
-
         </div>
-
       </header>
 
-      <label class="chat-search">
-        <span>⌕</span>
-
-        <input
-          type="search"
-          placeholder="Buscar en mensajes o publicaciones..."
-          [value]="searchTerm()"
-          (input)="onSearch($event)"
-        >
-      </label>
-
       <div class="chat-list__content">
-
         @if (loading()) {
-          <div class="chat-state">
-            Cargando conversaciones...
-          </div>
+          <div class="chat-state">Cargando conversaciones...</div>
         }
 
         @if (error()) {
-          <div
-            class="
-              chat-state
-              chat-state--error
-            "
-          >
-            <p>
-              No fue posible cargar
-              las conversaciones.
-            </p>
-
-            <button
-              type="button"
-              (click)="loadChats()"
-            >
-              Reintentar
-            </button>
+          <div class="chat-state chat-state--error" role="alert">
+            <p>No fue posible cargar las conversaciones.</p>
+            <button type="button" (click)="loadChats()">Reintentar</button>
           </div>
         }
 
-        @if (
-          !loading() &&
-          !error()
-        ) {
-
-          @for (
-            chat of filteredChats();
-            track chat.id
-          ) {
-
+        @if (!loading() && !error()) {
+          @for (chat of filteredChats(); track chat.id) {
             <button
               type="button"
               class="chat-preview"
-              [class.chat-preview--active]="
-                selectedChatId() ===
-                chat.id
-              "
-              (click)="
-                selectChat(chat.id)
-              "
+              [class.chat-preview--active]="selectedChatId() === chat.id"
+              [attr.aria-pressed]="selectedChatId() === chat.id"
+              (click)="selectChat(chat.id)"
             >
+              <div class="participant-avatar">
+                @if (!avatarFailed(chat.id)) {
+                  <img
+                    [src]="chat.participante.fotoPerfil"
+                    [alt]="chat.participante.nombre"
+                    (error)="onAvatarError(chat.id)"
+                  >
+                } @else {
+                  <span>{{ getInitials(chat.participante.nombre) }}</span>
+                }
 
-              <div class="chat-preview__top">
-
-                <div
-                  class="
-                    participant-avatar
-                  "
-                >
-                  @if (
-                    !avatarFailed(
-                      chat.id
-                    )
-                  ) {
-                    <img
-                      [src]="
-                        chat.participante
-                          .fotoPerfil
-                      "
-                      [alt]="
-                        chat.participante
-                          .nombre
-                      "
-                      (error)="
-                        onAvatarError(
-                          chat.id
-                        )
-                      "
-                    >
-                  } @else {
-                    <span>
-                      {{
-                        getInitials(
-                          chat.participante
-                            .nombre
-                        )
-                      }}
-                    </span>
-                  }
-
-                  @if (
-                    chat.participante
-                      .verificado
-                  ) {
-                    <i></i>
-                  }
-                </div>
-
-                <div
-                  class="
-                    chat-preview__identity
-                  "
-                >
-                  <strong>
-                    {{
-                      chat.participante
-                        .nombre
-                    }}
-                  </strong>
-
-                  <small>
-                    Usuario TEC verificado
-                  </small>
-                </div>
-
-                <time>
-                  {{
-                    formatTime(
-                      chat.ultimoMensaje
-                        .fecha
-                    )
-                  }}
-                </time>
-
-              </div>
-
-              <div
-                class="
-                  chat-preview__publication
-                "
-              >
-
-                <img
-                  [src]="
-                    chat.publicacion.imagen
-                  "
-                  [alt]="
-                    chat.publicacion.titulo
-                  "
-                  (error)="
-                    onPublicationImageError(
-                      $event
-                    )
-                  "
-                >
-
-                <span>
-                  {{
-                    chat.publicacion.titulo
-                  }}
-                </span>
-
-                <strong>
-                  {{
-                    formatPrice(
-                      chat.publicacion.precio
-                    )
-                  }}
-                </strong>
-
-              </div>
-
-              <div
-                class="
-                  chat-preview__message
-                "
-              >
-                <span>
-                  @if (
-                    chat.ultimoMensaje
-                      .enviadoPorMi
-                  ) {
-                    Tú:
-                  }
-
-                  {{
-                    chat.ultimoMensaje.texto
-                  }}
-                </span>
-
-                @if (
-                  chat.mensajesNoLeidos >
-                  0
-                ) {
-                  <strong>
-                    {{
-                      chat.mensajesNoLeidos
-                    }}
-                  </strong>
+                @if (chat.participante.verificado) {
+                  <i title="Usuario TEC verificado"></i>
                 }
               </div>
 
+              <div class="chat-preview__body">
+                <div class="chat-preview__heading">
+                  <strong>{{ chat.participante.nombre }}</strong>
+                  <time [attr.datetime]="chat.ultimoMensaje.fecha">
+                    {{ formatTime(chat.ultimoMensaje.fecha) }}
+                  </time>
+                </div>
+
+                <div class="chat-preview__publication">
+                  <img
+                    [src]="chat.publicacion.imagen"
+                    [alt]="chat.publicacion.titulo"
+                    (error)="onPublicationImageError($event)"
+                  >
+
+                  <span>{{ chat.publicacion.titulo }}</span>
+                  <strong>{{ formatPrice(chat.publicacion.precio) }}</strong>
+                </div>
+
+                <div class="chat-preview__message">
+                  <span>
+                    @if (chat.ultimoMensaje.enviadoPorMi) {
+                      Tú:
+                    }
+                    {{ chat.ultimoMensaje.texto }}
+                  </span>
+
+                  @if (chat.mensajesNoLeidos > 0) {
+                    <strong aria-label="Mensajes no leídos">
+                      {{ chat.mensajesNoLeidos }}
+                    </strong>
+                  }
+                </div>
+              </div>
             </button>
-
           } @empty {
-            <div class="chat-state">
-              No se encontraron
-              conversaciones.
-            </div>
+            <div class="chat-state">No se encontraron conversaciones.</div>
           }
-
         }
-
       </div>
 
       <footer class="chat-list__footer">
-        <span>
-          ◈
-          Intercambios seguros dentro
-          del campus
-        </span>
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M12 3 5 6v5c0 4.6 2.8 8 7 10 4.2-2 7-5.4 7-10V6l-7-3Z"></path>
+          <path d="m9.5 12 1.7 1.7 3.8-4"></path>
+        </svg>
+        <span>Intercambios seguros dentro del campus</span>
       </footer>
-
     </aside>
 
-    <section class="conversation">
-
-      @if (
-        selectedChat();
-        as chat
-      ) {
-
+    <section
+      class="conversation"
+      [class.conversation--open]="mobileConversationOpen()"
+      aria-label="Conversación seleccionada"
+    >
+      @if (selectedChat(); as chat) {
         <header class="conversation__header">
+          <button
+            class="conversation__back"
+            type="button"
+            aria-label="Volver a las conversaciones"
+            (click)="closeConversation()"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="m15 18-6-6 6-6"></path>
+            </svg>
+          </button>
 
           <div class="conversation__participant">
-
-            <div
-              class="
-                participant-avatar
-                participant-avatar--large
-              "
-            >
-              @if (
-                !avatarFailed(
-                  chat.id
-                )
-              ) {
+            <div class="participant-avatar participant-avatar--large">
+              @if (!avatarFailed(chat.id)) {
                 <img
-                  [src]="
-                    chat.participante
-                      .fotoPerfil
-                  "
-                  [alt]="
-                    chat.participante
-                      .nombre
-                  "
-                  (error)="
-                    onAvatarError(
-                      chat.id
-                    )
-                  "
+                  [src]="chat.participante.fotoPerfil"
+                  [alt]="chat.participante.nombre"
+                  (error)="onAvatarError(chat.id)"
                 >
               } @else {
-                <span>
-                  {{ selectedInitials() }}
-                </span>
+                <span>{{ selectedInitials() }}</span>
               }
 
-              @if (
-                chat.participante
-                  .verificado
-              ) {
-                <i></i>
+              @if (chat.participante.verificado) {
+                <i title="Usuario TEC verificado"></i>
               }
             </div>
 
             <div>
-              <h2>
-                {{
-                  chat.participante
-                    .nombre
-                }}
-              </h2>
-
+              <h2>{{ chat.participante.nombre }}</h2>
               <p>
+                <span aria-hidden="true"></span>
                 Usuario TEC verificado
               </p>
             </div>
-
           </div>
 
           <a
-            class="
-              conversation__publication
-            "
-            [routerLink]="[
-              '/publicaciones',
-              chat.publicacion.id
-            ]"
+            class="conversation__publication"
+            [routerLink]="['/publicaciones', chat.publicacion.id]"
+            aria-label="Ver publicación asociada"
           >
             <img
-              [src]="
-                chat.publicacion.imagen
-              "
-              [alt]="
-                chat.publicacion.titulo
-              "
-              (error)="
-                onPublicationImageError(
-                  $event
-                )
-              "
+              [src]="chat.publicacion.imagen"
+              [alt]="chat.publicacion.titulo"
+              (error)="onPublicationImageError($event)"
             >
 
             <div>
-              <span>
-                Publicación asociada
-              </span>
-
-              <strong>
-                {{
-                  chat.publicacion.titulo
-                }}
-              </strong>
-
-              <small>
-                {{
-                  formatPrice(
-                    chat.publicacion.precio
-                  )
-                }}
-              </small>
+              <span>Publicación asociada</span>
+              <strong>{{ chat.publicacion.titulo }}</strong>
+              <small>{{ formatPrice(chat.publicacion.precio) }}</small>
             </div>
 
-            <span>
-              ↗
-            </span>
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M7 17 17 7M8 7h9v9"></path>
+            </svg>
           </a>
-
         </header>
 
-        <div class="conversation__safety">
-          <strong>
-            🛡 Consejo de seguridad:
-          </strong>
-
-          Realiza los intercambios
-          únicamente en lugares seguros
-          del campus y evita pagos
-          adelantados a cuentas externas.
-        </div>
-
         <div class="conversation__messages">
+          <div class="conversation__safety" role="note">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M12 3 5 6v5c0 4.6 2.8 8 7 10 4.2-2 7-5.4 7-10V6l-7-3Z"></path>
+              <path d="m9.5 12 1.7 1.7 3.8-4"></path>
+            </svg>
+            <span>
+              <strong>Compra con seguridad.</strong>
+              Coordina el intercambio en un lugar seguro del campus y evita pagos adelantados.
+            </span>
+          </div>
 
           <div class="history-notice">
-            El historial completo no está
-            disponible temporalmente.
-            Se muestra el último mensaje
-            proporcionado por API Management
-            y los mensajes enviados durante
-            esta sesión.
+            El historial completo no está disponible temporalmente. Se muestra el último
+            mensaje registrado y los mensajes enviados durante esta sesión.
           </div>
 
           <article
             class="message"
-            [class.message--mine]="
-              chat.ultimoMensaje
-                .enviadoPorMi
-            "
+            [class.message--mine]="chat.ultimoMensaje.enviadoPorMi"
           >
-
             <span class="message__author">
-              {{
-                chat.ultimoMensaje
-                  .enviadoPorMi
-                  ? 'Tú'
-                  : chat.participante
-                      .nombre
-              }}
+              {{ chat.ultimoMensaje.enviadoPorMi ? 'Tú' : chat.participante.nombre }}
             </span>
 
-            <div class="message__bubble">
-              {{
-                chat.ultimoMensaje.texto
-              }}
-            </div>
+            <div class="message__bubble">{{ chat.ultimoMensaje.texto }}</div>
 
-            <time>
-              {{
-                formatTime(
-                  chat.ultimoMensaje
-                    .fecha
-                )
-              }}
+            <time [attr.datetime]="chat.ultimoMensaje.fecha">
+              {{ formatTime(chat.ultimoMensaje.fecha) }}
             </time>
-
           </article>
 
-          @for (
-            message of
-              selectedSessionMessages();
-            track message.id
-          ) {
-
-            <article
-              class="
-                message
-                message--mine
-              "
-            >
-
-              <span
-                class="
-                  message__author
-                "
-              >
-                Tú
-              </span>
-
-              <div
-                class="
-                  message__bubble
-                "
-              >
-                {{ message.texto }}
-              </div>
-
-              <time>
-                {{
-                  formatTime(
-                    message.fecha
-                  )
-                }}
-              </time>
-
+          @for (message of selectedSessionMessages(); track message.id) {
+            <article class="message message--mine">
+              <span class="message__author">Tú</span>
+              <div class="message__bubble">{{ message.texto }}</div>
+              <time [attr.datetime]="message.fecha">{{ formatTime(message.fecha) }}</time>
             </article>
-
           }
-
         </div>
 
         <footer class="composer">
-
           @if (sendError()) {
-            <p class="composer__error">
-              {{ sendErrorMessage() }}
-            </p>
+            <p class="composer__error" role="alert">{{ sendErrorMessage() }}</p>
           }
 
-          <form
-            [formGroup]="messageForm"
-            (ngSubmit)="sendMessage()"
-          >
-
+          <form [formGroup]="messageForm" (ngSubmit)="sendMessage()">
             <textarea
               formControlName="texto"
               rows="1"
               maxlength="500"
-              placeholder="
-                Escribe un mensaje...
-              "
+              aria-label="Mensaje"
+              placeholder="Escribe un mensaje..."
             ></textarea>
 
             <button
@@ -513,45 +269,39 @@
               [disabled]="
                 sending() ||
                 messageForm.invalid ||
-                !messageForm.controls
-                  .texto.value.trim()
+                !messageForm.controls.texto.value.trim()
               "
               aria-label="Enviar mensaje"
             >
               @if (sending()) {
-                …
+                <span class="composer__sending" aria-hidden="true">•••</span>
               } @else {
-                ➤
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="m21 3-7.5 18-3.8-7.7L2 9.5 21 3Z"></path>
+                  <path d="m9.7 13.3 4.1-4.1"></path>
+                </svg>
               }
             </button>
-
           </form>
 
           <div class="composer__footer">
             <span>
-              ● Transacción protegida
-              por Código de Ética TEC
+              <i aria-hidden="true"></i>
+              Transacción protegida por el Código de Ética TEC
             </span>
-
-            <span>
-              Evita pagos adelantados
-              a cuentas externas
-            </span>
+            <span>Evita pagos adelantados a cuentas externas</span>
           </div>
-
         </footer>
-
       } @else {
-
         <div class="conversation__empty">
-          Selecciona una conversación
-          para comenzar.
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path d="M21 12a8 8 0 0 1-8 8H6l-4 2 1.4-4.2A9 9 0 1 1 21 12Z"></path>
+            <path d="M8 12h.01M12 12h.01M16 12h.01"></path>
+          </svg>
+          <strong>Elige una conversación</strong>
+          <span>Selecciona un chat para ver los mensajes.</span>
         </div>
-
       }
-
     </section>
-
   </section>
-
 </main>

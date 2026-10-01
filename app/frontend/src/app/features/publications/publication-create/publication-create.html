@@ -1,55 +1,6 @@
 <main class="publication-create">
   <div class="publication-create__container">
 
-    <header class="creation-header">
-      <nav
-        class="breadcrumb"
-        aria-label="Navegación"
-      >
-        <a routerLink="/">
-          Inicio
-        </a>
-
-        <span>›</span>
-
-        <a routerLink="/mis-publicaciones">
-          Mis Publicaciones
-        </a>
-
-        <span>›</span>
-
-        <strong>
-          Nueva Publicación
-        </strong>
-      </nav>
-
-      <span class="creation-header__autosave">
-        Los cambios permanecen durante esta sesión
-      </span>
-    </header>
-
-    <section class="progress-card">
-      <div class="progress-card__header">
-        <div class="progress-card__step">
-          <span class="progress-card__number">
-            3
-          </span>
-
-          <strong>
-            Detalles de la Publicación
-          </strong>
-        </div>
-
-        <span>
-          Paso 3 de 4 · Vista previa siguiente
-        </span>
-      </div>
-
-      <div class="progress-card__track">
-        <div class="progress-card__bar"></div>
-      </div>
-    </section>
-
     <div class="publication-create__layout">
 
       <form
@@ -412,7 +363,7 @@
             <button
               type="submit"
               class="form-actions__submit"
-              [disabled]="submitting()"
+              [disabled]="form.invalid || submitting()"
             >
               @if (submitting()) {
                 Publicando...
@@ -520,7 +471,7 @@
 
         <div class="preview-note">
           <strong>
-            Vista previa local
+            Vista previa
           </strong>
 
           <p>

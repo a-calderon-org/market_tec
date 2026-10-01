@@ -124,6 +124,33 @@ describe('PublicationCreate', () => {
     ).toBe(true);
   });
 
+  it('should enable creation only when every required field is valid', () => {
+    const createButton =
+      fixture.nativeElement.querySelector(
+        '.form-actions__submit'
+      ) as HTMLButtonElement;
+
+    expect(createButton.disabled).toBe(true);
+
+    component.form.setValue({
+      categoria: 'electronicos',
+      subcategoria: 'monitores',
+      titulo: 'Monitor Dell UltraSharp',
+      precio: 195000,
+      ubicacion: 'Biblioteca TEC',
+      condicion: 'como-nuevo',
+      descripcion: 'Monitor en excelente estado.'
+    });
+    fixture.detectChanges();
+
+    expect(createButton.disabled).toBe(false);
+
+    component.form.controls.ubicacion.setValue('');
+    fixture.detectChanges();
+
+    expect(createButton.disabled).toBe(true);
+  });
+
   it('should select a category and clear the subcategory', () => {
     component.form.controls
       .subcategoria
@@ -558,53 +585,4 @@ describe('PublicationCreate', () => {
     );
   });
 
-  it('should render the publication creation breadcrumb', () => {
-    const breadcrumb:
-      HTMLElement =
-        fixture.nativeElement
-          .querySelector(
-            '.breadcrumb'
-          );
-
-    expect(
-      breadcrumb.textContent
-    ).toContain(
-      'Inicio'
-    );
-
-    expect(
-      breadcrumb.textContent
-    ).toContain(
-      'Mis Publicaciones'
-    );
-
-    expect(
-      breadcrumb.textContent
-    ).toContain(
-      'Nueva Publicación'
-    );
-  });
-
-  it('should link the breadcrumb back to my publications', () => {
-    const links:
-      NodeListOf<HTMLAnchorElement> =
-        fixture.nativeElement
-          .querySelectorAll(
-            '.breadcrumb a'
-          );
-
-    expect(
-      links.length
-    ).toBeGreaterThanOrEqual(
-      2
-    );
-
-    expect(
-      links[1].getAttribute(
-        'href'
-      )
-    ).toBe(
-      '/mis-publicaciones'
-    );
-  });
 });
