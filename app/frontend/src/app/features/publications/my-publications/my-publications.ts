@@ -26,11 +26,6 @@ export class MyPublications implements OnInit {
   private readonly publicationService =
     inject(PublicationService);
 
-  /*
-   * Temporal para Fase I.
-   * Cuando implementemos autenticación, este ID debe
-   * obtenerse de la sesión del usuario.
-   */
   private readonly currentUserId = 'USR-001';
 
   private readonly allPublications =

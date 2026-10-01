@@ -15,49 +15,19 @@
    ========================= */
 
 .home__header {
-  padding: 30px 4% 34px;
+  padding: 30px 0 12px;
 
-  background: var(--surface-muted, #f0f2ff);
-  border-bottom: 1px solid var(--border, #e7e9f3);
+  background: var(--page, #f8f7fc);
 }
 
 .home__header-inner {
   max-width: 1500px;
   margin: 0 auto;
-}
-
-.home__breadcrumb {
-  display: flex;
-  gap: 7px;
-  align-items: center;
-
-  margin: 0 0 16px;
-
-  color: var(--text-muted, #727986);
-  font-size: 0.8rem;
-}
-
-.home__breadcrumb a {
-  color: var(--text-muted, #5f6672);
-  text-decoration: none;
-
-  transition: color 0.2s ease;
-}
-
-.home__breadcrumb a:hover {
-  color: var(--accent-text, #00628f);
-}
-
-.home__breadcrumb strong {
-  color: var(--text, #39414e);
-  font-weight: 700;
+  padding: 0 4%;
 }
 
 .home__header-content {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 48px;
+  display: block;
 }
 
 .home__header-main {
@@ -107,133 +77,13 @@
 }
 
 /* =========================
-   Header actions
-   ========================= */
-
-.home__header-actions {
-  display: flex;
-  flex-shrink: 0;
-  flex-direction: column;
-  gap: 12px;
-  align-items: flex-end;
-
-  width: min(100%, 430px);
-}
-
-.home__security-message {
-  display: flex;
-  gap: 9px;
-  align-items: center;
-
-  box-sizing: border-box;
-  width: 100%;
-  padding: 11px 15px;
-
-  color: var(--accent-text, #00628f);
-  font-size: 0.8rem;
-  font-weight: 700;
-  line-height: 1.35;
-
-  background: var(--accent-surface, #dcecff);
-  border: 1px solid var(--border, #cae3f8);
-  border-radius: 9px;
-}
-
-.home__security-icon {
-  display: grid;
-  flex-shrink: 0;
-  place-items: center;
-
-  width: 21px;
-  height: 21px;
-
-  color: #fff;
-  font-size: 0.68rem;
-  font-weight: 800;
-
-  background: #00628f;
-  border-radius: 50%;
-}
-
-.home-action {
-  display: inline-flex;
-  gap: 9px;
-  align-items: center;
-  justify-content: center;
-
-  padding: 11px 17px;
-
-  color: #fff;
-  font-size: 0.82rem;
-  font-weight: 700;
-  text-decoration: none;
-
-  background: #00628f;
-  border-radius: 9px;
-  box-shadow: 0 4px 12px rgb(0 98 143 / 13%);
-
-  transition:
-    background 0.2s ease,
-    transform 0.2s ease,
-    box-shadow 0.2s ease;
-}
-
-.home-action:hover {
-  background: #004f74;
-
-  box-shadow:
-    0 6px 16px
-    rgb(0 98 143 / 18%);
-
-  transform: translateY(-1px);
-}
-
-.home-action__icon {
-  font-size: 0.9rem;
-}
-
-.home-action__arrow {
-  transition: transform 0.2s ease;
-}
-
-.home-action:hover
-.home-action__arrow {
-  transform: translateX(3px);
-}
-
-.home__navigation-actions {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  justify-content: flex-end;
-
-  width: 100%;
-}
-
-.home-action--secondary {
-  color: var(--accent-text, #00628f);
-
-  background: var(--surface, #fff);
-  border: 1px solid var(--border, #bfd9e7);
-  box-shadow: none;
-}
-
-.home-action--secondary:hover {
-  color: var(--accent-text, #004f74);
-
-  background: var(--surface-muted, #edf7fb);
-  border-color: var(--border, #9fc8da);
-  box-shadow: none;
-}
-
-/* =========================
    Main content
    ========================= */
 
 .home__content {
   max-width: 1500px;
   margin: 0 auto;
-  padding: 32px 4%;
+  padding: 12px 4% 32px;
 }
 
 /* =========================
@@ -580,34 +430,12 @@ button:disabled {
    ========================= */
 
 @media (width <= 1100px) {
-  .home__header-content {
-    gap: 28px;
-  }
-
   .publication-grid {
     grid-template-columns:
       repeat(
         2,
         minmax(0, 1fr)
       );
-  }
-}
-
-@media (width <= 900px) {
-  .home__header-content {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 22px;
-  }
-
-  .home__header-actions {
-    align-items: flex-start;
-
-    width: 100%;
-  }
-
-  .home__security-message {
-    width: 100%;
   }
 }
 
@@ -639,9 +467,12 @@ button:disabled {
 
 @media (width <= 600px) {
   .home__header {
-    padding:
-      24px 20px
-      28px;
+    padding: 24px 0 10px;
+  }
+
+  .home__header-inner {
+    padding-right: 20px;
+    padding-left: 20px;
   }
 
   .home__content {
@@ -659,10 +490,6 @@ button:disabled {
     font-size: 0.86rem;
   }
 
-  .home-action {
-    box-sizing: border-box;
-    width: 100%;
-  }
 }
 
 @media (width <= 500px) {

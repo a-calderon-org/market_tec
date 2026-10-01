@@ -1,29 +1,38 @@
 <main class="profile">
+  <button
+    class="profile__backdrop"
+    type="button"
+    (click)="close()"
+    aria-label="Cerrar el perfil y volver a explorar"
+  ></button>
+
+  <aside
+    class="profile__panel"
+    aria-labelledby="profile-title"
+  >
 
   <header class="profile__topbar">
     <div class="profile__topbar-inner">
 
-      <a
-        class="profile__back"
-        routerLink="/"
-        aria-label="Volver al inicio"
-      >
-        ←
-      </a>
-
-      <div class="profile__brand">
-        <span class="profile__brand-icon">
-          ✦
+      <div>
+        <span class="profile__eyebrow">
+          Mi cuenta
         </span>
 
-        <strong>
-          MarketTec
-        </strong>
+        <h1 id="profile-title">
+          Perfil
+        </h1>
       </div>
 
-      <h1>
-        Perfil
-      </h1>
+      <button
+        class="profile__close"
+        type="button"
+        (click)="close()"
+        aria-label="Cerrar el perfil y volver a explorar"
+        title="Cerrar perfil"
+      >
+        &times;
+      </button>
 
     </div>
   </header>
@@ -506,36 +515,11 @@
           </p>
         </div>
 
-        <div class="logout-section">
-
-          <div class="logout-section__info">
-            <strong>
-              Cerrar sesión
-            </strong>
-
-            <p>
-              Volverás a la pantalla de acceso
-              de MarketTec.
-            </p>
-          </div>
-
-          <button
-            class="logout-button"
-            type="button"
-            (click)="logout()"
-          >
-            <span>
-              ↪
-            </span>
-
-            Cerrar sesión
-          </button>
-
-        </div>
-
       </section>
 
     }
 
   </div>
+
+  </aside>
 </main>

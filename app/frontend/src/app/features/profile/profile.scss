@@ -3,11 +3,36 @@
 }
 
 .profile {
-  min-height: 100vh;
+  position: fixed;
+  z-index: 90;
+  inset: 68px 0 0;
+
+  display: flex;
+  justify-content: flex-end;
 
   color: var(--text, #172033);
 
+  background: transparent;
+}
+
+.profile__backdrop {
+  flex: 1 1 auto;
+  min-width: 48px;
+
+  cursor: default;
+
+  background: rgb(15 23 42 / 8%);
+  border: 0;
+}
+
+.profile__panel {
+  width: min(680px, calc(100% - 48px));
+  height: 100%;
+  overflow-y: auto;
+
   background: var(--page, #f8f7fc);
+  border-left: 1px solid var(--border, #e8e9ef);
+  box-shadow: -18px 0 42px rgb(15 23 42 / 14%);
 }
 
 .profile__topbar {
@@ -16,69 +41,59 @@
 }
 
 .profile__topbar-inner {
-  display: grid;
-  grid-template-columns: auto auto 1fr;
-  gap: 16px;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
 
-  max-width: 920px;
-  margin: 0 auto;
-  padding: 18px 24px;
+  padding: 18px 28px;
 }
 
 .profile__topbar h1 {
-  margin: 0;
+  margin: 2px 0 0;
 
-  font-size: 1.1rem;
+  font-size: 1.35rem;
   font-weight: 800;
 }
 
-.profile__back {
+.profile__eyebrow {
+  color: var(--text-muted, #606775);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.profile__close {
   display: grid;
   place-items: center;
 
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
 
   color: var(--text, #172033);
-  font-size: 1.35rem;
+  font-size: 1.65rem;
+  line-height: 1;
   text-decoration: none;
+
+  cursor: pointer;
+
+  border: 0;
 
   border-radius: 50%;
 
-  transition: background 0.2s ease;
+  transition: color 0.2s ease, background 0.2s ease;
 }
 
-.profile__back:hover {
+.profile__close:hover {
+  color: var(--accent-text, #00628f);
   background: var(--surface-muted, #f1f3f8);
 }
 
-.profile__brand {
-  display: flex;
-  gap: 7px;
-  align-items: center;
-
-  font-size: 0.83rem;
-}
-
-.profile__brand-icon {
-  display: grid;
-  place-items: center;
-
-  width: 25px;
-  height: 25px;
-
-  color: #fff;
-
-  background: #007c9e;
-  border-radius: 7px;
-}
-
 .profile__container {
-  width: min(calc(100% - 32px), 760px);
+  width: auto;
 
-  margin: 0 auto;
-  padding: 28px 0 48px;
+  margin: 0;
+  padding: 24px 28px 48px;
 }
 
 /* Hero */
@@ -530,20 +545,29 @@
 
 /* Responsive */
 
-@media (width <= 620px) {
-  .profile__topbar-inner {
-    grid-template-columns: auto 1fr auto;
-    padding: 14px 18px;
+@media (width <= 760px) {
+  .profile {
+    inset: 116px 0 0;
   }
 
-  .profile__brand strong {
+  .profile__backdrop {
     display: none;
   }
 
-  .profile__container {
-    width: min(calc(100% - 24px), 760px);
+  .profile__panel {
+    width: 100%;
+    height: 100%;
 
-    padding-top: 20px;
+    border-left: 0;
+    box-shadow: none;
+  }
+
+  .profile__topbar-inner {
+    padding: 14px 18px;
+  }
+
+  .profile__container {
+    padding: 20px 12px 36px;
   }
 
   .profile-card {
@@ -564,71 +588,3 @@
   }
 }
 
-.logout-section {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-
-  margin-top: 20px;
-  padding-top: 20px;
-
-  border-top: 1px solid var(--border, #ececf2);
-}
-
-.logout-section__info {
-  display: grid;
-  gap: 4px;
-}
-
-.logout-section__info strong {
-  font-size: 0.85rem;
-}
-
-.logout-section__info p {
-  margin: 0;
-
-  color: var(--text-muted, #707785);
-  font-size: 0.74rem;
-}
-
-.logout-button {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  justify-content: center;
-
-  min-width: 150px;
-  padding: 11px 16px;
-
-  color: var(--danger-text, #c62828);
-  font: inherit;
-  font-size: 0.8rem;
-  font-weight: 700;
-
-  cursor: pointer;
-
-  background: var(--danger-surface, #ffe5e5);
-  border: 1px solid var(--border, #ffcaca);
-  border-radius: 9px;
-
-  transition:
-    background 0.2s ease,
-    border-color 0.2s ease;
-}
-
-.logout-button:hover {
-  background: var(--danger-surface, #ffd7d7);
-  border-color: var(--border, #ffb7b7);
-}
-
-@media (width <= 620px) {
-  .logout-section {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .logout-button {
-    width: 100%;
-  }
-}

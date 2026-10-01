@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 
 import { Publication } from '../features/publications/models/publication.model';
 import { PublicationCard } from './publication-card';
@@ -29,7 +30,8 @@ describe('PublicationCard', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [PublicationCard]
+      imports: [PublicationCard],
+      providers: [provideRouter([])]
     }).compileComponents();
 
     fixture = TestBed.createComponent(PublicationCard);

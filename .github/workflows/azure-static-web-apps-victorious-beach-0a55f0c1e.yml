@@ -28,9 +28,11 @@ jobs:
         env:
           MARKET_TEC_API_URL: ${{ secrets.MARKET_TEC_API_URL }}
           MARKET_TEC_SUBSCRIPTION_KEY: ${{ secrets.MARKET_TEC_SUBSCRIPTION_KEY }}
+          MARKET_TEC_GOOGLE_CLIENT_ID: ${{ secrets.MARKET_TEC_GOOGLE_CLIENT_ID }}
         run: |
           test -n "$MARKET_TEC_API_URL"
           test -n "$MARKET_TEC_SUBSCRIPTION_KEY"
+          test -n "$MARKET_TEC_GOOGLE_CLIENT_ID"
 
           mkdir -p src/environments
 
@@ -39,7 +41,8 @@ jobs:
 
           const environment = {
             apiBaseUrl: process.env.MARKET_TEC_API_URL,
-            subscriptionKey: process.env.MARKET_TEC_SUBSCRIPTION_KEY
+            subscriptionKey: process.env.MARKET_TEC_SUBSCRIPTION_KEY,
+            googleClientId: process.env.MARKET_TEC_GOOGLE_CLIENT_ID
           };
 
           fs.writeFileSync(

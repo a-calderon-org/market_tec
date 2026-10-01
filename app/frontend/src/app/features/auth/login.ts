@@ -1,7 +1,14 @@
+<<<<<<< Updated upstream
 import { Component, inject, signal } from '@angular/core';
+=======
+import { AfterViewInit, Component, ElementRef, ViewChild, effect, inject, signal } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
+import { GoogleAuthService } from './services/google-auth.service';
+>>>>>>> Stashed changes
 import { AbstractControl, NonNullableFormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { LoginService } from './services/login.service';
+import { ThemeService } from '../../core/theme.service';
 
 @Component({
   selector: 'app-login',
@@ -12,7 +19,72 @@ import { LoginService } from './services/login.service';
   templateUrl: './login.html',
   styleUrl: './login.scss'
 })
+<<<<<<< Updated upstream
 export class Login {
+=======
+export class Login implements AfterViewInit {
+  private readonly googleAuth = inject(GoogleAuthService);
+  private readonly themeService = inject(ThemeService);
+  private googleButtonReady = false;
+
+  private readonly googleButtonThemeEffect = effect(() => {
+    const theme = this.themeService.theme();
+
+    if (this.googleButtonReady) {
+      void this.renderGoogleButton(theme, false);
+    }
+  });
+
+  @ViewChild('googleButton') private googleButton!: ElementRef<HTMLElement>;
+  readonly googleLoading = signal(true);
+  readonly googleLoadError = signal(false);
+
+  ngAfterViewInit(): void {
+    this.googleButtonReady = true;
+    void this.loadGoogleButton();
+  }
+
+  async loadGoogleButton(): Promise<void> {
+    await this.renderGoogleButton(this.themeService.theme(), true);
+  }
+
+  private async renderGoogleButton(
+    theme: 'light' | 'dark',
+    resetFeedback: boolean
+  ): Promise<void> {
+    this.googleLoading.set(true);
+    this.googleLoadError.set(false);
+    if (resetFeedback) this.error.set(false);
+    try {
+      await this.googleAuth.renderButton(this.googleButton.nativeElement, credential => {
+        void this.signInWithGoogle(credential);
+      }, theme === 'dark' ? 'outline_dark' : 'outline');
+    } catch (error) {
+      this.googleLoadError.set(true);
+      this.error.set(true);
+      this.errorMessage.set(error instanceof Error ? error.message : 'No se pudo cargar Google.');
+    } finally {
+      this.googleLoading.set(false);
+    }
+  }
+
+  async signInWithGoogle(credential: string): Promise<void> {
+    if (this.submitting()) return;
+    this.submitting.set(true);
+    this.error.set(false);
+    try {
+      await this.googleAuth.signIn(credential);
+      if (!await this.router.navigate(['/'])) throw new Error('No fue posible abrir MarketTec.');
+    } catch (error) {
+      this.error.set(true);
+      this.errorMessage.set(error instanceof HttpErrorResponse
+        ? error.error?.message || 'No se pudo conectar con el servidor de acceso. Inténtalo nuevamente.'
+        : 'No fue posible ingresar a MarketTec.');
+    } finally {
+      this.submitting.set(false);
+    }
+  }
+>>>>>>> Stashed changes
   private readonly loginService =
     inject(LoginService);
 
@@ -115,34 +187,10 @@ export class Login {
       return;
     }
 
-    this.submitting.set(true);
-
-    void this.router
-      .navigate(['/'])
-      .then(
-        (navigated) => {
-          if (!navigated) {
-            this.error.set(true);
-
-            this.errorMessage.set(
-              'No fue posible ingresar a MarketTec.'
-            );
-          }
-
-          this.submitting.set(false);
-        }
-      )
-      .catch(
-        () => {
-          this.error.set(true);
-
-          this.errorMessage.set(
-            'No fue posible ingresar a MarketTec.'
-          );
-
-          this.submitting.set(false);
-        }
-      );
+    this.error.set(true);
+    this.errorMessage.set(
+      'El acceso con credenciales TEC aún no está disponible. Ingresa con el botón de Google.'
+    );
   }
 
   isControlInvalid(
@@ -179,6 +227,10 @@ export class Login {
         errorName
       )
     );
+  }
+
+  onSupportClick(event: Event): void {
+    event.preventDefault();
   }
 
   private validateInstitutionalEmail(

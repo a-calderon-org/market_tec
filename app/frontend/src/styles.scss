@@ -35,21 +35,21 @@ textarea {
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --page: #101725;
-  --surface: #192334;
-  --surface-muted: #222e42;
-  --surface-overlay: rgb(25 35 52 / 95%);
-  --text: #edf2fa;
-  --text-muted: #b5c1d3;
-  --border: #40516a;
-  --accent-text: #9ccfff;
-  --accent-surface: #213b55;
-  --success-text: #79dfc0;
-  --success-surface: #183e37;
-  --danger-text: #ffaba8;
-  --danger-surface: #482b35;
-  --warning-text: #f5d28a;
-  --warning-surface: #443923;
+  --page: #131314;
+  --surface: #1f1f1f;
+  --surface-muted: #2b2c2f;
+  --surface-overlay: rgb(31 31 31 / 96%);
+  --text: #f1f3f4;
+  --text-muted: #c4c7c5;
+  --border: #444746;
+  --accent-text: #a8c7fa;
+  --accent-surface: #2b3a4f;
+  --success-text: #6dd58c;
+  --success-surface: #123524;
+  --danger-text: #f2b8b5;
+  --danger-surface: #3f2325;
+  --warning-text: #fdd663;
+  --warning-surface: #3a300c;
 }
 
 button, input, select, textarea {
@@ -60,6 +60,44 @@ button, input, select, textarea {
 :root[data-theme='dark'] textarea::placeholder {
   color: var(--text-muted);
   opacity: 1;
+}
+
+/* Google renders its personalized button inside an iframe. Keeping the
+   iframe canvas on the same neutral background avoids a light rectangle
+   around the official dark button. */
+:root[data-theme='dark'] .google-button,
+:root[data-theme='dark'] .google-button > div,
+:root[data-theme='dark'] .google-button iframe {
+  color-scheme: dark;
+  background-color: #131314 !important;
+}
+
+:root[data-theme='dark'] .google-button {
+  position: relative;
+  height: 39px;
+}
+
+:root[data-theme='dark'] .google-button::after {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+
+  pointer-events: none;
+
+  content: '';
+
+  border: 1px solid #8e918f;
+  border-radius: 4px;
+}
+
+:root[data-theme='dark'] .google-button > :first-child {
+  transform: translateY(-2px);
+}
+
+:root[data-theme='dark'] .google-button > div,
+:root[data-theme='dark'] .google-button iframe {
+  display: block !important;
+  margin-block: 0 !important;
 }
 
 :focus-visible {

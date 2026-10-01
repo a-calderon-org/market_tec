@@ -14,23 +14,6 @@
   padding: 40px 4% 60px;
 }
 
-.breadcrumb {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 18px;
-  color: var(--text-muted, #6d7480);
-  font-size: 0.78rem;
-}
-
-.breadcrumb a {
-  color: inherit;
-  text-decoration: none;
-}
-
-.breadcrumb strong {
-  color: var(--accent-text, #00628f);
-}
-
 .page-header {
   display: flex;
   justify-content: space-between;

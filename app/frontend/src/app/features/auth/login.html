@@ -2,56 +2,21 @@
   <section class="login-card">
 
     <header class="login-brand">
-
-      <div class="login-brand__identity">
-
-        <div class="login-brand__icon">
-          ▥
-        </div>
-
-        <div>
-          <div class="login-brand__title">
-            <strong>
-              Tec Digital
-            </strong>
-
-            <span>
-              SC
-            </span>
-          </div>
-
-          <small>
-            Campus San Carlos
-          </small>
-        </div>
-
-      </div>
-
       <div class="login-brand__welcome">
 
         <h1>
-          Bienvenido a MarketTec
+          Bienvenido a MarketTEC
         </h1>
 
         <p>
           Compra, vende y encuentra servicios
           dentro de la comunidad TEC San Carlos.
         </p>
-
-        <div class="login-brand__tec">
-          <strong>
-            Tec Digital
-          </strong>
-
-          <span>
-            SC
-          </span>
-        </div>
-
       </div>
 
     </header>
 
+<<<<<<< Updated upstream
     <button
       class="institutional-button"
       type="button"
@@ -80,6 +45,8 @@
       <span></span>
     </div>
 
+=======
+>>>>>>> Stashed changes
     @if (error()) {
       <div class="login-feedback">
         <span>
@@ -284,6 +251,7 @@
         class="login-submit"
         type="submit"
         [disabled]="
+          loginForm.invalid ||
           submitting()
         "
       >
@@ -297,12 +265,37 @@
           </span>
 
           <span>
-            Ingresar a MarketTec
+            Ingresar
           </span>
         }
       </button>
 
     </form>
+
+    <div class="login-divider">
+      <span></span>
+
+      <p>
+        o continúa con Google
+      </p>
+
+      <span></span>
+    </div>
+
+    <div class="google-access" [attr.aria-busy]="googleLoading() || submitting()">
+      <div #googleButton class="google-button" [hidden]="submitting()"></div>
+      @if (googleLoading()) {
+        <p class="google-login-note" role="status">Cargando Google...</p>
+      }
+      @if (submitting()) {
+        <p class="google-login-note" role="status">Verificando tu cuenta...</p>
+      }
+      @if (googleLoadError()) {
+        <button type="button" class="institutional-button" (click)="loadGoogleButton()">
+          Reintentar conexión con Google
+        </button>
+      }
+    </div>
 
     <footer class="login-footer">
 
@@ -321,9 +314,13 @@
           ¿Necesitas ayuda?
         </span>
 
-        <strong>
+        <a
+          href="#"
+          (click)="onSupportClick($event)"
+          aria-label="Abrir Soporte Estudiantil"
+        >
           Soporte Estudiantil
-        </strong>
+        </a>
       </div>
 
     </footer>

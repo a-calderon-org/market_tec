@@ -1,0 +1,10 @@
+{
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": ["/images/*", "/*.{css,js,ico,png,jpg,jpeg,gif,svg,webp,woff,woff2}"]
+  },
+  "globalHeaders": {
+    "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
+    "Referrer-Policy": "no-referrer-when-downgrade"
+  }
+}

@@ -1,6 +1,5 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, EventEmitter, inject, OnInit, Output, signal } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { UpdateUser, User } from './models/user.model';
 import { UserService } from './services/user.service';
@@ -9,13 +8,17 @@ import { UserService } from './services/user.service';
   selector: 'app-profile',
   standalone: true,
   imports: [
-    ReactiveFormsModule,
-    RouterLink
+    ReactiveFormsModule
   ],
   templateUrl: './profile.html',
   styleUrl: './profile.scss'
 })
 export class Profile implements OnInit {
+<<<<<<< Updated upstream
+=======
+  @Output() readonly closed = new EventEmitter<void>();
+
+>>>>>>> Stashed changes
   private readonly formBuilder =
     inject(NonNullableFormBuilder);
 
@@ -29,9 +32,6 @@ export class Profile implements OnInit {
     signal<User | null>(
       null
     );
-
-  private readonly router =
-    inject(Router)
 
   readonly loading =
     signal(true);
@@ -139,6 +139,10 @@ export class Profile implements OnInit {
 
   ngOnInit(): void {
     this.loadUser();
+  }
+
+  close(): void {
+    this.closed.emit();
   }
 
   loadUser(): void {
@@ -375,9 +379,13 @@ export class Profile implements OnInit {
     );
   }
 
+<<<<<<< Updated upstream
   logout(): void {
     void this.router.navigate(
       ['/login']
     );
   }
 }
+=======
+}
+>>>>>>> Stashed changes

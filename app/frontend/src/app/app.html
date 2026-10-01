@@ -1,14 +1,137 @@
-<div class="appearance-bar">
-  <button
-    class="theme-toggle"
-    type="button"
-    (click)="themeService.toggle()"
-    [attr.aria-pressed]="themeService.theme() === 'dark'"
-    aria-label="Modo oscuro"
-    [title]="themeService.theme() === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'"
-  >
-    <span aria-hidden="true">{{ themeService.theme() === 'dark' ? '☀' : '☾' }}</span>
-    {{ themeService.theme() === 'dark' ? 'Modo claro' : 'Modo oscuro' }}
-  </button>
-</div>
+@if (googleAuth.user()) {
+  <header class="app-header">
+    <div class="app-header__inner">
+      <a class="app-brand" routerLink="/" aria-label="Ir a explorar publicaciones">
+        <svg class="app-brand__logo" aria-hidden="true" viewBox="0 0 52 46">
+          <defs>
+            <linearGradient id="market-logo-gradient" x1="6" y1="5" x2="43" y2="42">
+              <stop offset="0" stop-color="#0397c4"></stop>
+              <stop offset="1" stop-color="#00897f"></stop>
+            </linearGradient>
+          </defs>
+          <path
+            fill="url(#market-logo-gradient)"
+            d="M8 10h8V6.5A4.5 4.5 0 0 1 20.5 2h11A4.5 4.5 0 0 1 36 6.5V10h3a7 7 0 0 1 7 7v20a7 7 0 0 1-7 7H8a7 7 0 0 1-7-7V17a7 7 0 0 1 7-7Zm13-3.5V10h10V6.5a.5.5 0 0 0-.5-.5h-9a.5.5 0 0 0-.5.5Z"
+          ></path>
+          <path
+            fill="#fff"
+            d="M23.5 17c.6 5.8 3.2 8.4 9 9-5.8.6-8.4 3.2-9 9-.6-5.8-3.2-8.4-9-9 5.8-.6 8.4-3.2 9-9Z"
+          ></path>
+          <circle cx="41" cy="8" r="6" fill="#8fbd36"></circle>
+          <circle cx="43" cy="6" r="2.5" fill="#b7d84b" opacity=".8"></circle>
+        </svg>
+        <span class="app-brand__wordmark">
+          Market<span>Tec</span>
+        </span>
+      </a>
+
+      <nav class="app-navigation" aria-label="Navegación principal">
+        <a
+          routerLink="/"
+          routerLinkActive="app-navigation__link--active"
+          [routerLinkActiveOptions]="{ exact: true }"
+        >
+          Explorar
+        </a>
+        <a routerLink="/mensajes" routerLinkActive="app-navigation__link--active">
+          Mensajes
+        </a>
+        <a routerLink="/mis-publicaciones" routerLinkActive="app-navigation__link--active">
+          Mis publicaciones
+        </a>
+      </nav>
+
+      <div class="app-header__actions">
+        <button
+          class="header-icon-button"
+          type="button"
+          (click)="themeService.toggle()"
+          [attr.aria-pressed]="themeService.theme() === 'dark'"
+          [attr.aria-label]="themeService.theme() === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'"
+          [title]="themeService.theme() === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'"
+        >
+          @if (themeService.theme() === 'dark') {
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="4"></circle>
+              <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"></path>
+            </svg>
+          } @else {
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M20.5 15.1A8.5 8.5 0 0 1 8.9 3.5 8.5 8.5 0 1 0 20.5 15.1Z"></path>
+            </svg>
+          }
+        </button>
+
+        <button
+          class="logout-button"
+          type="button"
+          (click)="logout()"
+          [disabled]="loggingOut()"
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path d="M10 17l5-5-5-5M15 12H3M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"></path>
+          </svg>
+          <span>{{ loggingOut() ? 'Saliendo...' : 'Cerrar sesión' }}</span>
+        </button>
+
+        <button
+          class="profile-avatar"
+          type="button"
+          (click)="openProfile()"
+          [class.profile-avatar--active]="profileOpen()"
+          [attr.aria-expanded]="profileOpen()"
+          aria-label="Abrir mi perfil"
+          title="Mi perfil"
+        >
+          @if (googleAuth.user()?.picture; as picture) {
+            @if (!profileImageFailed()) {
+              <img
+                [src]="picture"
+                alt=""
+                (error)="useProfileInitials()"
+              >
+            } @else {
+              <span aria-hidden="true">{{ userInitials() }}</span>
+            }
+          } @else {
+            <span aria-hidden="true">{{ userInitials() }}</span>
+          }
+        </button>
+      </div>
+    </div>
+
+    @if (logoutError()) {
+      <p class="app-header__error" role="alert">
+        No fue posible cerrar la sesión. Inténtalo nuevamente.
+      </p>
+    }
+  </header>
+} @else {
+  <div class="appearance-bar">
+    <button
+      class="header-icon-button"
+      type="button"
+      (click)="themeService.toggle()"
+      [attr.aria-pressed]="themeService.theme() === 'dark'"
+      [attr.aria-label]="themeService.theme() === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'"
+      [title]="themeService.theme() === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'"
+    >
+      @if (themeService.theme() === 'dark') {
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="4"></circle>
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"></path>
+        </svg>
+      } @else {
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M20.5 15.1A8.5 8.5 0 0 1 8.9 3.5 8.5 8.5 0 1 0 20.5 15.1Z"></path>
+        </svg>
+      }
+    </button>
+  </div>
+}
+
+@if (googleAuth.user() && profileOpen()) {
+  <app-profile (closed)="closeProfile()" />
+}
+
 <router-outlet />
