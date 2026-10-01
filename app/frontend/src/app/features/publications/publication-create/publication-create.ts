@@ -5,6 +5,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs';
 import { CreatePublication } from '../models/publication-create.model';
 import { PublicationService } from '../services/publication.service';
+import { PublicationFeedbackService } from '../services/publication-feedback.service';
 
 type PublicationCategory =
   | 'electronicos'
@@ -39,6 +40,9 @@ export class PublicationCreate {
 
   private readonly publicationService =
     inject(PublicationService);
+
+  private readonly publicationFeedback =
+    inject(PublicationFeedbackService);
 
   private readonly router =
     inject(Router);
@@ -397,6 +401,7 @@ export class PublicationCreate {
         next: () => {
           this.submitting.set(false);
           this.success.set(true);
+          this.publicationFeedback.notifyCreated();
           void this.router.navigate(
             [
               '/mis-publicaciones'

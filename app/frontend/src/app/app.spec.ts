@@ -3,6 +3,7 @@ import { provideRouter, Router } from '@angular/router';
 import { vi } from 'vitest';
 import { App } from './app';
 import { GoogleAuthService } from './features/auth/services/google-auth.service';
+import { PublicationFeedbackService } from './features/publications/services/publication-feedback.service';
 
 describe('App', () => {
   let fixture: ComponentFixture<App>;
@@ -33,6 +34,29 @@ describe('App', () => {
     expect(themeButton).toBeTruthy();
     expect(themeButton.textContent?.trim()).toBe('');
     expect(themeButton.getAttribute('aria-label')).toContain('Cambiar a modo');
+  });
+
+  it('should show and dismiss the global publication confirmation', () => {
+    const feedback = fixture.debugElement.injector.get(
+      PublicationFeedbackService
+    );
+
+    feedback.notifyCreated();
+    fixture.detectChanges();
+
+    const notification =
+      fixture.nativeElement.querySelector(
+        '.app-notification'
+      ) as HTMLElement;
+
+    expect(notification.textContent).toContain('Publicación creada');
+
+    notification.querySelector<HTMLButtonElement>('button')?.click();
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector('.app-notification')
+    ).toBeNull();
   });
 
   it('should group authenticated navigation in the global header', () => {

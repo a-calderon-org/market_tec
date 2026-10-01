@@ -284,6 +284,46 @@ describe('PublicationDetail', () => {
     );
   });
 
+  it('should link to the publication owner conversation', () => {
+    createComponent();
+
+    const messageLink:
+      HTMLAnchorElement =
+        fixture.nativeElement
+          .querySelector(
+            '.seller-card__message'
+          );
+
+    expect(messageLink).toBeTruthy();
+    expect(messageLink.textContent)
+      .toContain('Enviar mensaje');
+    expect(messageLink.getAttribute('href'))
+      .toContain('/mensajes?');
+    expect(messageLink.getAttribute('href'))
+      .toContain('publicacion=PUB-2024-0891');
+    expect(messageLink.getAttribute('href'))
+      .toContain('vendedor=101');
+  });
+
+  it('should not offer messaging from my own publication', () => {
+    activatedRouteMock
+      .snapshot
+      .queryParamMap =
+        convertToParamMap({
+          from:
+            'mis-publicaciones'
+        });
+
+    createComponent();
+
+    expect(
+      fixture.nativeElement
+        .querySelector(
+          '.seller-card__message'
+        )
+    ).toBeNull();
+  });
+
   it('should set an error when the route has no publication id', () => {
     activatedRouteMock
       .snapshot

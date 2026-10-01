@@ -3,6 +3,7 @@ import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/rou
 import { ThemeService } from './core/theme.service';
 import { GoogleAuthService } from './features/auth/services/google-auth.service';
 import { Profile } from './features/profile/profile';
+import { PublicationFeedbackService } from './features/publications/services/publication-feedback.service';
 
 @Component({
   selector: 'app-root',
@@ -13,6 +14,7 @@ import { Profile } from './features/profile/profile';
 export class App {
   protected readonly themeService = inject(ThemeService);
   protected readonly googleAuth = inject(GoogleAuthService);
+  protected readonly publicationFeedback = inject(PublicationFeedbackService);
   private readonly router = inject(Router);
 
   protected readonly loggingOut = signal(false);

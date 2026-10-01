@@ -134,4 +134,29 @@
   <app-profile (closed)="closeProfile()" />
 }
 
+@if (publicationFeedback.creationVisible()) {
+  <div
+    class="app-notification app-notification--success"
+    role="status"
+    aria-live="polite"
+  >
+    <span class="app-notification__icon" aria-hidden="true">
+      ✓
+    </span>
+
+    <div>
+      <strong>Publicación creada</strong>
+      <p>Tu publicación fue registrada correctamente.</p>
+    </div>
+
+    <button
+      type="button"
+      (click)="publicationFeedback.dismiss()"
+      aria-label="Cerrar mensaje"
+    >
+      &times;
+    </button>
+  </div>
+}
+
 <router-outlet />

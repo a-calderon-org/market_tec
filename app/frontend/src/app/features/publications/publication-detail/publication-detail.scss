@@ -359,6 +359,44 @@
   font-size: 0.75rem;
 }
 
+.seller-card__message {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 18px;
+  padding: 10px 14px;
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-decoration: none;
+  background: linear-gradient(135deg, #087fa4, #00877e);
+  border-radius: 10px;
+  transition: box-shadow 160ms ease, transform 160ms ease;
+}
+
+.seller-card__message:hover {
+  box-shadow: 0 8px 18px rgb(0 98 143 / 20%);
+  transform: translateY(-1px);
+}
+
+.seller-card__message:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent-text, #00628f) 35%, transparent);
+  outline-offset: 2px;
+}
+
+.seller-card__message svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
 .seller-card__verified {
   display: flex;
   gap: 10px;
