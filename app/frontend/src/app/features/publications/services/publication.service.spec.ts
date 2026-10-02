@@ -123,20 +123,34 @@ describe('PublicationService', () => {
 
     const response =
       await firstValueFrom(
-        service.getPublications()
+        service.getPublications(1, 12)
       );
 
     expect(
       apiClientMock.get
     ).toHaveBeenCalledWith(
-      '/publicaciones'
+      '/publicaciones',
+      expect.anything()
     );
+
+    expect(apiClientMock.get.mock.calls[0][1].toString())
+      .toBe('page=1&pageSize=12');
 
     expect(
       response
     ).toEqual(
       publicationList
     );
+  });
+
+  it('should request the second page with query parameters', async () => {
+    apiClientMock.get.mockReturnValue(of(publicationList));
+
+    await firstValueFrom(service.getPublications(2, 12));
+
+    expect(apiClientMock.get.mock.calls[0][0]).toBe('/publicaciones');
+    expect(apiClientMock.get.mock.calls[0][1].toString())
+      .toBe('page=2&pageSize=12');
   });
 
   it('should request a publication by id', async () => {

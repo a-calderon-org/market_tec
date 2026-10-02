@@ -1,4 +1,5 @@
 import { inject, Injectable } from '@angular/core';
+import { HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { PublicationDetail } from '../models/publication-detail.model';
 import { ApiClientService } from '../../../core/api/api-client.service';
@@ -13,9 +14,14 @@ import { CreatePublication } from '../models/publication-create.model';
 export class PublicationService {
   private readonly apiClient = inject(ApiClientService);
 
-  getPublications(): Observable<PaginatedResponse<Publication>> {
+  getPublications(page: number, pageSize: number): Observable<PaginatedResponse<Publication>> {
+    const params = new HttpParams()
+      .set('page', page)
+      .set('pageSize', pageSize);
+
     return this.apiClient.get<PaginatedResponse<Publication>>(
-      '/publicaciones'
+      '/publicaciones',
+      params
     );
   }
 

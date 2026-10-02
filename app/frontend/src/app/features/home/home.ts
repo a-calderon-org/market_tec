@@ -22,6 +22,9 @@ export class Home implements OnInit {
   readonly totalRecords = signal(0);
   readonly page = signal(1);
   readonly pageSize = signal(12);
+  readonly totalPages = computed(() =>
+    Math.ceil(this.totalRecords() / this.pageSize())
+  );
 
   readonly loading = signal(true);
   readonly error = signal(false);
@@ -54,7 +57,7 @@ export class Home implements OnInit {
     this.loading.set(true);
     this.error.set(false);
 
-    this.publicationService.getPublications().subscribe({
+    this.publicationService.getPublications(this.page(), this.pageSize()).subscribe({
       next: (response) => {
         this.allPublications.set(response.items);
 
@@ -70,6 +73,20 @@ export class Home implements OnInit {
         this.loading.set(false);
       }
     });
+  }
+
+  nextPage(): void {
+    if (this.page() < this.totalPages()) {
+      this.page.update((page) => page + 1);
+      this.loadPublications();
+    }
+  }
+
+  previousPage(): void {
+    if (this.page() > 1) {
+      this.page.update((page) => page - 1);
+      this.loadPublications();
+    }
   }
 
   onSearch(event: Event): void {

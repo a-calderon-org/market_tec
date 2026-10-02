@@ -105,6 +105,51 @@ describe('Home', () => {
     expect(
       publicationServiceMock.getPublications
     ).toHaveBeenCalledTimes(1);
+    expect(publicationServiceMock.getPublications).toHaveBeenCalledWith(1, 12);
+  });
+
+  it('should navigate through server pages and respect pagination boundaries', () => {
+    const firstPage = Array.from({ length: 12 }, (_, index) => ({
+      ...publications[0], id: `FIRST-${index}`
+    }));
+    const secondPage = Array.from({ length: 3 }, (_, index) => ({
+      ...publications[0], id: `SECOND-${index}`
+    }));
+    publicationServiceMock.getPublications
+      .mockReturnValueOnce(of({ ...apiResponse, totalRecords: 15, items: firstPage }))
+      .mockReturnValueOnce(of({ ...apiResponse, totalRecords: 15, page: 2, items: secondPage }))
+      .mockReturnValueOnce(of({ ...apiResponse, totalRecords: 15, items: firstPage }));
+
+    createComponent();
+
+    const buttons = () => fixture.nativeElement.querySelectorAll('.pagination__controls button');
+    expect(component.totalPages()).toBe(2);
+    expect(component.publications()).toHaveLength(12);
+    expect(buttons()[0].disabled).toBe(true);
+    expect(buttons()[2].disabled).toBe(false);
+    component.previousPage();
+    expect(publicationServiceMock.getPublications).toHaveBeenCalledTimes(1);
+
+    buttons()[2].click();
+    fixture.detectChanges();
+
+    expect(publicationServiceMock.getPublications).toHaveBeenLastCalledWith(2, 12);
+    expect(component.publications()).toEqual(secondPage);
+    expect(component.page()).toBe(2);
+    expect(buttons()[1].textContent.trim()).toBe('2');
+    expect(buttons()[0].disabled).toBe(false);
+    expect(buttons()[2].disabled).toBe(true);
+    component.nextPage();
+    expect(publicationServiceMock.getPublications).toHaveBeenCalledTimes(2);
+
+    buttons()[0].click();
+    fixture.detectChanges();
+
+    expect(publicationServiceMock.getPublications).toHaveBeenLastCalledWith(1, 12);
+    expect(component.publications()).toEqual(firstPage);
+    expect(component.page()).toBe(1);
+    expect(buttons()[0].disabled).toBe(true);
+    expect(buttons()[2].disabled).toBe(false);
   });
 
   it('should load publications from the service', () => {
