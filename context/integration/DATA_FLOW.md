@@ -21,7 +21,11 @@ El documento existente afirma validación backend antes de navegar, pero `signIn
 
 ## Publicaciones
 
-El listado devuelve `{ totalRecords, page, pageSize, items }`. La UI almacena los metadatos, pero aplica búsqueda, categoría, precio y orden solo a `items` de la página actual. El alta envía categoría, subcategoría, título, descripción, precio, condición y ubicación; no envía previews, archivos ni `usuarioId`.
+El listado devuelve `{ totalRecords, page, pageSize, items }`. Home solicita la primera página con hasta 100 elementos y continúa con el tamaño efectivo informado por la respuesta hasta reunir el catálogo; una recarga cancela la suscripción anterior. Deduplica por `id`, rechaza paginación inválida o resultados incompletos, aplica búsqueda, categoría, precio y orden al conjunto completo, calcula el total filtrado y finalmente toma la ventana local de 12 elementos. El alta envía categoría, subcategoría, título, descripción, precio, condición y ubicación; no envía previews, archivos ni `usuarioId`.
+
+La categoría no se transforma en la capa HTTP ni en el modelo. Home obtiene las opciones únicas directamente de `Publication.categoria`, presenta una etiqueta separada y conserva el valor original para la igualdad exacta del filtro. Así, cambiar una opción actualiza `selectedCategory` con una clave que necesariamente proviene del mismo catálogo filtrado.
+
+Las búsquedas recientes no cruzan la frontera HTTP: `RecentSearchService` registra solo consultas enviadas, normaliza espacios y comparación por mayúsculas, limita a diez y persiste en `localStorage` con fallback en memoria.
 
 ## Identidad
 

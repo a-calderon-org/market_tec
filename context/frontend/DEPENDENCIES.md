@@ -20,4 +20,4 @@ La subscription key queda embebida en el JavaScript servido al navegador; debe t
 
 ## Build y calidad
 
-Hay 18 archivos `*.spec.ts`. Con Node 24.21.0 ya instalado, los 170 tests y `ngc --noEmit` terminaron con éxito. El build abortó con código 134 en production y development, incluso limitado a un worker, por lo que no se verificaron bundle ni presupuestos. `angular.json` fija 500 kB/1 MB inicial y 8/12 kB por estilo de componente.
+Hay 19 archivos `*.spec.ts`. Con Node 24.21.0 ya instalado, los 179 tests y `ngc --noEmit` terminaron con éxito. El build abortó con código 134 en production y development, incluso limitado a un worker, por lo que no se verificaron bundle ni presupuestos. `angular.json` fija 500 kB/1 MB inicial y 8/12 kB por estilo de componente.

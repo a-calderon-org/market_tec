@@ -32,16 +32,81 @@
   <section class="home__content">
     <section class="toolbar">
       <div class="toolbar__top">
-        <label class="search">
-          <span>⌕</span>
-
-          <input
-            type="search"
-            placeholder="Buscar publicaciones..."
-            [value]="searchTerm()"
-            (input)="onSearch($event)"
+        <form
+          #searchContainer
+          class="search"
+          role="search"
+          (submit)="$event.preventDefault(); executeSearch()"
+          (focusout)="onSearchFocusOut($event)"
+          (keydown.escape)="
+            closeRecentSearches(true);
+            $event.stopPropagation()
+          "
+        >
+          <div
+            class="search__field"
+            (focusin)="openRecentSearches()"
           >
-        </label>
+            <span aria-hidden="true">⌕</span>
+
+            <input
+              #searchInput
+              type="search"
+              aria-label="Buscar publicaciones"
+              aria-controls="recent-searches"
+              [attr.aria-expanded]="showRecentSearches()"
+              placeholder="Buscar publicaciones..."
+              [value]="searchDraft()"
+              (input)="onSearch($event)"
+            >
+
+            @if (showRecentSearches() && recentSearches().length > 0) {
+              <section
+                id="recent-searches"
+                class="recent-searches"
+                aria-label="Búsquedas recientes"
+              >
+                <div class="recent-searches__header">
+                  <strong>Búsquedas recientes</strong>
+
+                  <button
+                    type="button"
+                    (click)="clearRecentSearches()"
+                  >
+                    Limpiar
+                  </button>
+                </div>
+
+                <ul>
+                  @for (query of recentSearches(); track query) {
+                    <li>
+                      <button
+                        class="recent-searches__query"
+                        type="button"
+                        (click)="selectRecentSearch(query)"
+                      >
+                        {{ query }}
+                      </button>
+
+                      <button
+                        class="recent-searches__remove"
+                        type="button"
+                        [attr.aria-label]="'Eliminar búsqueda ' + query"
+                        (click)="removeRecentSearch(query, $event)"
+                      >
+                        ×
+                      </button>
+                    </li>
+                  }
+                </ul>
+              </section>
+            }
+          </div>
+
+          <button class="search__submit" type="submit">
+            Buscar
+          </button>
+        </form>
 
         <select
           class="sort-button"
@@ -123,38 +188,18 @@
             Todas las categorías
           </button>
 
-          <button
-            class="filter-option"
-            [class.filter-option--active]="
-              selectedCategory() === 'electronicos'
-            "
-            type="button"
-            (click)="selectCategory('electronicos')"
-          >
-            Electrónicos
-          </button>
-
-          <button
-            class="filter-option"
-            [class.filter-option--active]="
-              selectedCategory() === 'alquiler'
-            "
-            type="button"
-            (click)="selectCategory('alquiler')"
-          >
-            Alquileres
-          </button>
-
-          <button
-            class="filter-option"
-            [class.filter-option--active]="
-              selectedCategory() === 'tutoria'
-            "
-            type="button"
-            (click)="selectCategory('tutoria')"
-          >
-            Tutorías
-          </button>
+          @for (category of categories(); track category) {
+            <button
+              class="filter-option"
+              [class.filter-option--active]="
+                selectedCategory() === category
+              "
+              type="button"
+              (click)="selectCategory(category)"
+            >
+              {{ categoryLabel(category) }}
+            </button>
+          }
         </section>
 
         <section class="filters__section">

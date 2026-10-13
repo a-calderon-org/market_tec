@@ -32,7 +32,7 @@ Revisión: 2026-10-13, commit `30ff761`.
 ## Estado técnico
 
 - **Verificado:** el backend compila con `npm run build`.
-- **Verificado:** con un Node 24.21.0 ya instalado, los 18 archivos frontend ejecutaron 170 pruebas exitosas y `ngc --noEmit` completó.
+- **Verificado:** con Node 24.21.0, los 19 archivos frontend ejecutaron 179 pruebas exitosas y `ngc --noEmit` completó tras la depuración de Home.
 - **No verificado por ejecución:** el build Angular de producción abortó con código 134 en este entorno incluso con Node compatible; el bundle y sus presupuestos no se certifican.
 - **Verificado:** no hay pruebas backend ni configuración de lint.
 - **Verificado:** README y `GOOGLE_LOGIN.md` contienen afirmaciones desactualizadas respecto del código actual; se detallan en las auditorías.

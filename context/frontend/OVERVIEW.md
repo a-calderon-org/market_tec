@@ -5,7 +5,7 @@ SPA Angular 22 standalone, responsive y en español. Todas las rutas funcionales
 ## Funcionalidad por feature
 
 - `auth`: botón Google funcional en cliente y formulario institucional de maqueta.
-- `home`: obtiene una página de publicaciones, pagina y filtra localmente esa página.
+- `home`: recorre el catálogo paginado de publicaciones, valida que esté completo, aplica búsqueda/filtros/orden al conjunto y pagina localmente las coincidencias. Conserva hasta diez búsquedas recientes en `localStorage`.
 - `publications`: detalle, formulario de alta y vista de publicaciones del usuario.
 - `profile`: panel de consulta/edición.
 - `messenger`: lista chats, selecciona conversación y envía mensajes; los enviados se agregan solo a estado de sesión.

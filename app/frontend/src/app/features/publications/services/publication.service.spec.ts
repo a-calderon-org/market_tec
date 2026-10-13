@@ -153,6 +153,65 @@ describe('PublicationService', () => {
       .toBe('page=2&pageSize=12');
   });
 
+  it('should fetch every page of the publication catalog', async () => {
+    const categories = [
+      'Tecnología y Electrónica',
+      'Servicios Académicos',
+      'alquiler',
+      'tutoria',
+      'otra-categoria'
+    ];
+    const catalog = Array.from({ length: 5 }, (_, index) => ({
+      ...publicationList.items[0],
+      id: `PUB-${index + 1}`,
+      categoria: categories[index]
+    }));
+
+    apiClientMock.get.mockImplementation(
+      (_endpoint: string, params: { get(name: string): string | null }) => {
+        const page = Number(params.get('page'));
+        const start = (page - 1) * 2;
+
+        return of({
+          totalRecords: 5,
+          page,
+          pageSize: 2,
+          items: catalog.slice(start, start + 2)
+        });
+      }
+    );
+
+    const result = await firstValueFrom(
+      service.getPublicationCatalog(100)
+    );
+
+    expect(result.map(({ id }) => id)).toEqual([
+      'PUB-1',
+      'PUB-2',
+      'PUB-3',
+      'PUB-4',
+      'PUB-5'
+    ]);
+    expect(result.map(({ categoria }) => categoria))
+      .toEqual(categories);
+    expect(apiClientMock.get).toHaveBeenCalledTimes(3);
+    expect(apiClientMock.get.mock.calls[2][1].toString())
+      .toBe('page=3&pageSize=2');
+  });
+
+  it('should reject an incomplete publication catalog', async () => {
+    apiClientMock.get.mockReturnValue(of({
+      totalRecords: 2,
+      page: 1,
+      pageSize: 2,
+      items: [publicationList.items[0]]
+    }));
+
+    await expect(
+      firstValueFrom(service.getPublicationCatalog())
+    ).rejects.toThrow('Incomplete publication catalog');
+  });
+
   it('should request a publication by id', async () => {
     apiClientMock.get
       .mockReturnValue(

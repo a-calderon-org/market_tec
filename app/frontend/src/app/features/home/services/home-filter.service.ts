@@ -24,6 +24,7 @@ export class HomeFilterService {
   ): Publication[] {
     const searchTerm = filters.searchTerm
       .trim()
+      .replace(/\s+/g, ' ')
       .toLocaleLowerCase('es');
 
     return publications
