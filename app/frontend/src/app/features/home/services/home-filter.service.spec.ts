@@ -49,7 +49,7 @@ describe('HomeFilterService', () => {
     },
     {
       id: 'PUB-003',
-      categoria: 'tutorias',
+      categoria: 'tutoria',
       subcategoria: 'matematica',
       titulo: 'Tutoría de Cálculo',
       descripcion: 'Clases de cálculo diferencial',
@@ -123,6 +123,19 @@ describe('HomeFilterService', () => {
     expect(result[0].id).toBe('PUB-003');
   });
 
+  it('should normalize repeated spaces in searches', () => {
+    const result = service.applyFilters(
+      publications,
+      {
+        ...defaultFilters,
+        searchTerm: '  monitor   dell '
+      }
+    );
+
+    expect(result.map((publication) => publication.id))
+      .toEqual(['PUB-002']);
+  });
+
   it('should filter publications by category', () => {
     const filters: HomeFilters = {
       ...defaultFilters,
@@ -142,6 +155,46 @@ describe('HomeFilterService', () => {
           publication.categoria === 'electronicos'
       )
     ).toBe(true);
+  });
+
+  it('should filter the tutoring category used by publication creation', () => {
+    const result = service.applyFilters(
+      publications,
+      {
+        ...defaultFilters,
+        category: 'tutoria'
+      }
+    );
+
+    expect(result.map((publication) => publication.id))
+      .toEqual(['PUB-003']);
+  });
+
+  it('should compare the exact category value supplied by the catalog', () => {
+    const catalogPublication = {
+      ...publications[0],
+      categoria: 'Servicios Académicos'
+    };
+
+    expect(
+      service.applyFilters(
+        [catalogPublication],
+        {
+          ...defaultFilters,
+          category: 'Servicios Académicos'
+        }
+      )
+    ).toEqual([catalogPublication]);
+
+    expect(
+      service.applyFilters(
+        [catalogPublication],
+        {
+          ...defaultFilters,
+          category: 'servicios academicos'
+        }
+      )
+    ).toEqual([]);
   });
 
   it('should filter publications by minimum price', () => {

@@ -8,7 +8,7 @@ La SPA no apunta automáticamente a `app/backend`. Todas las peticiones feature 
 
 | Método y ruta relativa | Solicitud | Respuesta esperada | Consumidor |
 |---|---|---|---|
-| `GET /publicaciones?page&pageSize` | enteros | `PaginatedResponse<Publication>` | Home |
+| `GET /publicaciones?page&pageSize` | enteros; Home solicita inicialmente 100 y continúa con el tamaño efectivo indicado por `pageSize` hasta completar | `PaginatedResponse<Publication>` | Home |
 | `GET /publicaciones/{id}` | id string | `PublicationDetail` | Detalle |
 | `POST /publicaciones` | `CreatePublication` | cuerpo ignorado (`void`) | Alta |
 | `GET /usuarios/{id}/publicaciones` | id string | `PaginatedResponse<UserPublication>` | Mis publicaciones |
@@ -18,6 +18,10 @@ La SPA no apunta automáticamente a `app/backend`. Todas las peticiones feature 
 | `POST /chats/{id}/mensajes` | `{ texto }` | cuerpo ignorado (`void`) | Mensajería |
 
 Los tipos completos están en `features/*/models` y `shared/paginated-response.model.ts`. No hay OpenAPI ni esquemas compartidos. Todos los contratos de negocio están verificados únicamente como consumidores/mocks locales y dependen de un servicio externo no disponible.
+
+El contrato disponible no documenta parámetros server-side de búsqueda, categoría, precio u orden. **Verificado en el cliente:** Home usa únicamente `page` y `pageSize`, recorre secuencialmente todas las páginas indicadas por los metadatos y rechaza una carga incompleta. **No determinado:** el límite real de `pageSize`, el volumen máximo del catálogo y la estabilidad de `totalRecords` en APIM; por eso el filtrado global es correcto en el cliente, pero menos escalable que un contrato server-side.
+
+`Publication.categoria` es un `string` abierto: no existe enum, catálogo de categorías ni mapeo de respuesta versionado. `PublicationService` conserva el valor recibido. **Verificado en código y pruebas:** Home genera sus controles desde esos valores y compara la clave exacta. **No determinado en APIM:** un GET de inspección con la subscription key local respondió 401 sin bearer, por lo que no se confirmaron valores productivos, capitalización, tildes ni categorías adicionales.
 
 ## Cabeceras
 

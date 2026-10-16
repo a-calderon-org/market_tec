@@ -15,7 +15,7 @@
 | Backend | `PORT=43117 node dist/server.js` + `curl` | Mostró el mensaje de arranque, pero el proceso terminó/no fue alcanzable desde `curl` en el entorno aislado; endpoint no verificado en ejecución |
 | Frontend | `npm start` | No ejecutado; servidor persistente |
 | Frontend | `ngc -p tsconfig.app.json --noEmit` con Node 24.21.0 | Exitoso |
-| Frontend | `ng test --watch=false` con Node 24.21.0 | Exitoso: 18 archivos, 170 pruebas |
+| Frontend | `ng test --watch=false` con Node 24.21.0 | Exitoso: 19 archivos, 179 pruebas |
 | Frontend | `ng build` con Node 24.21.0 y salida en `/tmp` | Abortó con código 134 en production y development, también con un worker. Causa no determinada |
 
 No hay scripts `lint`, cobertura ni E2E configurados. `npm ci` está documentado, pero no se ejecutó porque las dependencias ya estaban presentes y la tarea prohíbe instalaciones. Los Node instalados detectados fueron 22.22.0, 24.14.0 y 24.21.0; este último se invocó por ruta absoluta sin alterar configuración persistente.

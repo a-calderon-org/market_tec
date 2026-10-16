@@ -18,11 +18,11 @@ apiKeyInterceptor
 Azure APIM
 ```
 
-Los componentes coordinan además presentación, validación, formato y estado asíncrono. Los modelos son interfaces TypeScript sin validación runtime.
+Los componentes coordinan además presentación, validación, formato y estado asíncrono. Los modelos son interfaces TypeScript sin validación runtime. Home delega filtrado puro a `HomeFilterService`, persistencia local a `RecentSearchService` y recorrido paginado a `PublicationService`.
 
 ## Manejo de errores
 
-El interceptor centraliza únicamente 401. Cada componente mantiene flags y mensajes; algunos exponen mensajes del API (`Profile`), mientras otros usan texto genérico. No hay retry, timeout, caché ni telemetría observados.
+El interceptor centraliza únicamente 401. Cada componente mantiene flags y mensajes; algunos exponen mensajes del API (`Profile`), mientras otros usan texto genérico. No hay retry automático, timeout, caché compartida ni telemetría observados. Home permite reintento manual y cancela su carga anterior para invalidar respuestas obsoletas.
 
 ## Autenticación
 
