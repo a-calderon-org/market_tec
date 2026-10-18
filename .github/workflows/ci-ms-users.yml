@@ -1,0 +1,30 @@
+name: CI ms-users
+
+on:
+  push:
+    paths:
+      - 'app/ms-users/**'
+      - '.github/workflows/ci-ms-users.yml'
+  pull_request:
+    paths:
+      - 'app/ms-users/**'
+      - '.github/workflows/ci-ms-users.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app/ms-users
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Compile and test
+        run: ./mvnw --batch-mode verify

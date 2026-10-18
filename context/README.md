@@ -19,6 +19,7 @@
 - `audits/`: evaluación inicial fechada; no representa automáticamente el estado futuro.
 - `decisions/`: mecanismo ADR y registro, sin atribuir decisiones inferidas.
 - `maintenance/`: reglas, protocolo y lista de verificación.
+- `phase2/`: propuestas de arquitectura distribuida y [fundacion tecnica realmente implementada](phase2/IMPLEMENTED_FOUNDATION.md).
 
 ## Convención de certeza
 
@@ -32,4 +33,3 @@
 - Auditorías iniciales: [backend](audits/INITIAL_BACKEND_AUDIT.md), [frontend](audits/INITIAL_FRONTEND_AUDIT.md) e [integración](audits/INTEGRATION_AUDIT.md); registros históricos del primer pase.
 - [Segunda validación independiente](audits/SECOND_PASS_VALIDATION.md): revisión vigente de certeza y severidad; refuta y matiza hallazgos sin reescribir los informes iniciales.
 - [Deuda técnica vigente](audits/TECHNICAL_DEBT.md): priorización consolidada tras la segunda pasada.
-
