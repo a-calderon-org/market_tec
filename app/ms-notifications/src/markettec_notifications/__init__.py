@@ -1,0 +1,1 @@
+"""MarketTec notifications service."""

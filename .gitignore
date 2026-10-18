@@ -1,8 +1,14 @@
 # Dependencies
 node_modules/
+.venv/
+*.egg-info/
 
 # Build
 dist/
+target/
+__pycache__/
+.pytest_cache/
+*.py[cod]
 
 # Angular
 .angular/
