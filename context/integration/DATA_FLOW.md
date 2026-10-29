@@ -14,6 +14,7 @@ sequenceDiagram
   SPA-->>U: navega al catálogo
   SPA->>API: solicitud + clave APIM + Bearer token
   API-->>SPA: respuesta o 401
+  SPA->>SPA: expiración o 401 invalida token y usuario reactivo
   Note over API: validación de firma/audiencia no verificable en este repositorio
 ```
 
@@ -37,5 +38,5 @@ El shell muestra claims `sub/email/name/picture`. Perfil y publicaciones propias
 
 ## Errores
 
-401 se trata globalmente. Otros errores llegan al componente. No existe sobre común de error tipado; `Profile` intenta leer `error.error.message`, mientras otras vistas muestran mensajes genéricos.
+401 autenticado se trata globalmente y solo puede invalidar el token capturado al emitir la solicitud. La expiración local produce la misma limpieza de token/usuario y navegación a login. Otros errores llegan al componente. No existe sobre común de error tipado; `Profile` intenta leer `error.error.message`, mientras otras vistas muestran mensajes genéricos.
 

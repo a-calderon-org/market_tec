@@ -2,8 +2,8 @@
 
 ## Estado global por servicios singleton
 
-- `GoogleAuthService.user`: identidad derivada del token.
-- `AuthTokenService`: token en `sessionStorage` bajo `google_token`.
+- `GoogleAuthService.user`: identidad reactiva derivada de los claims del token activo.
+- `AuthTokenService`: fuente única del token en `sessionStorage` bajo `google_token`; programa su expiración y descarta invalidaciones obsoletas por identidad de token.
 - `ThemeService`: preferencia en `localStorage` y `data-theme` del documento.
 - `PublicationFeedbackService`: aviso efímero de creación con temporizador de seis segundos.
 - `RecentSearchService`: últimas diez búsquedas ejecutadas, normalizadas y sin duplicados triviales en `localStorage`; degrada a memoria si el almacenamiento falla.
@@ -21,5 +21,6 @@ Signals y `computed` mantienen carga, error, filtros, selección y datos. Los fo
 - **Verificado:** Home solicita inicialmente hasta 100 publicaciones y continúa con el `pageSize` efectivo informado por APIM, descarta IDs repetidos, falla si no logra reunir `totalRecords` y conserva el catálogo completo en un signal. `filteredPublications` aplica búsqueda, categoría, precios y orden; `publications` pagina después ese resultado en grupos de 12. Los totales se derivan de las coincidencias.
 - **Verificado:** `categories` deriva claves únicas del catálogo y `selectedCategory` guarda una de esas claves sin normalización contractual. La comparación sigue siendo igualdad exacta sobre `publication.categoria`; esto evita que etiquetas hardcodeadas queden desacopladas de los datos.
 - **Verificado:** cualquier cambio de criterio vuelve a página 1; cambiar página conserva criterios y no emite otra solicitud. Reintentar cancela la carga anterior antes de iniciar otra.
-- La expiración del token se detecta al volver a llamar `getToken`; no existe temporizador y el signal `GoogleAuthService.user` no se limpia automáticamente en ese punto.
+- **Verificado:** al establecer o restaurar un token válido, `AuthTokenService` programa su expiración. Logout cancela el temporizador y sustituir el token lo reprograma; el callback captura el token esperado para no invalidar una sesión posterior.
+- **Verificado:** expiración y 401 autenticado limpian almacenamiento y estado reactivo, y navegan a `/login`. Los 401 concurrentes son idempotentes y una respuesta tardía solo puede invalidar el token que llevaba su solicitud.
 

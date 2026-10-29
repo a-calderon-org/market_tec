@@ -22,9 +22,11 @@ Los componentes coordinan además presentación, validación, formato y estado a
 
 ## Manejo de errores
 
-El interceptor centraliza únicamente 401. Cada componente mantiene flags y mensajes; algunos exponen mensajes del API (`Profile`), mientras otros usan texto genérico. No hay retry automático, timeout, caché compartida ni telemetría observados. Home permite reintento manual y cancela su carga anterior para invalidar respuestas obsoletas.
+El interceptor centraliza únicamente 401 autenticados: invalida el mismo token que llevaba la solicitud y delega la navegación a la fuente de sesión. Cada componente mantiene flags y mensajes; algunos exponen mensajes del API (`Profile`), mientras otros usan texto genérico. No hay retry automático, timeout, caché compartida ni telemetría observados. Home permite reintento manual y cancela su carga anterior para invalidar respuestas obsoletas.
 
 ## Autenticación
 
 Google GIS entrega un credential. `GoogleAuthService.signIn` lo almacena y lee claims; no realiza una solicitud de validación. `AuthTokenService` solo comprueba estructura y `exp`, no firma/audiencia/emisor. La seguridad final depende de la API externa, cuya configuración no se puede verificar aquí.
+
+`AuthTokenService` conserva la sesión en `sessionStorage`, programa un temporizador desde `exp` y expone claims reactivos. `GoogleAuthService.user` se deriva de esos claims, por lo que expiración, logout y 401 actualizan la UI y los guards sin mantener una copia independiente. Esto no sustituye la validación criptográfica obligatoria en la API.
 
