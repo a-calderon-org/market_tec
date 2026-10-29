@@ -1,0 +1,606 @@
+{
+  "openapi": "3.1.0",
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "info": {
+    "title": "MarketTec Users API",
+    "version": "0.1.0-draft",
+    "description": "Contrato de diseño. Solo GET /health está implementado; identidad y perfiles están propuestos."
+  },
+  "x-contract-status": "draft-pending-team-approval",
+  "servers": [
+    {
+      "url": "/",
+      "description": "Ruta relativa del servicio; APIM puede mapear rutas públicas sin /v1."
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "getUsersHealth",
+        "summary": "Estado técnico del servicio",
+        "x-implementation-status": "implemented",
+        "security": [],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Servicio disponible",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                },
+                "examples": {
+                  "up": {
+                    "value": {
+                      "status": "UP",
+                      "service": "ms-users",
+                      "timestamp": 1790000000,
+                      "correlationId": "550e8400-e29b-41d4-a716-446655440000"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/google": {
+      "post": {
+        "operationId": "exchangeGoogleCredential",
+        "summary": "Intercambiar un Google ID token por una sesión interna",
+        "description": "Propuesta pendiente de aprobación. Angular todavía no invoca esta operación.",
+        "x-implementation-status": "proposed",
+        "x-public-apim-path": "/auth/google",
+        "security": [
+          {
+            "apimSubscriptionKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoogleAuthRequest"
+              },
+              "examples": {
+                "credential": {
+                  "value": {
+                    "credential": "google-id-token-placeholder"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Credencial interna emitida",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                },
+                "examples": {
+                  "authenticated": {
+                    "value": {
+                      "token": "internal-jwt-placeholder",
+                      "tokenType": "Bearer",
+                      "expiresAt": 1790000900,
+                      "user": {
+                        "userId": "usr_abc123",
+                        "email": "usuario@estudiantec.cr",
+                        "nombre": "Ana López",
+                        "fotoPerfil": "https://example.invalid/avatar.png"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/v1/usuarios/{userId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/UserId"
+        },
+        {
+          "$ref": "#/components/parameters/CorrelationId"
+        }
+      ],
+      "get": {
+        "operationId": "getUserProfile",
+        "summary": "Consultar un perfil de usuario",
+        "description": "Forma de respuesta compatible con el modelo Angular actual. APIM mapearía la ruta pública /usuarios/{userId}.",
+        "x-implementation-status": "proposed",
+        "x-public-apim-path": "/usuarios/{userId}",
+        "security": [
+          {
+            "bearerAuth": [],
+            "apimSubscriptionKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Perfil encontrado",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfileV1"
+                },
+                "examples": {
+                  "currentAngularShape": {
+                    "value": {
+                      "id": "usr_abc123",
+                      "nombreUsuario": "ana.lopez",
+                      "nombre": "Ana",
+                      "apellidos": "López Mora",
+                      "correo": "usuario@estudiantec.cr",
+                      "fotoPerfil": "https://example.invalid/avatar.png",
+                      "fechaRegistro": "2026-10-20T14:00:00Z",
+                      "verificado": true,
+                      "estado": "activo",
+                      "createdAt": 1792504800
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "put": {
+        "operationId": "updateUserProfile",
+        "summary": "Actualizar el perfil propio",
+        "description": "El userId autenticado debe ser propietario del perfil. No se confía en headers del navegador.",
+        "x-implementation-status": "proposed",
+        "x-public-apim-path": "/usuarios/{userId}",
+        "security": [
+          {
+            "bearerAuth": [],
+            "apimSubscriptionKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserRequest"
+              },
+              "examples": {
+                "profile": {
+                  "value": {
+                    "nombreUsuario": "ana.lopez",
+                    "nombre": "Ana",
+                    "apellidos": "López Mora"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Perfil actualizado",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateUserResponseV1"
+                },
+                "examples": {
+                  "updated": {
+                    "value": {
+                      "id": "usr_abc123",
+                      "nombreUsuario": "ana.lopez",
+                      "nombre": "Ana",
+                      "apellidos": "López Mora",
+                      "correo": "usuario@estudiantec.cr",
+                      "fotoPerfil": "https://example.invalid/avatar.png",
+                      "fechaRegistro": "2026-10-20T14:00:00Z",
+                      "fechaActualizacion": "2026-10-28T17:00:00Z",
+                      "verificado": true,
+                      "estado": "activo",
+                      "message": "Perfil actualizado"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT interno propuesto; issuer, audience y firma siguen pendientes de aprobación."
+      },
+      "apimSubscriptionKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Ocp-Apim-Subscription-Key",
+        "description": "Credencial de gateway usada por la SPA; no representa identidad de usuario."
+      }
+    },
+    "parameters": {
+      "CorrelationId": {
+        "name": "X-Correlation-ID",
+        "in": "header",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 128
+        }
+      },
+      "UserId": {
+        "name": "userId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/UserId"
+        }
+      }
+    },
+    "headers": {
+      "CorrelationId": {
+        "required": true,
+        "schema": {
+          "type": "string",
+          "maxLength": 128
+        }
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "Credencial ausente o inválida",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            },
+            "examples": {
+              "unauthorized": {
+                "value": {
+                  "error": {
+                    "code": "UNAUTHORIZED",
+                    "message": "Authentication is required.",
+                    "details": [],
+                    "correlationId": "550e8400-e29b-41d4-a716-446655440000",
+                    "timestamp": 1790000000
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "El usuario no puede modificar el recurso",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Usuario no encontrado",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "UserId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64,
+        "description": "Identificador lógico opaco emitido por ms-users.",
+        "example": "usr_abc123"
+      },
+      "EpochSeconds": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 9999999999
+      },
+      "HealthResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["status", "service", "timestamp", "correlationId"],
+        "properties": {
+          "status": {
+            "const": "UP"
+          },
+          "service": {
+            "const": "ms-users"
+          },
+          "timestamp": {
+            "$ref": "#/components/schemas/EpochSeconds"
+          },
+          "correlationId": {
+            "type": "string",
+            "maxLength": 128
+          }
+        }
+      },
+      "GoogleAuthRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["credential"],
+        "properties": {
+          "credential": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Google ID token recibido por GIS; no es un access token."
+          }
+        }
+      },
+      "AuthResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["token", "tokenType", "expiresAt", "user"],
+        "properties": {
+          "token": {
+            "type": "string",
+            "minLength": 1
+          },
+          "tokenType": {
+            "const": "Bearer"
+          },
+          "expiresAt": {
+            "$ref": "#/components/schemas/EpochSeconds"
+          },
+          "user": {
+            "$ref": "#/components/schemas/AuthenticatedUser"
+          }
+        }
+      },
+      "AuthenticatedUser": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["userId", "email", "nombre"],
+        "properties": {
+          "userId": {
+            "$ref": "#/components/schemas/UserId"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "nombre": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "fotoPerfil": {
+            "type": "string",
+            "format": "uri"
+          }
+        }
+      },
+      "UserProfileV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "nombreUsuario",
+          "nombre",
+          "apellidos",
+          "correo",
+          "fotoPerfil",
+          "fechaRegistro",
+          "verificado",
+          "estado"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/UserId"
+          },
+          "nombreUsuario": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "nombre": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "apellidos": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "correo": {
+            "type": "string",
+            "format": "email"
+          },
+          "fotoPerfil": {
+            "type": "string",
+            "format": "uri"
+          },
+          "fechaRegistro": {
+            "type": "string",
+            "format": "date-time",
+            "deprecated": true,
+            "description": "Campo preservado para Angular v1. No cambiar su tipo en esta versión."
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/EpochSeconds",
+            "description": "Campo aditivo de migración; su obligatoriedad depende de aprobar ADR-003."
+          },
+          "verificado": {
+            "type": "boolean"
+          },
+          "estado": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          }
+        }
+      },
+      "UpdateUserRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["nombreUsuario", "nombre", "apellidos"],
+        "properties": {
+          "nombreUsuario": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "nombre": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "apellidos": {
+            "type": "string",
+            "maxLength": 160
+          }
+        }
+      },
+      "UpdateUserResponseV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "nombreUsuario",
+          "nombre",
+          "apellidos",
+          "correo",
+          "fotoPerfil",
+          "fechaRegistro",
+          "fechaActualizacion",
+          "verificado",
+          "estado",
+          "message"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/UserId"
+          },
+          "nombreUsuario": {
+            "type": "string"
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "apellidos": {
+            "type": "string"
+          },
+          "correo": {
+            "type": "string",
+            "format": "email"
+          },
+          "fotoPerfil": {
+            "type": "string",
+            "format": "uri"
+          },
+          "fechaRegistro": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fechaActualizacion": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "verificado": {
+            "type": "boolean"
+          },
+          "estado": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["code", "message", "details", "correlationId", "timestamp"],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "details": {
+                "type": "array",
+                "items": {}
+              },
+              "correlationId": {
+                "type": "string",
+                "maxLength": 128
+              },
+              "timestamp": {
+                "$ref": "#/components/schemas/EpochSeconds"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

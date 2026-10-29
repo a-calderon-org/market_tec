@@ -1,0 +1,9 @@
+{
+  "name": "markettec-contract-validation",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Herramientas reproducibles para validar los contratos OpenAPI de MarketTec.",
+  "devDependencies": {
+    "@redocly/cli": "2.71.2"
+  }
+}

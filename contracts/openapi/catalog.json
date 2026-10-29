@@ -1,0 +1,628 @@
+{
+  "openapi": "3.1.0",
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "info": {
+    "title": "MarketTec Catalog API",
+    "version": "0.1.0-draft",
+    "description": "Contrato de diseño compatible con los consumidores Angular actuales. Solo GET /health está implementado."
+  },
+  "x-contract-status": "draft-pending-team-approval",
+  "servers": [
+    {
+      "url": "/",
+      "description": "Ruta relativa del servicio; APIM puede eliminar /v1 en la ruta pública."
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "getCatalogHealth",
+        "summary": "Estado técnico del servicio",
+        "x-implementation-status": "implemented",
+        "security": [],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Servicio disponible",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                },
+                "examples": {
+                  "up": {
+                    "value": {
+                      "status": "UP",
+                      "service": "ms-catalog",
+                      "timestamp": 1790000000,
+                      "correlationId": "550e8400-e29b-41d4-a716-446655440000"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/publicaciones": {
+      "get": {
+        "operationId": "listPublications",
+        "summary": "Listar y filtrar publicaciones",
+        "description": "Mantiene la paginación plana consumida por Angular. Los filtros nuevos son opcionales y aditivos.",
+        "x-implementation-status": "proposed",
+        "x-public-apim-path": "/publicaciones",
+        "security": [
+          {
+            "bearerAuth": [],
+            "apimSubscriptionKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "categoria",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["precio", "fecha"],
+              "default": "fecha"
+            }
+          },
+          {
+            "name": "sortDirection",
+            "in": "query",
+            "required": false,
+            "description": "Nombre canónico alineado con MTEC-13. sortDir no se introduce en v1.",
+            "schema": {
+              "type": "string",
+              "enum": ["asc", "desc"],
+              "default": "desc"
+            }
+          },
+          {
+            "name": "precioMin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "precioMax",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Página de publicaciones",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicationPageV1"
+                },
+                "examples": {
+                  "currentAngularShape": {
+                    "value": {
+                      "totalRecords": 1,
+                      "page": 1,
+                      "pageSize": 12,
+                      "items": [
+                        {
+                          "id": "pub_xyz789",
+                          "categoria": "Electrónica",
+                          "subcategoria": "Laptops",
+                          "titulo": "Laptop Dell XPS",
+                          "descripcion": "En excelente estado",
+                          "precio": 85000,
+                          "condicion": "Usado",
+                          "ubicacion": "Campus San Carlos",
+                          "imagen": "https://example.invalid/pub_xyz789/main.jpg",
+                          "fechaPublicacion": "2026-10-20T14:00:00Z",
+                          "createdAt": 1792504800,
+                          "estado": "activo",
+                          "vendedor": {
+                            "id": 101,
+                            "userId": "usr_abc123",
+                            "nombre": "Ana López",
+                            "carrera": "Computación",
+                            "verificado": true
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      }
+    },
+    "/v1/publicaciones/{publicationId}": {
+      "get": {
+        "operationId": "getPublicationDetail",
+        "summary": "Consultar el detalle de una publicación",
+        "x-implementation-status": "proposed",
+        "x-public-apim-path": "/publicaciones/{publicationId}",
+        "security": [
+          {
+            "bearerAuth": [],
+            "apimSubscriptionKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PublicationId"
+          },
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detalle compatible con PublicationDetail de Angular",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicationDetailV1"
+                },
+                "examples": {
+                  "detail": {
+                    "value": {
+                      "id": "pub_xyz789",
+                      "categoria": "Electrónica",
+                      "subcategoria": "Laptops",
+                      "titulo": "Laptop Dell XPS",
+                      "descripcion": "En excelente estado",
+                      "precio": 85000,
+                      "condicion": "Usado",
+                      "estado": "activo",
+                      "ubicacion": "Campus San Carlos",
+                      "fechaPublicacion": "2026-10-20T14:00:00Z",
+                      "imagenes": [
+                        "https://example.invalid/pub_xyz789/main.jpg"
+                      ],
+                      "vendedor": {
+                        "id": 101,
+                        "userId": "usr_abc123",
+                        "nombre": "Ana López",
+                        "carrera": "Computación",
+                        "verificado": true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT interno propuesto. No se aceptan headers de identidad del navegador."
+      },
+      "apimSubscriptionKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Ocp-Apim-Subscription-Key"
+      }
+    },
+    "parameters": {
+      "CorrelationId": {
+        "name": "X-Correlation-ID",
+        "in": "header",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 128
+        }
+      },
+      "Page": {
+        "name": "page",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        }
+      },
+      "PageSize": {
+        "name": "pageSize",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 12
+        }
+      },
+      "PublicationId": {
+        "name": "publicationId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/PublicationId"
+        }
+      }
+    },
+    "headers": {
+      "CorrelationId": {
+        "required": true,
+        "schema": {
+          "type": "string",
+          "maxLength": 128
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Parámetros inválidos",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Publicación no encontrada",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "PublicationId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "UserId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      },
+      "EpochSeconds": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 9999999999
+      },
+      "HealthResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["status", "service", "timestamp", "correlationId"],
+        "properties": {
+          "status": {
+            "const": "UP"
+          },
+          "service": {
+            "const": "ms-catalog"
+          },
+          "timestamp": {
+            "$ref": "#/components/schemas/EpochSeconds"
+          },
+          "correlationId": {
+            "type": "string",
+            "maxLength": 128
+          }
+        }
+      },
+      "SellerV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "nombre", "carrera", "verificado"],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Identificador numérico preservado para Angular v1."
+          },
+          "userId": {
+            "$ref": "#/components/schemas/UserId",
+            "description": "Campo aditivo para migración; no sustituye id sin versión coordinada."
+          },
+          "nombre": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "carrera": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "verificado": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PublicationV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "categoria",
+          "subcategoria",
+          "titulo",
+          "descripcion",
+          "precio",
+          "condicion",
+          "ubicacion",
+          "imagen",
+          "fechaPublicacion",
+          "estado",
+          "vendedor"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/PublicationId"
+          },
+          "categoria": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "subcategoria": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "titulo": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "descripcion": {
+            "type": "string",
+            "maxLength": 5000
+          },
+          "precio": {
+            "type": "number",
+            "minimum": 0
+          },
+          "condicion": {
+            "type": ["string", "null"]
+          },
+          "ubicacion": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "imagen": {
+            "type": "string",
+            "format": "uri"
+          },
+          "fechaPublicacion": {
+            "type": "string",
+            "format": "date-time",
+            "deprecated": true,
+            "description": "Campo preservado para Angular v1; no cambiar de tipo."
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/EpochSeconds",
+            "description": "Campo aditivo pendiente de aprobar ADR-003."
+          },
+          "estado": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "vendedor": {
+            "$ref": "#/components/schemas/SellerV1"
+          }
+        }
+      },
+      "PublicationPageV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["totalRecords", "page", "pageSize", "items"],
+        "properties": {
+          "totalRecords": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicationV1"
+            }
+          }
+        }
+      },
+      "PublicationDetailV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "categoria",
+          "subcategoria",
+          "titulo",
+          "descripcion",
+          "precio",
+          "condicion",
+          "estado",
+          "ubicacion",
+          "fechaPublicacion",
+          "vendedor"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/PublicationId"
+          },
+          "categoria": {
+            "type": "string"
+          },
+          "subcategoria": {
+            "type": "string"
+          },
+          "titulo": {
+            "type": "string"
+          },
+          "descripcion": {
+            "type": "string"
+          },
+          "precio": {
+            "type": "number",
+            "minimum": 0
+          },
+          "precioAnterior": {
+            "type": "number",
+            "minimum": 0
+          },
+          "condicion": {
+            "type": ["string", "null"]
+          },
+          "estado": {
+            "type": "string"
+          },
+          "ubicacion": {
+            "type": "string"
+          },
+          "puntoEntrega": {
+            "type": "string"
+          },
+          "fechaPublicacion": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/EpochSeconds"
+          },
+          "imagenes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          "imagen": {
+            "type": "string",
+            "format": "uri"
+          },
+          "especificaciones": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "incluye": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "vendedor": {
+            "$ref": "#/components/schemas/SellerV1"
+          }
+        }
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["code", "message", "details", "correlationId", "timestamp"],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "details": {
+                "type": "array",
+                "items": {}
+              },
+              "correlationId": {
+                "type": "string",
+                "maxLength": 128
+              },
+              "timestamp": {
+                "$ref": "#/components/schemas/EpochSeconds"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
