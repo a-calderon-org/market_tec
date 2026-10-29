@@ -11,16 +11,69 @@ on:
       - main
 
 jobs:
+  validate_build_job:
+    if: github.event_name == 'pull_request' && github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    name: Validate Angular Build
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+          cache-dependency-path: app/frontend/package-lock.json
+
+      - name: Create validation environment
+        working-directory: ./app/frontend
+        run: |
+          mkdir -p src/environments
+
+          node - <<'NODE'
+          const fs = require('fs');
+
+          const environment = {
+            apiBaseUrl: 'https://example.invalid',
+            subscriptionKey: 'ci-placeholder',
+            googleClientId: 'ci-placeholder'
+          };
+
+          fs.writeFileSync(
+            'src/environments/environment.ts',
+            `export const environment = ${JSON.stringify(environment, null, 2)};\n`
+          );
+          NODE
+
+      - name: Install dependencies
+        working-directory: ./app/frontend
+        run: npm ci
+
+      - name: Build Angular application
+        working-directory: ./app/frontend
+        run: npm run build
+
+      - name: Verify production artifact
+        run: |
+          test -f app/frontend/dist/market-tec-frontend/browser/index.html
+          test -f app/frontend/dist/market-tec-frontend/browser/staticwebapp.config.json
+
   build_and_deploy_job:
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
     runs-on: ubuntu-latest
     name: Build and Deploy Job
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
           lfs: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+          cache-dependency-path: app/frontend/package-lock.json
 
       - name: Create Angular environment
         working-directory: ./app/frontend
@@ -51,7 +104,20 @@ jobs:
           );
           NODE
 
-      - name: Build And Deploy
+      - name: Install dependencies
+        working-directory: ./app/frontend
+        run: npm ci
+
+      - name: Build Angular application
+        working-directory: ./app/frontend
+        run: npm run build
+
+      - name: Verify production artifact
+        run: |
+          test -f app/frontend/dist/market-tec-frontend/browser/index.html
+          test -f app/frontend/dist/market-tec-frontend/browser/staticwebapp.config.json
+
+      - name: Deploy prebuilt artifact
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
         with:
@@ -59,12 +125,13 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
 
-          app_location: "./app/frontend"
+          app_location: "./app/frontend/dist/market-tec-frontend/browser"
           api_location: ""
-          output_location: "dist/market-tec-frontend/browser"
+          output_location: ""
+          skip_app_build: true
 
   close_pull_request_job:
-    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     name: Close Pull Request Job
 
