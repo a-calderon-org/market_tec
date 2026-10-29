@@ -71,7 +71,7 @@ No contienen pasos de despliegue ni alteran el workflow existente de Angular.
 - `ms-catalog`: puertos Cosmos DB, Blob Storage y publicacion en Queue al implementar casos de uso reales.
 - `ms-notifications`: puertos Queue/Table y entrega SSE. Antes de SSE debe definirse autenticacion compatible con `EventSource`, navegador y APIM; no se aceptan tokens permanentes en URL.
 - SQL Database frente a PostgreSQL para `ms-users` sigue **No determinado**.
-- ADR-001, ADR-002 y ADR-003 continúan `Proposed`.
+- ADR-001 fue **Accepted** el 2026-10-29; ADR-002 y ADR-003 continúan `Proposed`.
 - `app/backend` se conserva hasta resolver ADR-002.
 - La aplicacion es exclusivamente web. El requisito academico de push movil/FCM queda como discrepancia pendiente de validacion docente; esta etapa no crea app movil, registro de dispositivos ni FCM.
 
