@@ -1,5 +1,7 @@
 # Segunda auditoría independiente y validación
 
+> **Estado posterior verificado (2026-10-29, MTEC-17):** SPV-003 y SPV-004 fueron corregidos en el frontend mediante validación estructural de URL, expiración programada y una fuente reactiva única de sesión. La suite incorpora casos negativos de destinos/configuración y pruebas con reloj simulado, concurrencia y respuestas tardías. Este apunte actualiza el estado del hallazgo sin reescribir la evidencia histórica del análisis siguiente; las políticas APIM continúan **No determinadas**.
+
 ## A. Información de la revisión
 
 - **Fecha:** 2026-10-13.

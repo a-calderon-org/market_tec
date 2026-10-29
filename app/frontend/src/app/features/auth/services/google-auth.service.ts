@@ -1,6 +1,7 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, inject, linkedSignal } from '@angular/core';
 import { environment } from '../../../../environments/environment';
 import { AuthTokenService } from '../../../core/auth/auth-token.service';
+import type { GoogleTokenClaims } from '../../../core/auth/auth-token.service';
 
 interface GoogleIdentity {
   initialize(options: {
@@ -25,7 +26,18 @@ export type GoogleButtonTheme = 'outline' | 'outline_dark';
 @Injectable({ providedIn: 'root' })
 export class GoogleAuthService {
   private readonly authToken = inject(AuthTokenService);
-  readonly user = signal<AuthUser | null>(null);
+  readonly user = linkedSignal<AuthUser | null>(() => this.toUser(this.authToken.claims()));
+
+  private toUser(claims: GoogleTokenClaims | null): AuthUser | null {
+    if (!claims?.sub || !claims.email) return null;
+
+    return {
+      id: claims.sub,
+      email: claims.email,
+      name: claims.name || claims.email,
+      picture: claims.picture,
+    };
+  }
 
   async renderButton(
     element: HTMLElement,
@@ -67,44 +79,22 @@ export class GoogleAuthService {
 
   async signIn(credential: string): Promise<void> {
     this.authToken.setToken(credential);
-    const user = this.readUser();
 
-    if (!user) {
+    if (!this.user()) {
       this.authToken.clearToken();
       throw new Error('Google no entregó una identidad válida. Inténtalo nuevamente.');
     }
-
-    this.user.set(user);
   }
 
   async restoreSession(): Promise<boolean> {
-    const user = this.readUser();
-
-    if (!user) {
-      this.user.set(null);
-      return false;
-    }
-
+    const user = this.toUser(this.authToken.getClaims());
     this.user.set(user);
-    return true;
+
+    return user !== null;
   }
 
   async logout(): Promise<void> {
-    this.user.set(null);
     this.authToken.clearToken();
     window.google?.accounts.id.disableAutoSelect();
-  }
-
-  private readUser(): AuthUser | null {
-    const claims = this.authToken.getClaims();
-
-    if (!claims?.sub || !claims.email) return null;
-
-    return {
-      id: claims.sub,
-      email: claims.email,
-      name: claims.name || claims.email,
-      picture: claims.picture
-    };
   }
 }

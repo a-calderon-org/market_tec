@@ -31,14 +31,15 @@ No se confirmó un hallazgo que justifique P0 con evidencia local.
 |---|---|---|---|---|---|
 | FE-006 | Defecto local | ejemplo de entorno omite `googleClientId` | ejemplo/esquema completo | Bajo | ninguna |
 | FE-009 | Mejora local | errores no 401 inconsistentes | sobre y política común | Medio | contrato API |
-| SPV-003 | Riesgo condicionado | interceptor compara URL por prefijo textual | comparar origen/ruta normalizados y validar config | Bajo | ninguna |
-| SPV-004 | Mejora local | expiración no sincroniza signal de usuario | fuente única reactiva de sesión | Bajo-Medio | diseño auth |
+| SPV-003 | Resuelto 2026-10-29 | interceptor valida `URL.origin` y ruta delimitada; configuración inválida falla cerrada | conservar pruebas negativas de destinos/configuración | Bajo residual | ninguna |
+| SPV-004 | Resuelto 2026-10-29 | fuente reactiva programa `exp`, sincroniza usuario y protege contra 401/timers obsoletos | conservar pruebas con reloj simulado y concurrencia | Bajo residual | ninguna |
 | INT-004 / FE-005 | Limitación documentada | imágenes son preview y `usuarioId` documentado no se envía | alinear contrato/guía; diseñar upload solo si entra en alcance | Variable | producto/API |
 | BE-002 / BE-005 / INT-006 | Deuda condicionada | CORS/operación/config residual de Express | endurecer o retirar al decidir su papel | Bajo-Medio | decisión sobre backend |
 
 ## Trazabilidad de correcciones de la auditoría
 
 - **FE-004 / SPV-002 queda cerrado funcionalmente tras la depuración y verificación manual del 2026-10-13:** Home reúne y valida el catálogo completo, deriva las opciones de categoría de los valores exactos del catálogo, combina búsqueda y filtros antes de paginar, calcula totales desde las coincidencias y mantiene un historial persistente operable con ratón y teclado. La integración real con APIM permanece **No determinada** porque el GET de inspección respondió 401 sin bearer; también permanece la limitación de escalabilidad hasta disponer de filtros server-side documentados.
+- **SPV-003 / SPV-004 quedan cerrados localmente el 2026-10-29:** pruebas unitarias verifican origen/protocolo/puerto/ruta, configuración vacía o inválida, URLs relativas, expiración activa, logout, reemplazo de token, 401 concurrente y 401 tardío. **No determinado:** las políticas APIM y el enforcement remoto, que permanecen fuera del repositorio.
 - **BE-004 fue refutado:** `tsx` sí resuelve `src/server.js`; no es deuda vigente.
 - **BE-001/INT-001 bajan de prioridad:** README confirma que APIM mocks son la arquitectura de Fase I y Express está reservado.
 - La ausencia de upload de imágenes no es pérdida silenciosa: la UI lo identifica como preview de sesión.

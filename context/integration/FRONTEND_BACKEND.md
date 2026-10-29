@@ -25,7 +25,7 @@ El contrato disponible no documenta parámetros server-side de búsqueda, catego
 
 ## Cabeceras
 
-Para URLs que empiezan con `apiBaseUrl`, el interceptor añade `Ocp-Apim-Subscription-Key` siempre y `Authorization: Bearer <token>` si existe. Un 401 limpia el token y redirige a login. CORS debe permitir el origen y ambas cabeceras, pero las políticas APIM no están disponibles.
+Para destinos cuyo `URL.origin` coincide exactamente con `apiBaseUrl` y cuyo pathname es la ruta base o un descendiente delimitado por `/`, el interceptor añade `Ocp-Apim-Subscription-Key` si está configurada y `Authorization: Bearer <token>` si existe un token vigente. Una base vacía, nula, con protocolo no HTTP(S) o malformada falla cerrada y no adjunta credenciales; las solicitudes ajenas continúan sin esas cabeceras. Un 401 autenticado invalida únicamente el token enviado y redirige a login, por lo que respuestas tardías no cierran una sesión posterior. CORS debe permitir el origen y ambas cabeceras, pero las políticas APIM no están disponibles.
 
 ## Compatibilidad
 
