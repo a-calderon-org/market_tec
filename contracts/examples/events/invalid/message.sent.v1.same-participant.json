@@ -1,0 +1,16 @@
+{
+  "eventId": "550e8400-e29b-41d4-a716-446655440000",
+  "eventType": "message.sent",
+  "schemaVersion": 1,
+  "occurredAt": 1790000100,
+  "producer": "ms-catalog",
+  "correlationId": "7e3f1789-66f8-4ea2-90e5-9c97ec8acba7",
+  "payload": {
+    "chatId": "chat_01",
+    "messageId": "msg_001",
+    "senderUserId": "usr_same",
+    "recipientUserId": "usr_same",
+    "sentAt": 1790000100,
+    "publicationId": "pub_xyz789"
+  }
+}

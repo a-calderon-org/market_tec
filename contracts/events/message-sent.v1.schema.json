@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://markettec.local/contracts/events/message-sent.v1.schema.json",
+  "title": "MessageSentV1",
+  "description": "Evento message.sent versión 1. Borrador pendiente de aprobación.",
+  "allOf": [
+    {
+      "$ref": "common-event-envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "eventType": {
+          "const": "message.sent"
+        },
+        "schemaVersion": {
+          "const": 1
+        },
+        "producer": {
+          "const": "ms-catalog"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "chatId",
+            "messageId",
+            "senderUserId",
+            "recipientUserId",
+            "sentAt",
+            "publicationId"
+          ],
+          "properties": {
+            "chatId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "messageId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "senderUserId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "recipientUserId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "sentAt": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9999999999
+            },
+            "publicationId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "messagePreview": {
+              "type": "string",
+              "maxLength": 160,
+              "description": "Opcional y recortado; puede omitirse por privacidad. No contiene el historial completo."
+            }
+          }
+        }
+      }
+    }
+  ]
+}
