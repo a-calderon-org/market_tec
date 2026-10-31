@@ -1,6 +1,6 @@
 # Registro de decisiones
 
-Revisado el 2026-10-13. Actualizado el 2026-10-18 con propuestas de Fase II (Etapa A) y sincronizado el 2026-10-29 con la aprobación formal de ADR-001.
+Revisado el 2026-10-13. Actualizado el 2026-10-18 con propuestas de Fase II (Etapa A), sincronizado el 2026-10-29 con la aprobación formal de ADR-001 y ampliado el 2026-10-31 con la propuesta de seguridad ADR-004.
 
 No se encontraron ADR históricos verificables previos a Fase II. Las decisiones inferidas del código (Angular standalone, APIM, Express) no se atribuyen como decisiones formales.
 
@@ -11,7 +11,8 @@ No se encontraron ADR históricos verificables previos a Fase II. Las decisiones
 | [ADR-001](ADR-001-distribucion-microservicios.md) | 2026-10-29 | **Accepted** | Distribución de responsabilidades entre tres microservicios | — |
 | [ADR-002](ADR-002-rol-express-backend.md) | 2026-10-18 | **Proposed** | Rol del servidor Express existente (app/backend) | — |
 | [ADR-003](ADR-003-convencion-timestamps.md) | 2026-10-18 | **Proposed** | Convención de timestamps en contratos inter-servicio (Epoch seconds) | — |
+| [ADR-004](ADR-004-seguridad-autenticacion.md) | 2026-10-31 | **Proposed** | Seguridad de autenticación y fronteras de confianza | — |
 
 > **ADR-001 fue aprobado formalmente por el responsable del proyecto el 2026-10-29.**
 > ADR-002 y ADR-003 continúan en estado **Proposed** (pendientes de validación y aprobación). No deben darse por aprobados automáticamente aspectos sobre JWT interno, persistencia definitiva, SSE o políticas APIM.
-
+> ADR-004 propone la estrategia de autenticación y sus fronteras de confianza; permanece **Proposed** y no autoriza implementación ni cambios en Azure.
