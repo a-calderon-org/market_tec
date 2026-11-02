@@ -1,14 +1,26 @@
 # ADR-004: Seguridad de autenticación y fronteras de confianza
 
-**Estado:** Proposed
+**Estado:** Accepted
 **Fecha:** 2026-10-31
 **Revisión técnica pendiente de aprobación:** 2026-11-01 — MTEC-40, subfases 1 y 2; [informe QA](../../docs/MTEC40_QA_REVIEW.md)
-**Deciders:** Responsable del proyecto; aprobación pendiente
+**Fecha de aceptación de la dirección arquitectónica:** 2026-11-01
+**Autoridad de la decisión:** responsable del proyecto
+**Deciders:** Responsable del proyecto; arquitectura base aprobada expresamente
 **Revisores requeridos:** responsables de los tres microservicios, frontend, APIM/infraestructura y revisión de seguridad designada por el proyecto
 **Contexto:** MTEC-40 — revisión y decisión de arquitectura; dependencias MTEC-12, MTEC-15, MTEC-34, MTEC-35, MTEC-36 y MTEC-37; antecedente MTEC-17
 **Destinatarios:** desarrolladores y mantenedores de MarketTec
 
-> La dirección seleccionada por el responsable del proyecto es Google o correo institucional, identidad interna y sesiones propias de MarketTec, con `ms-users` en el repositorio independiente `a-calderon-org/ms-users-market-tec` ya existente. La revisión conjunta y aprobación formal exigidas por MTEC-40 están pendientes: ADR-004 permanece **Proposed** y no autoriza implementación, modificación de contratos ni cambios Azure. Los parámetros de seguridad aquí propuestos no se consideran aprobados. ADR-001 continúa Accepted; ADR-002 y ADR-003 continúan Proposed.
+> **Arquitectura base aceptada; perfil de seguridad pendiente.** El responsable
+> del proyecto aprobó expresamente el 2026-11-01 la alternativa B ampliada,
+> ambos métodos en la primera versión, la elegibilidad básica, las
+> responsabilidades, la comunicación entre servicios y la política de sesión:
+> ventana renovable de 60 minutos, 30 minutos de inactividad y máximo absoluto
+> de ocho horas desde el login inicial. Accepted se limita al núcleo de 2.1: no
+> aprueba todos los
+> parámetros P01–P24, no acredita conformidad de revisores ni certificación de
+> seguridad, no aprueba contratos MTEC-15, no habilita la implementación
+> completa de MTEC-36 ni acredita configuración Azure/APIM. MTEC-40 sigue
+> abierto. ADR-001 continúa Accepted; ADR-002 y ADR-003 continúan Proposed.
 
 ## 1. Contexto, alcance y evidencia
 
@@ -20,7 +32,28 @@ La evidencia inicial se elaboró sobre `ee198d4e78115834d7615e273d9007d2b719ee96
 
 El conector GitHub devolvió 404 para `ms-users-market-tec`. La subfase 1 inspeccionó objetos locales de `main@650411bdf0a5b9375fbe6911595f3150d79c633d` y de la preparación MTEC-37 en `7f963a98494a74acbe2479c91a372224ec55a033`, sin resolver entonces el contenido remoto. En la subfase 2, `git ls-remote` y consultas de solo lectura a GitHub REST confirmaron `main@19ce9f18281c4d6a73985772824e60d4587bd80c`: es un merge de esas dos bases y su árbol coincide exactamente con `7f963a9` (`6e58edc1251248d1548e5b65fb5e1396f91dd6d7`). Por ello el contenido local inspeccionado sí representa ese HEAD remoto. GitHub informa success para el run `41364044664` de ese SHA; se leyó su estado, sin auditar logs ni reejecutar pruebas. No se modificó ese repositorio ni se deduce despliegue de ese merge/CI. Evidencia, comandos y límites en el informe QA y 7.1.
 
-Se emplean las etiquetas de certeza del [índice de contexto](../README.md): **Verificado**, **Inferido**, **No determinado** y **Documentado pero no verificado**. Los controles recomendados son propuestas; su existencia operativa no se deduce de la presencia de documentación.
+La aceptación delimitada posterior del **2026-11-01** se registra sobre
+`market_tec@1ca76fc0ef555ec9efb0fb227da999958a16d489`, preservando la evidencia
+del QA anterior. Se releyeron los seis documentos y el informe QA; se
+consultaron MTEC-40, MTEC-36, MTEC-15 y MTEC-12 en solo lectura. La autoridad
+del núcleo Accepted es la aprobación expresa del responsable del proyecto de esa
+fecha, no un merge ni el dictamen QA. La consulta posterior de Jira del mismo
+día ya registra el núcleo Accepted y la política 60 min/30 min/8 h en MTEC-40
+y MTEC-36. MTEC-40 está In Progress; MTEC-36 sigue To Do y bloqueado. Los
+contratos y las conformidades técnicas continúan pendientes; no se modificaron
+tickets ni se infirieron nuevas conformidades. Los resultados
+posteriores están en el [addendum
+QA](../../docs/MTEC40_QA_REVIEW.md#h-revisión-posterior--aceptación-delimitada-2026-11-01).
+La [conciliación posterior de sesiones y
+main](../../docs/MTEC40_QA_REVIEW.md#i-conciliación-de-sesiones-y-bloqueo-de-main-2026-11-01)
+conserva ese resultado histórico y documenta el diagnóstico y las comprobaciones
+de esta política, aprobada por el responsable del proyecto el 2026-11-01.
+
+Se emplean las etiquetas de certeza del [índice de contexto](../README.md):
+**Verificado**, **Inferido**, **No determinado** y **Documentado pero no
+verificado**. La aprobación del núcleo y los controles todavía propuestos se
+distinguen en 2.1 y 4; su existencia operativa no se deduce de la presencia de
+documentación.
 
 No se dispone de evidencia de lectura del entorno Azure desplegado dentro de este alcance. No se inspeccionaron recursos Azure, no se enviaron credenciales de prueba a sistemas remotos y no se realizaron pruebas de explotación. La [segunda validación histórica](../audits/SECOND_PASS_VALIDATION.md) aporta antecedentes, pero sus afirmaciones sobre interceptor, expiración, ausencia de contratos y estado de Fase II deben contrastarse con esta base posterior.
 
@@ -36,7 +69,7 @@ No se dispone de evidencia de lectura del entorno Azure desplegado dentro de est
 | E6 | **Verificado:** [API_AND_EVENTS](../phase2/API_AND_EVENTS.md), sección `POST /auth/google`, contiene un ejemplo de respuesta cuyo primer segmento Base64URL se decodifica a `{"alg":"HS256","typ":"JWT"}`. [AZURE_INFRASTRUCTURE](../phase2/AZURE_INFRASTRUCTURE.md) conserva `jwt-secret`, `JWT_SECRET` y un ejemplo conceptual de APIM que referencia discovery Google. | La contradicción existe en ejemplos de diseño, aunque `HS256` no aparezca escrito literalmente. **Inferido:** esos nombres sugieren un secreto compartido. **No determinado:** algoritmo o claves realmente desplegados; no hay evidencia de implementación HS256. |
 | E7 | **Verificado:** [GOOGLE_LOGIN](../../app/GOOGLE_LOGIN.md) afirma validación backend y aceptación de cualquier dominio; [MICROSERVICES_ARCHITECTURE](../phase2/MICROSERVICES_ARCHITECTURE.md) conserva referencias a ADR-001 Proposed y a validación síncrona de usuario. | Hay desfases frente al código, ADR-001 y la propuesta de dominio institucional. Se registran aquí sin editar documentación ajena a este alcance. No usar esas frases como evidencia de controles desplegados. |
 | E8 | **Verificado documentalmente en la revisión inicial:** [auditoría MTEC-12](https://allanaron06122005.atlassian.net/browse/MTEC-12?focusedCommentId=10025) y [seguimiento de segunda auditoría](https://allanaron06122005.atlassian.net/browse/MTEC-12?focusedCommentId=10027) del 2026-10-29 mantienen la alternativa interna sin aprobación y Azure no verificado. [MTEC-36](https://allanaron06122005.atlassian.net/browse/MTEC-36) define intercambio seguro; [MTEC-34](https://allanaron06122005.atlassian.net/browse/MTEC-34) lo precede mediante identidad interna. [MTEC-15](https://allanaron06122005.atlassian.net/browse/MTEC-15) distingue contratos publicados de aprobación pendiente. | Los tickets sustentan la necesidad y dependencias, no la eficacia de controles productivos. No se modifican tickets ni sus estados. |
-| E9 | **Verificado:** [MTEC-40](https://allanaron06122005.atlassian.net/browse/MTEC-40) sigue To Do, sin comentarios al 2026-11-01; bloquea MTEC-36 y exige revisión humana y aprobación explícita. Su descripción conserva el recuento histórico de 16 amenazas; este ADR ya contiene T01–T18. | No acredita aprobación. El merge documental previo ni esta preparación satisfacen la revisión humana. |
+| E9 | **Verificado:** [MTEC-40](https://allanaron06122005.atlassian.net/browse/MTEC-40) está In Progress, sin comentarios en la consulta posterior del 2026-11-01; bloquea MTEC-36 y exige revisión humana y aprobación explícita. Su descripción vigente registra la aceptación delimitada y la política de sesión; este ADR conserva T01–T18. | El ticket exige todavía conformidades y registro revisado. El merge documental no sustituye conformidades técnicas ni satisface el cierre de MTEC-40. |
 | E10 | **Verificado en Jira, 2026-11-01:** MTEC-34 y MTEC-35 Done; MTEC-37 In Progress; MTEC-36 To Do, bloqueado por MTEC-40; MTEC-15 y MTEC-12 In Progress. **Documentado pero no verificado independientemente:** comentarios de MTEC-34/35 reportan dominio validado, PR #2 fusionado y 111 pruebas normales + 34 SQL; MTEC-37 reporta preparación y QA local; la subfase 2 confirma por GitHub REST el merge y el estado success del CI de `19ce9f1`, sin acreditar operación Azure. | Done de dominio/persistencia no acredita autenticación, permisos runtime/migrador, Managed Identity, migración Azure o APIM. MTEC-17 conserva su estado histórico Done; no se reabre. |
 | E11 | **Verificado por inspección local de ms-users:** `650411b` contiene `UserService`, `Email`, `ExternalIdentityKey`, `AuthenticatedPrincipal`, `SqlUserStore` y Flyway `V1__initial_users_schema.sql`; `7f963a9` añade perfil `sql-appservice`, observabilidad y CI. Referencias exactas en 7.1. | Ya existe dominio/persistencia independiente, a diferencia de `app/ms-users`. `AuthenticatedPrincipal` local solo expone `userId()`; vinculación queda denegada por defecto y no hay verificador Google/JWT, sesiones o correo implementados en esas bases inspeccionadas. |
 
@@ -56,34 +89,66 @@ Los nombres A/B de esta sección designan las alternativas históricas sobre dó
 
 **Evaluación de la revisión — Inferido:** B ampliada sigue siendo la opción más adecuada al requisito de acceso sin Google y a ADR-001. A por sí sola no autentica el correo institucional ni materializa el mapping interno; añadirle otro emisor y traducción en gateway recuperaría gran parte del coste de B con dos perfiles de admisión. A sería reconsiderable si se retirara el requisito sin Google o se aprobara una plataforma externa que resolviera ambos métodos y el mapping, con otra revisión de coste/contratos. No hay evidencia que justifique cambiar ahora la dirección seleccionada.
 
-La adopción de B queda condicionada a capacidad real para operar firma/rotación, sesiones y correo, responsables de incidentes y contratos aprobados. Si esa capacidad falta, se mantiene el bloqueo; publicar una recomendación no permite degradar validaciones ni habilitar rutas inseguras para continuar.
+La implementación de B, cuya arquitectura base queda aceptada en 2.1, queda
+condicionada a capacidad real para operar firma/rotación, sesiones y correo,
+responsables de incidentes y contratos aprobados. Si esa capacidad falta, se
+mantiene el bloqueo; publicar una recomendación no permite degradar validaciones
+ni habilitar rutas inseguras para continuar.
 
-### 2.1. Dirección seleccionada y aprobación pendiente
+### 2.1. Arquitectura base aceptada y límites de aprobación
 
-El responsable del proyecto ha seleccionado **la alternativa B como base del diseño**, ampliada con acceso mediante correo institucional sin Google. La alternativa A queda como antecedente evaluado y no es la base del diseño actual. La dirección seleccionada comprende:
+**Aceptación expresa del responsable del proyecto: 2026-11-01.** Se acepta la
+alternativa B ampliada. A queda como antecedente evaluado; no es la base
+seleccionada. La justificación de la sección 2 se mantiene: identidad
+independiente del proveedor, acceso sin Google y autorización junto al recurso,
+asumiendo el coste de operar el emisor, correo y sesiones.
 
-- Google o enlace institucional de un solo uso, resueltos por `ms-users` a una identidad interna única.
-- JWT interno común para APIs y sesiones renovables propias de MarketTec.
-- Propiedad de recursos derivada del principal autenticado y autorización en el servicio dueño.
-- Repositorio independiente existente para `ms-users`, con procedimiento de autoridad única pendiente en 7.1, conservando los tres dominios de ADR-001.
+| Núcleo Accepted | Decisión aprobada | Propietarios de su desarrollo y condición de implementación |
+|---|---|---|
+| Arquitectura e identidad | ms-users centraliza autenticación e identidad interna, JWT y sesiones; confianza compartida en emisor y claves públicas, sin compartir claves privadas ni bases. Se conservan los tres servicios de ADR-001, sin cuarto servicio de autenticación. | ms-users y tres servicios; perfil interoperable, contratos y custodia pendientes según 4/8. |
+| Métodos de primera versión | MTEC-36 incluirá simultáneamente Google y correo institucional. Adaptadores o flujos independientes sobre casos de uso compartidos conducen a identidad interna única y al mismo sistema de sesiones. No fusionar por correo; vínculo con prueba reciente suficiente de ambos métodos. | ms-users/frontend; coordinar alcance vigente de Jira y cerrar P16/P18/P21 y contratos antes de implementar cada interfaz. |
+| Elegibilidad básica | Posesión verificada de correo de estudiantec.cr, itcr.ac.cr o tec.ac.cr permite funciones básicas, sin exigir matrícula o empleo activo. Sin privilegios ni clasificación visible por dominio. | Funcional/ms-users/frontend; comparación exacta y prueba de buzón; continuidad del titular y recuperación pendientes, sin añadir otra barrera de afiliación al acceso básico. |
+| Responsabilidades | ms-users verifica métodos, resuelve identidad, emite y renueva; APIM valida admisión y políticas generales; cada servicio revalida credenciales y autoriza ownership, participación y capacidades. | Responsables de servicios y APIM; mecanismos, excepciones y pruebas pendientes; APIM no sustituye autorización de negocio. |
+| Comunicación | Solicitud del usuario con JWT interno por APIM al destinatario; trabajo interno con identidad de servicio y mínimo privilegio; eventos con identidad del productor, integridad y userId de negocio; delegación explícita y acotada cuando haga falta actuar por un usuario. | Servicios/APIM/SEG; protocolo y contratos por revisar. No reenviar indiscriminadamente JWT entre servicios ni consultar ms-users en cada autorización. |
+| Sesión | Ventana renovable de 60 minutos, 30 minutos de inactividad y máximo absoluto de ocho horas desde el login inicial; vence el primer límite aplicable. Aviso previo y renovación solo mientras siga válida, verificados en servidor; renovar no reinicia el máximo absoluto. Al vencer se exige reautenticación. | ms-users/frontend/SEG; medición de actividad humana sin sondeos automáticos, JWT y mecanismos seguros pendientes en 3.4/P10/P15/P23; aviso a cinco minutos solo propuesto. |
 
-Esta selección de dirección no equivale a la aceptación formal del ADR ni a la aprobación del perfil de seguridad:
+**Accepted no significa aprobación total de P01–P24**, conformidad de los
+revisores técnicos, certificación de seguridad, aprobación de MTEC-15,
+implementación completa autorizada de MTEC-36, configuración de Azure/APIM ni
+finalización de MTEC-40. La autoridad de esta aceptación es exclusivamente el
+responsable del proyecto; no se atribuyen acuerdos a los demás roles. Sus
+revisiones siguen pendientes en 10.
 
-| Ámbito | Estado y alcance |
+ADR-001 conserva su aceptación del 2026-10-29. El repositorio independiente
+existente de ms-users sigue documentado en 7.1; esta aceptación no resuelve el
+corte de autoridad operativa/pipelines, no altera almacenamiento ni topología
+productiva. Para cerrar MTEC-40 faltan las conformidades técnicas y de
+seguridad, los acuerdos mínimos aún abiertos y el registro revisado exigido por
+el ticket. No se crea PR ni se inicia MTEC-36 en esta ejecución.
+
+## 3. Responsabilidades aceptadas y perfil de seguridad propuesto
+
+El reparto siguiente pertenece al núcleo Accepted; sus mecanismos y valores
+pendientes conservan el estado de la sección 4. Ningún requisito se presenta
+como control ya implementado.
+
+| Componente | Responsabilidades aceptadas |
 |---|---|
-| Distribución de tres servicios, ownership de datos e identidad opaca de ADR-001 | **Accepted**, aprobación del 2026-10-29. No se reabre ni se amplía su alcance. |
-| Dirección de autenticación y repositorio descrita arriba | Seleccionada por el responsable del proyecto para el diseño de MTEC-40; pendiente de revisión conjunta y registro de aprobación formal. **Documentado pero no verificado** como mecanismo operativo. |
-| Perfil JWT, sesiones, elegibilidad, enlaces y operación | **Proposed**; parámetros y responsables en la sección 4. |
+| ms-users | Validación Google, verificación institucional, identidad interna, alta y vinculación, sesiones, emisión y renovación, publicación de claves públicas/metadata apropiada, revocación y logout según diseño aprobado. |
+| APIM | Validar perfil JWT interno en la frontera, admisión general, acceso y abuso, enrutamiento y excepciones explícitas para login, renovación y metadata. Tabla de operaciones y controles efectivos pendientes. |
+| Cada microservicio | Validar defensivamente firma y claims pertinentes; construir principal confiable; rechazar headers de identidad falsificados; autorizar ownership, participación y capacidades de sus propios recursos. |
 
-Para cerrar MTEC-40 falta evidencia de revisión por responsables de los tres servicios, frontend, APIM/infraestructura y seguridad designada; aprobación explícita del responsable del proyecto de B ampliada y los acuerdos mínimos de la sección 8; y registro formal revisado en ADR-004/DECISION_LOG mediante el PR exigido por el ticket. No se infiere aprobación de un merge previo. Nombre del revisor de seguridad, acta de conformidades/desacuerdos y plazos de pendientes: **No determinado**. Esta edición documental no cierra el ticket.
-
-## 3. Política criptográfica y responsabilidades propuestas
-
-Todos los verbos de obligación de esta sección describen requisitos para una futura implementación aprobada, no controles existentes.
+No se comparten claves privadas ni bases de datos. Los servicios confían en el
+emisor y sus claves públicas; no necesitan una consulta a ms-users por cada
+autorización de negocio. Azure/APIM efectivos continúan no verificados.
 
 ### 3.1. Dos caminos de autenticación e identidad común
 
-Los pasos siguientes son diseño futuro; no definen rutas ni payloads nuevos y no están implementados.
+Ambos métodos forman parte de la primera versión de MTEC-36. Se diseñarán como
+adaptadores o flujos independientes sobre casos de uso compartidos, con
+identidad y sesiones comunes; no se crea otro microservicio. Los pasos
+siguientes detallan el diseño futuro, sin aprobar rutas o payloads ni afirmar
+implementación.
 
 #### Camino A — Google Identity Services
 
@@ -102,9 +167,25 @@ ms-users usaría una biblioteca mantenida, con pruebas explícitas de firma, alg
 
 El mapping de identidad externa usaría `(issuer, sub)`, nunca correo como clave de cuenta. Si se admiten las dos representaciones oficiales del emisor Google, su normalización a un emisor canónico ocurriría **después** de validar contra la allowlist; la regla debe aprobarse y probarse para no crear cuentas duplicadas. Un vínculo existente prevalecería sobre cambios de correo. No se vincularían cuentas distintas automáticamente por coincidencia de email.
 
-La admisión Google también aplicaría la allowlist institucional descrita abajo. Se exigiría `email_verified` booleano verdadero y, cuando se use como evidencia Google Workspace, `hd` firmado y perteneciente a la allowlist Workspace aprobada, con su relación al dominio del correo definida por funcional; el parámetro `hd` del botón no demuestra pertenencia. Google advierte que un correo de terceros sin `hd` puede no estar bajo su autoridad actual aunque `email_verified` sea verdadero: en ese caso se exigiría prueba adicional de posesión del buzón institucional o se rechazaría según P16. No se impondría Google Workspace al camino de correo sin Google. Ninguno de esos claims demuestra por sí solo matrícula o empleo activo.
+La admisión Google también aplicaría la allowlist institucional descrita abajo.
+Se exigiría `email_verified` booleano verdadero y, cuando se use como evidencia
+Google Workspace, `hd` firmado y perteneciente a la allowlist Workspace
+aprobada, con su relación al dominio del correo definida por funcional; el
+parámetro `hd` del botón no demuestra pertenencia. Google advierte que un correo
+de terceros sin `hd` puede no estar bajo su autoridad actual aunque
+`email_verified` sea verdadero: en ese caso se exige verificación institucional
+adicional de posesión del buzón antes del acceso básico, conforme a la política
+aprobada. Su protocolo sigue pendiente en P16/P18. No se impondría Google
+Workspace al camino de correo sin Google. Ninguno de esos claims demuestra por
+sí solo matrícula o empleo activo.
 
-Para cuentas nuevas se recomienda alta idempotente después de validar identidad y elegibilidad, con unicidad del mapping y resolución transaccional de concurrencia. Alta automática frente a registro previo, evidencia institucional y reglas de vinculación requieren aprobación. MTEC-34 define el dominio y puertos; este ADR no elige motor de persistencia.
+Para cuentas nuevas se recomienda alta idempotente después de validar identidad
+y elegibilidad, con unicidad del mapping y resolución transaccional de
+concurrencia. La posesión verificada del correo autorizado basta para
+elegibilidad básica; el mecanismo de alta idempotente y las reglas técnicas de
+continuidad/vinculación requieren aprobación, sin exigir prueba externa de
+matrícula o empleo. MTEC-34 define el dominio y puertos; este ADR no elige motor
+de persistencia.
 
 #### Perfil mínimo Google para deliberación (P18/P21; Proposed)
 
@@ -140,11 +221,24 @@ Requisitos de seguridad para la futura implementación:
 
 Se adaptan los controles de tokens de un solo uso de [OWASP Forgot Password](https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html) al enlace de acceso; esa referencia no define el protocolo de login de MarketTec. La mitigación de escáneres y el consumo atómico son requisitos del diseño que necesitan pruebas propias.
 
-Verificar el correo acredita **control del buzón**, no necesariamente matrícula o empleo activo. La política funcional de elegibilidad y su eventual revalidación deben aprobarse por separado.
+Verificar el correo acredita **control del buzón**, no necesariamente matrícula
+o empleo activo. Ese control en uno de los tres dominios aprobados es suficiente
+para acceso básico; no se exige verificación externa de afiliación. La
+continuidad de una cuenta histórica y su recuperación siguen pendientes y no
+autorizan nuevas barreras de matrícula o empleo.
 
 #### Allowlist institucional común
 
-Se propone una allowlist configurable de **dominios exactos**: `estudiantec.cr`, `tec.ac.cr` e `itcr.ac.cr` son exclusivamente candidatos, pendientes de confirmación del responsable funcional antes de habilitar registro. No se habilita ninguno mediante esta edición.
+La allowlist aprobada contiene **exactamente** `estudiantec.cr`, `itcr.ac.cr` y
+`tec.ac.cr`. La posesión verificada de un correo de cualquiera de esos dominios
+permite acceder a las funciones básicas de MarketTec, sin verificación externa
+de matrícula o empleo activo. Esta decisión documental no habilita registro en
+código.
+
+No se infieren ni conceden roles privilegiados por dominio ni se muestra una
+clasificación de estudiante o funcionario por ese dato. No se almacenarán
+atributos de afiliación sin caso de uso de negocio que los justifique. No se
+elimina ningún atributo existente del dominio sin autorización.
 
 La futura comparación usaría el dominio extraído de un correo validado, con normalización definida y uniforme. Se prohíben sufijos ambiguos, coincidencias parciales, comodines, subdominios implícitos y dominios similares: `estudiantec.cr.example.org` y `otroestudiantec.cr` no equivalen a `estudiantec.cr`. Añadir cualquier otro dominio institucional requeriría configuración y aprobación explícita. No se añade validación funcional al código.
 
@@ -168,14 +262,25 @@ No se fusionan cuentas automáticamente por coincidencia de correo. Vincular mé
 
 | Decisión | Alternativas y recomendación razonada | Riesgo y prueba necesaria |
 |---|---|---|
-| Dominio/alta/elegibilidad | Dominios candidatos de la allowlist frente a registro previo autorizado. Recomendar alta idempotente solo tras prueba y elegibilidad funcional aprobadas; si se exige matrícula/empleo activo, se necesita fuente y revalidación definidas antes de habilitarla. | No confundir buzón con vínculo institucional. Hasta decidir, registro deshabilitado. Probar dominios parecidos, subdominios y exclusión de cuentas no elegibles. |
+| Dominio/alta/elegibilidad | Accepted: allowlist exacta y posesión verificada suficientes para acceso básico, sin prueba de matrícula/empleo ni privilegios por dominio. Proposed: protocolo de alta idempotente y continuidad de cuentas. | No confundir elegibilidad básica con continuidad del titular histórico. Registro aún no implementado. Probar los tres dominios, parecidos, subdominios, correo no probado y ausencia de privilegios/clasificación por dominio. |
 | Secreto y caducidad | Recomendar 32 bytes CSPRNG (256 bits), Base64URL, TTL inicial 10 min frente a códigos cortos/plazos mayores. Guardar SHA-256 del secreto de alta entropía, nunca secreto en claro, junto con correo normalizado, propósito, intento y expiración. | Equilibra entrega tardía y ventana de robo, sujeto a medición. No aplicar hash rápido a contraseñas. Probar aleatoriedad/tamaño, vencimiento con reloj controlado, alteración y ausencia de secretos persistidos/logueados. |
 | Enumeración y tasa | Mismo acuse genérico y procesamiento comparable para toda dirección sintácticamente válida, registrada o no. Propuesta piloto: 3 envíos/15 min por destinatario, espera de 60 s entre reenvíos y 20 solicitudes/15 min por origen; 5 confirmaciones fallidas por intento. Combinar límite global de envío y presupuesto pendiente de APIM/correo. | Valores ajustables, pendientes de pruebas de carga/NAT y aprobación; no bloquear una cuenta por tráfico anónimo ni revelarla con 429 selectivo. Probar cuentas existentes/inexistentes, destinatarios rotatorios, ráfagas y red compartida. |
 | GET/consumo/reenvío | GET muestra confirmación, sin consumir ni crear sesión; POST protegido comprueba intento, prueba y caducidad con consumo transaccional único. Reenvío idempotente durante cooldown; nuevo enlace invalida el anterior para el mismo intento después de autorizar reenvío. | Escáner, carreras y respuesta perdida. Dos confirmaciones producen como máximo una sesión; reintentar no emite otra. Si la respuesta se pierde tras consumo, reiniciar autenticación; entrega fallida no consume como éxito ni crea usuario. |
 | Dispositivos | Recomendar confirmar en el navegador que inició el intento, ligado por cookie aleatoria HttpOnly/Secure y control CSRF; alternativa cross-device requiere protocolo adicional aprobado. Un navegador distinto reinicia allí el flujo, sin trasladar sesión con el enlace. | Reduce login CSRF por enlaces compartidos; limita comodidad. Probar escáner/preview, cookie ausente, navegador ajeno y enlace reenviado. Sin bloqueo duro por IP o user-agent. |
 | Recuperación y conflictos | Para vincular: sesión del usuario actual con reautenticación de máximo 5 min y prueba reciente del método nuevo; sin unión por email. Si ya hay método/correo en conflicto, detener alta/vínculo y resolver de forma explícita sin revelar cuenta. Si no controla ningún método, no hay recuperación automática; RP/funcional debe aprobar prueba alternativa y responsable antes de ofrecerla. | El código actual no garantiza persona única ni correo único entre métodos. No convertir nuevo control de buzón reasignado en acceso a cuenta histórica. Probar pérdida de método, cambio de correo, conflicto y baja; bloquear vínculo que ya pertenece a otro userId. |
 
-**Pendiente bloqueante P16 — continuidad del titular:** excluir la recuperación alternativa no resuelve el riesgo de un login ordinario a una `EmailIdentity` existente tras reasignación del buzón. Un enlace nuevo y el mismo correo no distinguen al titular histórico del nuevo; el dominio/persistencia inspeccionado tampoco aporta esa prueba. Funcional, ms-users y SEG deben acordar evidencia institucional estable/no reasignable o un procedimiento adicional de continuidad, o limitar explícitamente el método y aceptar su riesgo residual. Hasta resolverlo no habilitar ese acceso histórico ni prometer protección frente a reasignación. Probar el caso de dos titulares sucesivos del mismo buzón sin fusionar ni reasignar cuentas automáticamente. No se elige aquí una política de negocio ni se modifica el esquema.
+**Pendiente bloqueante P16 — continuidad del titular:** excluir la recuperación
+alternativa no resuelve el riesgo de un login ordinario a una `EmailIdentity`
+existente tras reasignación del buzón. Un enlace nuevo y el mismo correo no
+distinguen al titular histórico del nuevo; el dominio/persistencia inspeccionado
+tampoco aporta esa prueba. Funcional, ms-users y SEG deben acordar una prueba
+estable/no reasignable o un procedimiento adicional de continuidad de la cuenta
+histórica, o una limitación explícita y aceptación del riesgo residual. Esa
+prueba no puede convertirse en un requisito externo de matrícula o empleo para
+el acceso básico ya aprobado. Hasta resolverlo no habilitar ese acceso histórico
+ni prometer protección frente a reasignación. Probar el caso de dos titulares
+sucesivos del mismo buzón sin fusionar ni reasignar cuentas automáticamente. No
+se elige aquí el procedimiento de continuidad ni se modifica el esquema.
 
 **Reautenticación pendiente P16/P18:** `iat` reciente y nonce válido acreditan emisión/correlación del intento, no necesariamente autenticación interactiva reciente del usuario en Google. Antes de habilitar vínculos u operaciones sensibles, definir qué prueba y reloj satisfacen los 5 min propuestos para cada método; evaluar `auth_time`/`max_age` solo si el flujo elegido los soporta y verifica, o una prueba adicional aprobada. Una cookie MarketTec o un callback GIS silencioso no se declaran prueba suficiente por sí solos.
 
@@ -214,7 +319,48 @@ Un compromiso exige un procedimiento distinto de rotación normal: detener firma
 
 ### 3.4. Expiración, renovación, revocación y replay
 
-Se propone para ambos métodos un **JWT de acceso de 15 minutos (900 s)**, renovado mediante una **sesión propia de MarketTec**. Duración exacta, skew, máximo absoluto e inactividad de sesión permanecen sujetos a revisión (P10/P11). Esta propuesta sustituye la recomendación inicial de depender de un nuevo intercambio Google para cada renovación; no implementa sesiones ni modifica el contrato vigente.
+**Política funcional Accepted, aprobada por el responsable del proyecto el
+2026-11-01, común a ambos métodos:** ventana renovable de **60 minutos**,
+expiración tras **30 minutos de inactividad** y máximo absoluto de **ocho horas
+desde el login inicial**. Vence el primero de los tres límites aplicables.
+Angular advertirá antes de ese vencimiento y ofrecerá continuar únicamente
+mientras la sesión siga válida. Avisar **cinco minutos antes** es una propuesta
+UX; su anticipación exacta no está aprobada.
+
+| Concepto | Estado y significado |
+|---|---|
+| Ventana de sesión | 60 minutos renovables aprobados; no equivalen a vigencia de cada credencial. |
+| Inactividad | 30 minutos aprobados desde la última actividad humana válida; los sondeos automáticos no cuentan como actividad humana. Su detección y cómputo seguro están pendientes. |
+| Máximo absoluto | Ocho horas desde el login inicial, aprobadas. Ninguna renovación, refresh o actividad reinicia ese origen ni amplía el máximo. |
+| Vencimiento efectivo | El primero entre fin de ventana vigente, última actividad humana válida + 30 minutos y login inicial + ocho horas; la revocación puede invalidar antes. |
+| JWT de acceso | Duración definitiva pendiente; 15 minutos (900 s) sigue candidato, sin aprobación por estos límites de sesión. |
+| Renovación | Solicitud válida del usuario antes del vencimiento efectivo; servidor verifica sesión, usuario y credencial, además de controles seguros por diseñar. |
+
+El servidor verifica expiración e inactividad y rechaza la renovación al llegar
+a cualquiera de los límites, aunque Angular conserve estado visual o envíe
+peticiones. Los sondeos, heartbeats y renovaciones automáticas no acreditan
+actividad humana ni mantienen viva una sesión por sí solos. La señal de
+actividad, su validación, reloj y coordinación entre pestañas requieren diseño;
+no se confía únicamente en un timestamp enviado por el navegador.
+
+Si el usuario solicita continuar **antes del vencimiento efectivo**, el backend
+solo podrá conceder otra ventana de **hasta 60 minutos**, siempre acotada por el
+máximo absoluto de ocho horas y por el timeout de inactividad aplicable. Una
+solicitud de renovación no reinicia por sí sola el reloj de actividad humana.
+No se renuevan sesiones expiradas, revocadas o comprometidas. Al vencer el
+límite
+aplicable, el servidor invalida la sesión y exige autenticación nueva por Google
+o correo institucional; un clic no constituye reautenticación. Un JWT de acceso
+vencido puede renovarse únicamente con sesión y credencial de renovación aún
+válidas; no se confunde expiración de JWT con expiración de sesión.
+
+La ratificación del 2026-11-01 aprueba los límites de 30 min/8 h que antes
+figuraban como propuesta y luego pendientes; no acredita implementación.
+P10/P11/P15/P23 deben concretar actividad humana, duración JWT, controles
+seguros
+de renovación y anti-replay, rotación/compromiso, CSRF/SameSite/CORS/cookies,
+pestañas concurrentes, carreras y reautenticación sensible. Los mecanismos
+siguientes conservan estado **Proposed**; no se modifica el contrato vigente.
 
 La credencial de renovación sería rotatoria y revocable, vinculada a la sesión y al usuario interno, con almacenamiento seguro de verificadores. Cada uso válido invalidaría la anterior atómicamente y emitiría un reemplazo; la reutilización detectada exigiría revocar la familia de sesión afectada y reautenticar, con manejo de concurrencia/reintentos por aprobar. Logout, baja de cuenta y eventos de seguridad deben tener semántica explícita de revocación de sesiones. La [RFC 9700, sección 4.14](https://www.rfc-editor.org/rfc/rfc9700.html#section-4.14) orienta la rotación/detección de replay; usarla como referencia no declara un servidor OAuth implementado.
 
@@ -228,13 +374,44 @@ Para el intercambio se recomienda un desafío de servidor con nonce vinculado al
 
 En las APIs, un bearer robado continúa siendo reutilizable durante su ventana de validez aunque el intercambio use nonce. Se proponen TLS, minimización de exposición, controles de frontend, vida breve y detección; protección criptográfica de posesión sería otro diseño por aprobar. No se promete eliminar replay con JWT, CORS o subscription keys.
 
-#### Semántica inicial de sesión y revocación (Proposed)
+#### Mecanismos iniciales de sesión y revocación (Proposed)
 
-Para P10 se propone máximo absoluto de sesión de **8 h**, inactividad de **30 min** y reautenticación sensible de **5 min**, sin «recordarme» inicial. Renovar no extiende el máximo absoluto; la inactividad se mide por uso válido de sesión, no por actividad arbitraria del navegador. Se comparan con 24 h/varios días: la propuesta reduce persistencia de robo a costa de más logins; seguridad y funcional deben validar esos límites. Refresh opaco de 256 bits, verificador hash y familia persistida en `ms-users`; no reutilizar el ID token Google. Al confirmar login se rota el contexto previo para impedir fijación.
+Sobre la ventana de 60 minutos aprobada se propone un refresh opaco de 256 bits,
+verificador hash y familia persistida en `ms-users`; no reutilizar el ID token
+Google. Los límites 60 min/30 min/8 h son Accepted; el mecanismo de actividad
+y la reautenticación sensible siguen pendientes. Los 5 min de frescura de
+vínculo de 3.1 siguen siendo una propuesta separada. Al confirmar login se
+propone rotar el contexto previo para impedir fijación.
 
-La base propuesta es rotación estricta atómica, sin gracia: serializar refresh en frontend, invalidar el anterior y revocar la familia ante reutilización de una credencial consumida. Una respuesta perdida obliga a reautenticar, sin reemitir tokens al poseedor del refresh anterior. La alternativa de reintento idempotente/gracia acotada requiere protocolo y prueba adicionales; no se acepta una ventana reutilizable implícita. Expiración absoluta o por inactividad impide renovar; no invalida automáticamente el access JWT ya emitido. P10/P15 deben acordar si su `exp` se limita también al vencimiento absoluto de sesión o si se acepta la vigencia residual restante; probar ambos bordes sin presentar 8 h/30 min como corte distribuido inmediato. Logout revoca la sesión/familia actual e invalida su cookie; «cerrar todas», baja y compromiso revocan todas las sesiones del usuario. MTEC-15 debe acordar idempotencia y respuestas.
+La base propuesta es rotación estricta atómica, sin gracia: serializar refresh
+en frontend, invalidar el anterior y revocar la familia ante reutilización de
+una credencial consumida. Una respuesta perdida obliga a reautenticar, sin
+reemitir tokens al poseedor del refresh anterior. La alternativa de reintento
+idempotente/gracia acotada requiere protocolo y prueba adicionales; no se acepta
+una ventana reutilizable implícita. El vencimiento de la ventana de sesión, del
+máximo absoluto o del timeout de inactividad impide renovar y exige invalidación
+de sesión en servidor; no invalida automáticamente el access JWT ya emitido.
+P10/P15 deben diseñar cómo hacer efectivos los límites de sesión en todos los
+validadores, mediante expiración de credenciales y/o controles de sesión por
+aprobar, sin asumir que un JWT vigente autoriza una sesión vencida. No se
+aprueba acceso residual después del vencimiento de sesión. Probar bordes de
+60 min, 30 min de inactividad y ocho horas absolutas, sin atribuir corte
+distribuido a mecanismos todavía no implementados. Logout revoca
+la sesión/familia actual e invalida su cookie; «cerrar todas», baja y compromiso
+revocan todas las sesiones del usuario. MTEC-15 debe acordar idempotencia y
+respuestas.
 
-**Ventana residual explícita P15:** sin revocación distribuida de acceso, logout/baja no invalidan el JWT ya emitido. Con acceso de 900 s y skew propuesto de 30 s, el límite nominal es **`exp + 30 s` según el reloj del validador**, equivalente a 930 s respecto del `iat` declarado cuando `exp - iat = 900 s`. Desde la revocación queda la vigencia restante más skew; el desfase entre relojes debe medirse antes de comprometer un SLA de baja en tiempo real. Los 8 h de sesión no prolongan un JWT individual. Recomendar esta base únicamente para piloto de bajo riesgo y previa aceptación formal; si se exige baja inmediata, acordar difusión de revocaciones/denylist a todos los validadores, su persistencia y SLA, sin consulta síncrona por request a ms-users. `jti` o versión sin distribución no resuelven el problema.
+**Ventana residual explícita P15:** sin revocación distribuida de acceso,
+logout/baja no invalidan el JWT ya emitido. Con acceso de 900 s y skew propuesto
+de 30 s, el límite nominal es **`exp + 30 s` según el reloj del validador**,
+equivalente a 930 s respecto del `iat` declarado cuando `exp - iat = 900 s`.
+Desde la revocación queda la vigencia restante más skew; el desfase entre
+relojes debe medirse antes de comprometer un SLA de baja en tiempo real. La
+ventana de sesión de 60 minutos no prolonga un JWT individual. Recomendar esta
+base únicamente para piloto de bajo riesgo y previa aceptación formal; si se
+exige baja inmediata, acordar difusión de revocaciones/denylist a todos los
+validadores, su persistencia y SLA, sin consulta síncrona por request a
+ms-users. `jti` o versión sin distribución no resuelven el problema.
 
 El compromiso de la clave permite fabricar también tiempos y jti: esperar 15 min no basta mientras siga siendo confiable. El runbook propuesto detiene firma, sustituye clave y retira/bloquea el `kid` comprometido en cada validador con caché ya cargada; si no puede garantizarse, suspende rutas protegidas antes de reabrirlas con evidencia. Responsable operativo, SLA y mecanismo efectivo APIM están pendientes. Se requiere simulacro autorizado; no se promete rechazo inmediato con solo borrar la clave del JWKS.
 
@@ -242,53 +419,79 @@ El compromiso de la clave permite fabricar también tiempos y jti: esperar 15 mi
 
 | Evidencia contradictoria | Resolución propuesta, sin modificar el documento dueño |
 |---|---|
-| Identidad recomienda RS256/JWKS; el JWT sintético de respuesta de API_AND_EVENTS declara HS256 en su header codificado. | Adoptar un único perfil asimétrico interno si se aprueba B; retirar posteriormente el ejemplo HS256 o marcarlo sustituido. El ejemplo no prueba un emisor HS256 implementado. |
+| Identidad recomienda RS256/JWKS; el JWT sintético de respuesta de API_AND_EVENTS declara HS256 en su header codificado. | Concretar el perfil asimétrico de la arquitectura B aceptada; retirar posteriormente el ejemplo HS256 o marcarlo sustituido. El ejemplo no prueba un emisor HS256 implementado. |
 | AZURE_INFRASTRUCTURE usa `jwt-secret` y `JWT_SECRET`. | Sustituir posteriormente la receta por referencias y permisos de la clave asimétrica aprobada, publicación de claves públicas y runbook. No interpretar un nombre de variable como evidencia del algoritmo desplegado. |
 | El ejemplo APIM referencia discovery Google para «Google o interno». | Separar validación Google en ms-users de validación interna en rutas de negocio APIM. Documentar issuer/audience/discovery internos y excepciones de intercambio/metadata cuando se aprueben. |
 | GOOGLE_LOGIN afirma backend verificador, IDs derivados de Google y cualquier dominio; el código no hace el intercambio y los contratos proponen identidad opaca/admisión institucional. | Corregir después el flujo implementado y la política realmente aprobada. No afirmar hoy verificación remota ni decidir dominios por un ejemplo. |
 | Fase II conserva ADR-001 Proposed, validación síncrona de usuario y respuestas antiguas con envelope/campos distintos de Users OpenAPI. | Prevalecen ADR-001 Accepted y el estado draft del contrato versionado. Tras revisión conjunta, alinear prosa y ejemplos con el contrato aprobado, sin fallback a Google `sub` ni llamada por request. |
-| Contrato de identidad contempla renovar demostrando Google o diseñar refresh después; Users OpenAPI solo propone intercambio Google y no describe correo, sesiones ni vinculación. | La dirección de MTEC-40 propone sesiones propias comunes. MTEC-15 debe revisar la ampliación y compatibilidad antes de implementar; el borrador versionado sigue siendo la referencia contractual vigente y no se amplía por este ADR. |
+| Contrato de identidad contempla renovar demostrando Google o diseñar refresh después; Users OpenAPI solo propone intercambio Google y no describe correo, sesiones ni vinculación. | La arquitectura base aceptada selecciona sesiones propias comunes con límites 60 min/30 min/8 h de 3.4. MTEC-15 debe revisar la ampliación y compatibilidad antes de implementar; el borrador versionado sigue siendo la referencia contractual vigente y no se amplía por este ADR. |
 | ADR-002 propone directorios internos; ya existe dominio/persistencia en `ms-users-market-tec`. | La referencia histórica a repositorio futuro queda corregida en 7.1. Conservar el scaffold sin nuevos cambios de negocio; coordinar autoridad, mapa y workflows en tarea posterior, sin editar ADR-002 aquí. |
-| Los títulos/alcance histórico de MTEC-34/MTEC-36 se centran en Google; la dirección ampliada incorpora correo y sesiones. | Coordinar alcance de implementación con sus responsables antes de desarrollarlo, sin modificar Jira. MTEC-17 sigue Done; su endurecimiento no implementa JWT interno ni se reabre por este diseño. |
+| MTEC-34 conserva el alcance histórico Google; MTEC-36 ya registra ambos métodos y la política de sesiones, aunque su título siga centrado en Google. | La ampliación funcional consta en Jira; faltan acuerdos técnicos y contratos antes de desarrollarla, sin modificar Jira. MTEC-17 sigue Done; su endurecimiento no implementa JWT interno ni se reabre por este diseño. |
 
 ## 4. Parámetros y decisiones pendientes
 
-Las 24 decisiones se someten a deliberación; **ninguna aprobación de ADR-004 está acreditada**. P05 preserva el principio opaco Accepted de ADR-001, pero su perfil JWT sigue Proposed. «RP» es responsable del proyecto; «SEG» es revisión de seguridad designada, cuya persona aún es **No determinado**. Los roles pueden corresponder a la misma persona, sin presumir autoridad conjunta. El RP registra aceptación formal con revisión de los roles indicados; asignación Jira no equivale a aprobación.
+Las 24 filas se auditan tras la aceptación delimitada de 2.1: **P01 Accepted;
+siete filas con alcance Accepted parcial (P05/P10/P16/P17/P19/P20/P22); 16
+Proposed**. Accepted parcial significa decisión base aprobada y detalles todavía
+Proposed; nunca aprobación total de la fila. P05 conserva además el principio
+opaco de ADR-001. Ningún algoritmo, valor operativo o conformidad técnica se
+aprueba por recomendación. «RP» es responsable del proyecto; «SEG» es revisión
+de seguridad designada, cuya persona aún es **No determinado**. Los roles pueden
+corresponder a la misma persona, sin presumir autoridad conjunta. El RP aprobó
+solo el núcleo de 2.1; los roles indicados revisarán y acordarán los pendientes
+de cada fila. Su mención no acredita conformidad; asignación Jira no equivale a
+aprobación.
 
 Hitos acumulativos: **I (categoría A del QA)** = acuerdo mínimo para implementar interoperablemente MTEC-36; **F (categoría B)** = cierre de contrato/parámetro e integración frontend/consumidores; **D (categoría C)** = evidencia antes de desplegar un sistema protegido en Azure. La **categoría D del QA** identifica detalles diferibles con rol propietario e hito de revisión propuesto; no equivale al hito D de despliegue. Todas las filas aplican a D; la presencia en F no exige migrar Angular antes de I. «Diferible» describe solo el detalle indicado y un plazo propuesto por hito, nunca un aplazamiento aprobado. El responsable de la fila prepara ese pendiente; falta asignación nominal y fecha calendario en el acta de la sección 10.
 
-| Decisión | Alternativas reales | Recomendación, valor y razón (Proposed) | Riesgos | Pruebas necesarias | Bloqueo y detalle diferible con plazo propuesto | Responsable de aprobación | Estado |
+| Decisión | Alternativas reales | Decisión base y recomendación pendiente | Riesgos | Pruebas necesarias | Bloqueo y detalle diferible con plazo propuesto | Responsable de aprobación | Estado |
 |---|---|---|---|---|---|---|---|
-| P01. Estrategia | A: Google en APIM; B: métodos en ms-users y JWT propio | Ratificar B ampliada; mapping y correo sin Google bajo ms-users, conforme a evaluación 2 | Emisor/sesiones/correo críticos y coste operativo | Ambos métodos → mismo userId tras vínculo legítimo; sin dependencia de Google para correo (T13/T17/T18) | I/F/D; sin diferir elección | RP + tres servicios, frontend, APIM, SEG | Proposed |
+| P01. Estrategia | A: Google en APIM; B: métodos en ms-users y JWT propio | B ampliada aceptada: Google y correo institucional simultáneos en primera versión; identidad/sesiones comunes en ms-users, conforme a 2.1 | Emisor/sesiones/correo críticos y coste operativo | Ambos métodos → mismo userId tras vínculo legítimo; sin dependencia de Google para correo (T13/T17/T18) | Elección resuelta; I/F/D mantienen acuerdos técnicos y contratos de las demás filas | RP aprobó arquitectura el 2026-11-01; tres servicios, frontend, APIM y SEG pendientes de revisión técnica | Accepted: núcleo 2.1; sin conformidades técnicas atribuidas |
 | P02. Algoritmo | RS256; ES256; HMAC | RS256 único, RSA ≥2048 bits; revisar 3072 por coste/compatibilidad; verificadores solo públicos | Confusión RS/HS, coste de firma o soporte desigual | Java/Node/Python y APIM: RS válido, none/HS/clave ajena rechazados (T02/T03) | I/F/D; tamaño exacto del custodio productivo antes de D, ms-users/infra | RP + ms-users, APIM, SEG | Proposed |
 | P03. Issuer | URI HTTPS por entorno; identificador lógico | URI HTTPS estable y exacta. Fixture aislada `https://identity.dev.markettec.invalid`; no es URL desplegada ni discovery operativo | Mezcla de entornos, cambio de emisor | Issuer exacto aceptado; otro entorno/sufijo rechazado (T04) | I: regla/configuración; F/D: URI real antes de integrar entorno, ms-users/APIM | RP + ms-users, APIM, consumidores | Proposed |
 | P04. Audience | Una API; por servicio | Una audiencia por entorno, fixture `markettec-api-dev`; no comodines. Reduce complejidad inicial | Reutilización entre servicios; no sustituye ownership | Aud ajena/ausente rechazada; token propio no autoriza recurso ajeno (T04/T10) | I: semántica; F/D: valor real antes de integrar entorno, servicios/APIM | RP + tres servicios, APIM, SEG | Proposed |
-| P05. Sub/userId | Interno opaco; externo/correo | `sub = userId` interno estable; mapping `(issuer,subject)` solo ms-users. Formato local usr_ + UUIDv4 no obliga al consumidor | Confusión de namespaces, duplicados por método | Mapping concurrente, cambios de email, vínculo y consumidores opacos (T13/T18) | I/F/D; formato de transporte revisado con MTEC-15 antes de I | RP + tres servicios, ms-users, MTEC-15 | Proposed; principio opaco Accepted en ADR-001 |
+| P05. Sub/userId | Interno opaco; externo/correo | `sub = userId` interno estable; mapping `(issuer,subject)` solo ms-users. Formato local usr_ + UUIDv4 no obliga al consumidor | Confusión de namespaces, duplicados por método | Mapping concurrente, cambios de email, vínculo y consumidores opacos (T13/T18) | I/F/D; formato de transporte revisado con MTEC-15 antes de I | RP + tres servicios, ms-users, MTEC-15 | Accepted parcial: userId interno; Proposed: perfil JWT/mapping contractual |
 | P06. Iat | Obligatorio; opcional | Obligatorio NumericDate entero en segundos; `iat ≤ ahora + skew`, edad/duración máxima acotadas | Milisegundos, emisión futura | Tipos, límites, futuro y duración incoherente en cada validador (T05) | I/F/D; sin diferir semántica | RP + ms-users, APIM, consumidores | Proposed |
 | P07. Nbf | Omitir; obligatorio | Omitir inicialmente; si existe validarlo y exigir coherencia con exp | Validadores desiguales o aceptación prematura | Sin nbf válido; nbf futuro o incoherente rechazado (T05) | I/F/D; sin diferir regla | RP + ms-users, APIM, consumidores | Proposed |
 | P08. Exp | Obligatorio; opcional | Obligatorio, entero en segundos; `exp > iat`, `exp - iat ≤ 900 s` en perfil inicial P10 | Acceso indefinido o excesivo | Ausente, tipo inválido, expirado y borde con skew (T05/T06) | I/F/D; todo cambio de vida requiere coherencia P10 | RP + ms-users, APIM, consumidores | Proposed |
 | P09. Jti | UUIDv4/aleatorio; ausente | Obligatorio, UUIDv4 generado por emisor, sin PII; correlación/revocación eventual | No evita replay por sí mismo; logs correlacionables | Unicidad, obligatoriedad y replay no tratado como autorización (T06/T11) | I/F/D; retención operativa antes de D, SEG/observabilidad | RP + ms-users, SEG | Proposed |
-| P10. Acceso/sesión | 5/15/60 min; reintercambio; refresh rotatorio | 900 s acceso; sesión 8 h absoluta/30 min inactiva, reauth 5 min; refresh opaco rotatorio 256 bits; semántica en 3.4 | Robo, carrera, respuesta perdida y más logins | Expiración absoluta/inactiva, rotación única, concurrencia/reuso/logout (T06/T18) | I/F/D; límites exactos para entorno aprobados antes de I, ajustables sin superar política | RP + frontend, ms-users, SEG | Proposed |
+| P10. Acceso/sesión | Límites 60 min/30 min/8 h seleccionados; acceso 5/15/60 min y protocolos por evaluar | Accepted: ventana renovable 60 min, inactividad 30 min, máximo absoluto ocho horas desde login inicial sin reinicio por refresh; vence el primer límite; aviso previo, renovación solo válida y expiración en servidor. Sondeos automáticos no son actividad humana. Proposed: acceso 900 s, aviso a 5 min, refresh opaco 256 bits y mecanismos 3.4 | Robo, actividad falsificada, carrera, respuesta perdida y más logins | Bordes 60 min/30 min/8 h, renovación próxima al máximo sin reiniciarlo, sondeos sin actividad, sesión revocada, pestañas, carrera/reuso/logout (T06/T18) | I: cómputo seguro de actividad, renovación/anti-replay, cumplimiento de límites y reauth sensible; F: UX/transporte; D: evidencia | RP aprobó límites el 2026-11-01; frontend, ms-users y SEG pendientes de revisión técnica | Accepted parcial: política y límites; Proposed: mecanismos restantes |
 | P11. Skew | 0/30/60 s o medido | 30 s inicial homogéneo, condicionado a medir relojes; margen explícito al TTL | Hasta 30 s extra o falsos rechazos | Bordes ±30 s, desfase real y tipos (T05) | I/F/D; medición y ajuste antes de F/D, infra/validadores | RP + APIM, infra, servicios | Proposed |
 | P12. JWKS/kid/discovery/tipo | Metadata + JWKS; claves aprovisionadas | JWKS público sin privados, kid obligatorio, `typ=at+jwt` interno; metadata mínima compatible para APIM, sin declarar OIDC completo | SSRF, caché, ciclo de arranque o confusión de tipo | kid desconocido/duplicado, jku hostil, caída, clave privada ausente, Google rechazado en negocio (T04/T12/T15) | I: perfil/publicación; F: URLs/cachés y compatibilidad; D: prueba real. URLs productivas antes de F, ms-users/APIM | RP + ms-users, APIM, SEG | Proposed |
 | P13. Rotación | Manual controlada; automatizada | Publicar/prepropagar antes de firmar; mantener anterior hasta último exp + skew y evidencia de cachés; emergencia bloquea kid o tráfico | Retirada prematura o confianza persistente en comprometida | Nueva/anterior, caída y compromiso con cachés calientes (T12/T15) | I: estrategia normal/emergencia coherente con P12/P15; F: protocolo/cachés compatibles; D: automatización/cadencia y SLA, ms-users/infra | RP + ms-users, infra/APIM, SEG | Proposed |
 | P14. Custodia/firma | Key Vault + MI; otro custodio; clave exportable | Local: clave efímera aislada por proceso/prueba. Azure: evaluar no exportable + permiso mínimo de firma, sin compra/SKU aprobados | Coste/latencia, permisos excesivos y dependencia externa | Verificador no firma; fallo de custodio no emite; runtime sin exportar/administrar clave (T11/T12) | D; custodio/SKU/permisos diferibles hasta antes de D, infra/ms-users; aislamiento local mínimo desde I | RP + infra, ms-users, SEG | Proposed |
-| P15. Revocación | Expiración; denylist distribuida; versión difundida; introspección | Sesiones revocables y aceptación explícita del residual nominal hasta exp + 30 s (930 s respecto de iat), con desfase medido; si no tolerable, diseñar difusión sin consulta por request | Logout/baja no invalidan bearer; compromiso no limitado por TTL | Baja, logout/reuso y emergencia rechazan según ventana acordada en todos los validadores (T06/T12/T18) | I: semántica/ventana; F/D: mecanismo probado; SLA/difusión antes de D, servicios/APIM/SEG | RP + tres servicios, APIM, SEG | Proposed |
-| P16. Alta/dominios/vínculo | Alta idempotente; registro previo; prueba institucional adicional | Candidatos exactos estudiantec.cr/tec.ac.cr/itcr.ac.cr pendientes de funcional; alta tras elegibilidad y prueba; no fusión por email; recuperación cerrada hasta definir evidencia | Buzón reasignado, exclusión o duplicación; no garantiza persona única | Dominio exacto, no elegible, colisiones entre métodos, pérdida/recuperación y reauth ambos (T13/T17/T18) | I/F/D; no diferir elegibilidad ni continuidad del titular para login por correo existente; recuperación alternativa puede excluirse del piloto antes de F, RP/funcional | RP + funcional, ms-users, SEG | Proposed |
-| P17. Acceso directo | Restricciones; mTLS; privado según plan | Negocio solo por APIM y backend revalida JWT; elegir control de origen compatible con capacidades/coste reales | Host/slot alternativo o certificados no verificados | Acceso directo incluso con JWT válido bloqueado; origen gateway inválido rechazado (T07/T08/T09) | I: negocio vía APIM, backend revalida JWT y origen no se acredita por headers del navegador; F: interfaz de confianza compatible; D: control Azure concreto y evidencia, infra/APIM. No bloquea fakes locales | RP + infra/APIM, servicios, SEG | Proposed |
+| P15. Revocación | Expiración; denylist distribuida; versión difundida; introspección | Proponer sesiones revocables y residual de logout/baja hasta exp + 30 s (930 s desde iat), pendiente de aceptación; no aprobar acceso tras vencer límites 60 min/30 min/8 h. Diseñar cumplimiento sin consulta a ms-users por request | Logout/baja no invalidan bearer; compromiso no limitado por TTL | Baja, logout/reuso, emergencia y límites de sesión efectivos en todos los validadores (T06/T12/T18) | I: semántica/ventana; F/D: mecanismo probado; SLA/difusión antes de D, servicios/APIM/SEG | RP + tres servicios, APIM, SEG | Proposed |
+| P16. Alta/dominios/vínculo | Elegibilidad básica resuelta; mecanismos de alta, continuidad, vínculo y recuperación por evaluar | Accepted: estudiantec.cr, itcr.ac.cr, tec.ac.cr exactos y posesión verificada suficientes para básico; sin matrícula/empleo, roles ni clasificación por dominio; sin fusión por email y vínculo con prueba reciente de ambos. Proposed: alta idempotente, continuidad y recuperación | Buzón reasignado, exclusión o duplicación; no garantiza persona única | Dominio exacto, no elegible, colisiones entre métodos, pérdida/recuperación y reauth ambos (T13/T17/T18) | I/F/D: implementar política aceptada; continuidad de cuenta histórica y protocolos pendientes antes de I; recuperación alternativa puede excluirse antes de F, RP/funcional. Sin exigir afiliación externa para básico | RP + funcional, ms-users, SEG | Accepted parcial: dominios/elegibilidad/límite de vínculo; Proposed: protocolos y continuidad |
+| P17. Acceso directo | Restricciones; mTLS; privado según plan | Negocio solo por APIM y backend revalida JWT; elegir control de origen compatible con capacidades/coste reales | Host/slot alternativo o certificados no verificados | Acceso directo incluso con JWT válido bloqueado; origen gateway inválido rechazado (T07/T08/T09) | I: negocio vía APIM, backend revalida JWT y origen no se acredita por headers del navegador; F: interfaz de confianza compatible; D: control Azure concreto y evidencia, infra/APIM. No bloquea fakes locales | RP + infra/APIM, servicios, SEG | Accepted parcial: frontera y revalidación; Proposed: protección de origen/acceso directo |
 | P18. Replay/desafíos/enlaces | Nonce server; bearer sin vínculo; enlace/código | Google nonce 256 bits/5 min; correo 256 bits/10 min, SHA-256, consumo atómico y navegador iniciador; tasas piloto en 3.1 | Enumeración, CSRF login, escáner, reenvío y carrera | Nonce ajeno/repetido, GET no consume, TTL, dos confirmaciones y abuso/NAT (T06/T16/T17) | I/F/D; tasas globales y proveedor antes de F, ms-users/frontend/APIM; cross-device excluido salvo protocolo aprobado | RP + ms-users, frontend, MTEC-15, SEG | Proposed |
-| P19. Principal/headers | JWT reenviado; aserción adicional; headers | JWT interno original; gateway sanea headers y adaptador revalida antes de principal; dominio usa userId confiable | Header de identidad o actor de body tomado como autoridad | X-User-Id/roles falsos con/sin bearer no cambian actor; ownership propio/ajeno (T07/T10/T13) | I/F/D; shape adicional del principal con MTEC-15 antes de F, servicios | RP + APIM, tres servicios, SEG | Proposed |
-| P20. Scopes/autorización | Ownership inicial; capacidades; roles amplios | Ownership/participación obligatorios; sin admin/scopes implícitos. Matriz de recursos/capacidades por servicio antes de integrar | BOLA/IDOR y exceso de permisos; claim obsoleto | Acceso propio permitido, ajeno denegado sin efectos y capacidades exactas (T10) | F/D; catálogo de capacidades diferible hasta F, responsables de dominio; mínimo ownership desde I por P19 | RP + tres responsables de dominio, SEG | Proposed |
+| P19. Principal/headers | JWT reenviado; aserción adicional; headers | Accepted: JWT interno del usuario vía APIM y revalidación/principal confiable en destinatario; headers falsificados no acreditan identidad. Proposed: saneamiento detallado y shape; trabajo interno usa identidad de servicio y delegación explícita cuando corresponda | Header de identidad o actor de body tomado como autoridad | X-User-Id/roles falsos con/sin bearer no cambian actor; ownership propio/ajeno (T07/T10/T13) | I/F/D; shape adicional del principal con MTEC-15 antes de F, servicios | RP + APIM, tres servicios, SEG | Accepted parcial: responsabilidad/propagación; Proposed: perfil e interfaces |
+| P20. Scopes/autorización | Ownership inicial; capacidades; roles amplios | Accepted: ownership/participación/capacidades en servicio dueño, sin privilegios por dominio. Proposed: matriz exacta de recursos/capacidades antes de integrar | BOLA/IDOR y exceso de permisos; claim obsoleto | Acceso propio permitido, ajeno denegado sin efectos y capacidades exactas (T10) | F/D; catálogo de capacidades diferible hasta F, responsables de dominio; mínimo ownership desde I por P19 | RP + tres responsables de dominio, SEG | Accepted parcial: autorización de negocio; Proposed: matriz de capacidades |
 | P21. Perfil Google | Un client ID/entorno; múltiples; normalizar emisor | RS256, issuers oficiales exactos, aud/client ID del intento, tiempo, nonce y elegibilidad; normalizar después de verificar según 3.1 | Cliente ajeno, duplicado por iss, hd/email mal interpretados | Firma/iss/aud/tiempo/nonce inválidos y email/hd según política; mismo mapping en variantes iss (T02–T06/T13/T16) | I/F/D; client IDs reales antes de F, frontend/ms-users; fakes aislados desde I | RP + ms-users, frontend, SEG | Proposed |
-| P22. Excepciones APIM | Negocio; login/enlace/refresh/metadata; health | Excepción exacta por método/operación sin JWT previo solo donde corresponda; prueba propia/CSRF/tasa; health mínimo sin detalles | Wildcard o herencia evita autenticación; ciclos de login/JWKS | Negocio requiere JWT; access vencido puede renovar solo con refresh vigente; refresh vencido no renueva; preflight acotado; metadata sin ciclo (T09/T15/T17) | I: clases de operación y prueba propia sin JWT previo, sin ciclos; F: tabla exacta método/ruta y contrato; D: políticas efectivas, APIM/ms-users/MTEC-15 | RP + APIM, ms-users, SEG | Proposed |
+| P22. Excepciones APIM | Negocio; login/enlace/refresh/metadata; health | Excepción exacta por método/operación sin JWT previo solo donde corresponda; prueba propia/CSRF/tasa; health mínimo sin detalles | Wildcard o herencia evita autenticación; ciclos de login/JWKS | Negocio requiere JWT; access vencido solo renueva con sesión/refresh vigentes; sesión expirada requiere nueva autenticación; preflight acotado; metadata sin ciclo (T09/T15/T17) | I: clases de operación y prueba propia sin JWT previo, sin ciclos; F: tabla exacta método/ruta y contrato; D: políticas efectivas, APIM/ms-users/MTEC-15 | RP + APIM, ms-users, SEG | Accepted parcial: clases de excepción; Proposed: rutas, pruebas y políticas |
 | P23. Navegador/cookies/CSRF/CORS | sessionStorage; memoria+cookie; topologías same/cross-site | Acceso en memoria; cookies de renovación/preautenticación host-only HttpOnly/Secure, Path y SameSite explícitos; origen exacto + token CSRF ligado a sesión/intento. Lax para same-site; None solo si justificado por topología y probado | XSS, CSRF y cookies de terceros bloqueadas; CORS no autentica | Cross-origin permitido/prohibido, CSRF ausente/ajeno, expiración y cookie por navegador (T11/T16/T18) | I: transporte y CSRF; F/D: hostname/path/SameSite/orígenes reales antes de F, frontend/APIM/ms-users | RP + frontend, ms-users, APIM, SEG | Proposed |
 | P24. Subscription key/logs | Clave de cuota pública; privilegio; señales usuario/red | Clave SPA pública, sin privilegio de usuario; cuota/abuso aparte de JWT, logs sin bearer, cookies, enlaces, PII o claves | Agotamiento de cuotas/coste y fuga por telemetría | Clave sola no autentica; señuelos ausentes de logs/trazas; límites de abuso (T11/T14/T17) | D; cuotas, alertas y retención antes de D, APIM/infra; redacción y límites básicos desde I | RP + APIM, frontend, infra, SEG | Proposed |
 
-**Resultado QA:** 24/24 decisiones revisadas. Los 18 perfiles mínimos I de la subfase 1 (P01–P12, P15, P16, P18, P19, P21 y P23) se mantienen, pero no son una lista exhaustiva de condiciones iniciales: también deben acordarse las partes conceptuales de P13 (rotación), P17 (frontera/backend) y P22 (admisión/excepciones). Son **21 decisiones con algún acuerdo A/I**, sin exigir cerrar en I sus detalles de despliegue. P14 conserva aislamiento local; P20 conserva ownership ya Accepted por ADR-001; P24 conserva redacción y ausencia de privilegio por subscription key. Sus elecciones productivas no añaden bloqueos arquitectónicos iniciales. Todos los detalles diferidos conservan propietario por rol y revisión antes de F/D según fila; faltan nombres y fechas comprometidas, no se inventan. Ningún aplazamiento está aprobado ni permite desplegar sin controles críticos acreditados.
+**Auditoría posterior: 24/24 decisiones revisadas.** De las 21 filas
+históricamente asociadas a acuerdos A/I, P01 queda resuelta por el RP. **20
+filas conservan algún acuerdo técnico A/I pendiente**: P02–P13, P15–P19 y
+P21–P23. Las siete aceptaciones parciales no cierran sus detalles técnicos.
+P13/P17/P22 conservan sus condiciones iniciales, sin exigir cerrar en I detalles
+de despliegue. P14 conserva aislamiento local; P20 conserva ownership ya
+Accepted por ADR-001; P24 conserva redacción y ausencia de privilegio por
+subscription key. Sus elecciones productivas no añaden bloqueos arquitectónicos
+iniciales. Todos los detalles diferidos conservan propietario por rol y revisión
+antes de F/D según fila; faltan nombres y fechas comprometidas, no se inventan.
+Ningún aplazamiento está aprobado ni permite desplegar sin controles críticos
+acreditados.
 
-## 5. Fronteras de confianza propuestas
+## 5. Fronteras de confianza: arquitectura aceptada, controles pendientes
 
-El flujo es lógico y **Proposed**. Autenticación y renovación pasan por APIM. Login no requiere JWT interno previo; renovación exige credencial de sesión y controles propios, aunque el JWT de acceso haya expirado. Negocio exige JWT interno. No se aprueban rutas HTTP ni políticas concretas.
+El reparto y los tipos de comunicación están **Accepted** en 2.1. El flujo es
+lógico; protocolos, cookies y controles concretos del diagrama siguen
+**Proposed**. Autenticación y renovación pasan por APIM. Login no requiere JWT
+interno previo; renovación exige credencial de sesión y controles propios,
+aunque el JWT de acceso haya expirado. Negocio exige JWT interno. No se aprueban
+rutas HTTP ni políticas concretas.
 
 ```mermaid
 sequenceDiagram
@@ -347,6 +550,23 @@ sequenceDiagram
 | Servicios y eventos | El productor obtiene IDs de un contexto autorizado; consumidor valida contrato, procedencia y permisos del transporte según diseño independiente. | Un evento o `recipientUserId` no es un bearer de usuario ni autoriza acceso arbitrario. Este ADR no diseña identidad de workloads ni autenticación SSE. |
 
 Para App Service deben evaluarse restricciones de acceso y conectividad según plan real, además de autenticación del origen gateway. La [guía de restricciones de acceso](https://learn.microsoft.com/en-us/azure/app-service/app-service-ip-restrictions) y la [guía mTLS](https://learn.microsoft.com/en-us/azure/app-service/app-service-web-configure-tls-mutual-auth) son referencias de capacidad, no evidencia del entorno. Solicitar un certificado no prueba que la aplicación valide cadena/confianza, vigencia y cliente autorizado; un header de certificado solo puede usarse dentro de una frontera de proxy protegida y saneada. La combinación concreta se mantiene abierta en P17 y no cambia topología aquí.
+
+### Comunicación interna aceptada
+
+- Solicitudes del usuario: JWT interno a través de APIM y revalidación por el
+  servicio destinatario. Este trayecto no autoriza su retransmisión arbitraria a
+  otros servicios.
+- Trabajo interno: identidad de servicio específica con permisos mínimos, sin
+  reutilizar la sesión de un usuario como identidad técnica.
+- Eventos: autenticar productor y proteger integridad; userId es dato de negocio
+  cuando corresponda, no credencial ni prueba de autoridad.
+- Actuación por un usuario: delegación acotada y explícita solo ante un caso de
+  uso real. Protocolo, alcance, audiencia y pruebas requieren revisión con
+  MTEC-15/SEG antes de implementarse.
+
+No reenviar indiscriminadamente JWT de usuarios entre microservicios. Las
+identidades de servicio y la delegación no comparten claves privadas ni bases;
+su implementación y configuración Azure siguen pendientes.
 
 ### 5.1. Compatibilidad de desarrollo y Azure (Proposed)
 
@@ -426,7 +646,7 @@ Estas etapas describen trabajo futuro. Ninguna se ejecuta por publicar este ADR.
 
 | Etapa | Trabajo recomendado | Dependencias y evidencia de salida |
 |---|---|---|
-| 1. MTEC-40: aprobación arquitectónica | Revisar dirección B ampliada de 2.1 y amenazas; designar seguridad; aprobar perfil mínimo de ambos métodos, sesiones y transición de repositorio, con acuerdos, responsables y plazos de decisiones diferidas. Revisar compatibilidad Angular sin modificarlo. | Aprobación formal del RP y revisión conjunta de componentes afectados. MTEC-15 debe registrar aprobación de las interfaces compartidas que se implementarán; no basta fusionar borradores. Aplicar los hitos siguientes sin convertir todo P01–P24 en un bloqueo inicial. |
+| 1. MTEC-40: completar revisión técnica | Arquitectura base aceptada por RP en 2.1; revisar amenazas; designar seguridad; aprobar perfil mínimo de ambos métodos, sesiones y transición de repositorio, con acuerdos, responsables y plazos de decisiones diferidas. Revisar compatibilidad Angular sin modificarlo. | Aceptación del núcleo por RP ya registrada; revisión conjunta de componentes y perfil mínimo todavía pendientes. MTEC-15 debe registrar aprobación de las interfaces compartidas que se implementarán; no basta fusionar borradores. Aplicar los hitos siguientes sin convertir todo P01–P24 en un bloqueo inicial. |
 | 2. MTEC-36: futura autenticación | En repositorio independiente, tras transición de 7.1 y dominio/mapping de MTEC-34: Google, correo, emisor, sesiones y JWKS/rotación aprobados. Coordinar ampliación del alcance con sus responsables, sin modificar Jira aquí. | Contratos revisados en MTEC-15; pruebas positivas/negativas de ambos métodos, enlaces, sesiones, claims, cuenta, concurrencia y claves; errores conforme al contrato aprobado; ausencia de secretos en logs. Desarrollo local no demuestra integración Azure. |
 | 3. Seguridad defensiva | Adaptadores de autenticación en los tres servicios; principal confiable; autorización de ownership/participación/capacidad y rechazo de headers como autoridad. | Pruebas de token ausente/falsificado, principal válido, acceso propio/ajeno y efectos de cuenta/token revocado según P15. Sin consultas por request a ms-users ni bases compartidas. |
 | 4. APIM e infraestructura | Preparar políticas efectivas por operación, metadata/JWKS, saneamiento de headers y conectividad/origen protegidos; aislar App Services conforme a P17. | Solo tras aprobación, verificación de capacidades reales y autorización de despliegue. Pruebas controladas de conectividad, credenciales rechazadas, ausencia de bypass y continuidad de rotación. Nunca aplicar ejemplos conceptuales como configuración aprobada. |
@@ -436,11 +656,15 @@ Estas etapas describen trabajo futuro. Ninguna se ejecuta por publicar este ADR.
 
 | Hito | Acuerdos imprescindibles | Detalles que no bloquean ese hito |
 |---|---|---|
-| Inicio de implementación interoperable de MTEC-36 | Ratificación de B ampliada (P01), algoritmo y claims/identidad (P02–P12, P21), alta/dominios/vinculación y continuidad del titular (P16), enlaces/anti-replay (P18), renovación/revocación y transporte/CSRF de sesión (P10/P15/P23), propagación de principal (P19), estrategia conceptual de rotación (P13), frontera APIM/backend (P17) y clases de excepciones sin ciclo de autenticación (P22). Definir transición autoritativa de 7.1. Revisar en MTEC-15 la interfaz afectada; disponer del dominio/mapping de MTEC-34 para integrar el caso de uso. | Valores productivos de issuer/audience pueden cerrarse por entorno antes de integrarlo, usando configuración y fixtures de prueba identificados como tales. No requiere resolver SKU/permisos finales de Key Vault, intervalos operativos de rotación, topología Azure, cuotas ni migración completa del frontend. |
+| Inicio de implementación interoperable de MTEC-36 | P01 resuelta; cerrar algoritmo y claims/identidad (P02–P12, P21), alta/dominios/vinculación y continuidad del titular (P16), enlaces/anti-replay (P18), renovación/revocación y transporte/CSRF de sesión (P10/P15/P23), propagación de principal (P19), estrategia conceptual de rotación (P13), frontera APIM/backend (P17) y clases de excepciones sin ciclo de autenticación (P22). Definir transición autoritativa de 7.1. Revisar en MTEC-15 la interfaz afectada; disponer del dominio/mapping de MTEC-34 para integrar el caso de uso. | Valores productivos de issuer/audience pueden cerrarse por entorno antes de integrarlo, usando configuración y fixtures de prueba identificados como tales. No requiere resolver SKU/permisos finales de Key Vault, intervalos operativos de rotación, topología Azure, cuotas ni migración completa del frontend. |
 | Integración de autenticación y consumidores | Cerrar contratos de ambos accesos, desafío/enlace, renovación, logout y vinculación; principal/claims, issuer/audience/tiempos del entorno, metadata/JWKS (P12), ownership (P19/P20), cookies/CSRF/CORS (P23) y excepciones de autenticación/renovación/metadata (P22). | Automatización definitiva de rotación, umbrales finales de alertas y otros detalles operativos pueden avanzar en paralelo sin presentar la integración como producción segura. |
 | Habilitación productiva | Evidencia de custodia, rotación normal/emergencia, revocación y ventana residual aceptada (P13–P15); protección de origen y acceso directo (P17); controles P20/P22–P24, configuración efectiva Azure y pruebas autorizadas de la matriz. | Ninguna incertidumbre sobre controles críticos puede omitirse: un aplazamiento requiere alcance y riesgo residual aceptados formalmente. |
 
-El dominio de MTEC-34 y las pruebas aisladas de puertos/verificadores con fakes no dependen de decidir la topología Azure. Aceptar la estrategia no aprobaría automáticamente decisiones operativas aún abiertas ni autorizaría despliegues. No se considera resuelto MTEC-12 sin evidencia de políticas y pruebas del entorno; tampoco se cierra MTEC-15 solo por este ADR.
+El dominio de MTEC-34 y las pruebas aisladas de puertos/verificadores con fakes
+no dependen de decidir la topología Azure. La estrategia aceptada no aprueba
+decisiones criptográficas u operativas abiertas ni autoriza despliegues. No se
+considera resuelto MTEC-12 sin evidencia de políticas y pruebas del entorno;
+tampoco se cierra MTEC-15 solo por este ADR.
 
 ### Dependencias y exclusiones por ticket
 
@@ -461,7 +685,7 @@ El dominio de MTEC-34 y las pruebas aisladas de puertos/verificadores con fakes 
 | Google/intercambio | Identidad elegible verificada → un único userId estable y credencial interna | Firma/algoritmo/issuer/audience/tiempo/dominio inválidos; nonce repetido; mapping concurrente; ninguna emisión o alta no autorizada |
 | Correo institucional | Dominio aprobado y enlace confirmado recuperan/crean usuario interno | Dominios parciales/similares, enumeración, abuso de tasa, expiración, alteración, repetición, intento ajeno, escáner GET y consumo concurrente |
 | Identidad/vinculación | Ambos métodos vinculados conservan el mismo userId | Sin prueba reciente de ambos métodos no hay vínculo; conflicto no fusiona ni duplica; correo reasignado no toma una cuenta automáticamente |
-| Sesiones | Ambos métodos renuevan acceso con sesión MarketTec y rotación | Credencial anterior/revocada rechazada; replay/carreras, expiración absoluta/inactividad, logout, CSRF, CORS/cookies y reautenticación sensible |
+| Sesiones | Ambos métodos renuevan con sesión vigente dentro de 60 min/30 min/8 h y controles seguros por aprobar | Bordes de los tres límites, sondeos sin actividad, refresh sin reiniciar ocho horas; credencial anterior/revocada, replay/carreras, logout, CSRF, CORS/cookies y reautenticación sensible |
 | Perfil interno | Token de emisor y clave aprobados aceptado en APIM y cada stack | Ausente, `none`, RS/HS, firma inválida, claims erróneos, clave ajena, tipos temporales y contexto Google/internal mezclados |
 | Recursos | Acceso propio/participación permitidos | Lectura/escritura ajena bloqueada, actor del body ignorado, ausencia de efecto en datos y principal no suplantado por headers |
 | Claves y operación | Clave nueva y anterior válidas durante solapamiento calculado | Clave comprometida rechazada en todos los validadores, cachés precargadas, caída JWKS, no material privado ni tokens en logs |
@@ -486,11 +710,26 @@ El dominio de MTEC-34 y las pruebas aisladas de puertos/verificadores con fakes 
 
 MTEC-15 sigue In Progress: la publicación de contratos/CI no acredita aprobación conjunta ni compatibilidad dinámica. Debe versionar incompatibilidades y registrar consumidores revisados antes de implementar cada interfaz. Esta tabla es una propuesta de cambios, no una enmienda contractual ni autorización para Angular.
 
-## 9. Documentación afectada después de la aprobación
+## 9. Documentación afectada y actualizaciones posteriores
 
-Las únicas fuentes arquitectónicas editadas en MTEC-40 son este ADR y [DECISION_LOG](DECISION_LOG.md), conforme a la [convención ADR](README.md). La subfase 2 añade el [informe QA](../../docs/MTEC40_QA_REVIEW.md) solicitado, una auditoría técnica con evidencia y limitaciones, sin autoridad arquitectónica. No cambia ningún hecho de implementación ni contrato; por ello no corresponde presentar actualizaciones de arquitectura, auditoría o deuda como si se hubiera desplegado seguridad. Los desfases de E6/E7, el alcance todavía centrado en Google de MTEC-34/MTEC-36, el diseño parcial de contratos y la propuesta de directorios de ADR-002 quedan señalados para coordinación posterior, sin presentarlos como comportamiento vigente. No se crea otro documento de estrategia: su fuente canónica es 7.1.
+Las únicas fuentes arquitectónicas editadas en MTEC-40 son este ADR y
+[DECISION_LOG](DECISION_LOG.md), conforme a la [convención ADR](README.md). La
+subfase 2 añadió el [informe QA](../../docs/MTEC40_QA_REVIEW.md), complementado
+ahora con la revisión posterior sin borrar evidencia; es una auditoría técnica
+sin autoridad arquitectónica. No cambia ningún hecho de implementación ni
+contrato; por ello no corresponde presentar actualizaciones de arquitectura,
+auditoría o deuda como si se hubiera desplegado seguridad. Los desfases de
+E6/E7, el alcance histórico Google de MTEC-34, los detalles pendientes de
+MTEC-36 pese a su ampliación funcional registrada en Jira, el diseño
+parcial de contratos y la propuesta de directorios de ADR-002 quedan señalados
+para coordinación posterior, sin presentarlos como comportamiento vigente. No se
+crea otro documento de estrategia: su fuente canónica es 7.1.
 
-Tras aprobación se aplicaría el [protocolo de actualización](../maintenance/UPDATE_PROTOCOL.md), coordinando con los responsables de los documentos:
+Con el núcleo aceptado, la alineación posterior de prosa requiere trabajo
+autorizado de sus dueños; cambios de interfaz esperan MTEC-15 y hechos
+operativos esperan evidencia. Se aplicará el [protocolo de
+actualización](../maintenance/UPDATE_PROTOCOL.md), coordinando con los
+responsables de los documentos:
 
 | Documento dueño | Actualización posterior necesaria |
 |---|---|
@@ -502,24 +741,50 @@ Tras aprobación se aplicaría el [protocolo de actualización](../maintenance/U
 | [Mapa del repositorio](../REPOSITORY_MAP.md), [fundación implementada](../phase2/IMPLEMENTED_FOUNDATION.md), README y workflows de ms-users | Actualizar ubicación autoritativa, consumo de contratos, ejecución y CI cuando se apruebe/ejecute la transición de 7.1. Conservar la descripción de la fundación actual hasta entonces. |
 | [Deuda técnica](../audits/TECHNICAL_DEBT.md) y evidencia de auditoría | Registrar controles comprobados, limitaciones y riesgo residual cuando existan pruebas, conservando auditorías históricas. |
 
-## 10. Revisión humana pendiente — paquete de decisión sin aprobar
+## 10. Registro de aceptación delimitada y revisión humana pendiente
 
-**Estado de todos los bloques: Proposed.** Listos para deliberación técnica no significa aceptados ni listos para desplegar. Propuestas/alternativas y pruebas por P01–P24 son canónicas en la sección 4; las consecuencias/amenazas están en 6/7 y las brechas contractuales en 8.1. La siguiente tabla es el acta pendiente, sin nombres, firmas ni fechas de aprobación inventados.
+**Acta del núcleo:** el responsable del proyecto aprobó expresamente la
+arquitectura base el **2026-11-01**, con alcance exacto en 2.1 y motivos en 2.
+No se registran firmas, identidades de revisores ni conformidades ajenas a esa
+autoridad. Los bloques de parámetros pendientes conservan alternativas, riesgos,
+propietarios por rol e hitos en 4; amenazas en 6/7 y contratos en 8.1.
 
-| Bloque y propuesta a revisar | Alternativa / consecuencias y riesgo principal | Preguntas bloqueantes para aprobar | Roles requeridos para conformidad y aprobación | Estado | Evidencia de conformidad o desacuerdo / fecha |
-|---|---|---|---|---|---|
-| Estrategia e identidad: B ampliada, userId común y alta P01/P05/P16/P21 | A o registro previo; B exige emisor y operación de correo; buzón no prueba elegibilidad | ¿Ratifican B y el perfil Google? ¿Qué dominios y prueba funcional se admiten? ¿Alta automática o previa? ¿Cómo resolver conflicto/recuperación? | RP y funcional; ms-users; consumidores; frontend; SEG | Proposed | Dirección B seleccionada documentada en 2.1; sin ratificación formal, conformidades ni desacuerdos registrados; sin fecha de aprobación |
-| JWT y claves P02–P09/P11–P14 | ES256 o custodia distinta; más coste/operación frente a desacoplar verificadores | ¿RS256/tamaño y typ? ¿Iss/aud por entorno? ¿Publicación/cachés compatibles? ¿Quién firma, rota y responde a compromiso? | RP; ms-users; APIM/infra; tres servicios; SEG | Proposed | Sin evidencia de conformidad/desacuerdo; fecha pendiente |
-| Sesiones/enlaces P10/P15/P18/P23 | Reautenticar siempre, otros TTL o gracia controlada; replay bearer, reuso y UX | ¿900 s/30 s skew y residual tolerables? ¿8 h/30 min/5 min? ¿256 bits/TTL/tasas y navegador iniciador? ¿Rotación estricta? ¿Hosts, cookies, CSRF y CORS concretos? | RP y funcional; ms-users; frontend; APIM; SEG | Proposed | Sin evidencia de conformidad/desacuerdo ni aceptación residual; fecha pendiente |
-| Autorización/fronteras P17/P19/P20/P22/P24 | Aserción adicional o controles de origen alternativos; bypass/BOLA y abuso de cuota | ¿Principal y capacidades por recurso? ¿Excepciones exactas? ¿Plan que demuestra aislamiento? ¿Cuotas, redacción y alertas? | RP; tres servicios; frontend; APIM/infra; SEG | Proposed | Sin evidencia de conformidad/desacuerdo; operación Azure no verificada; fecha pendiente |
-| Contratos/transición 7.1/8.1 | Mantener interfaces draft impediría interoperabilidad; doble autoridad/pipeline podría divergir | ¿Versión contractual y consumidores conformes? ¿HEAD/candidato remoto comprobado? ¿Responsable/fecha de corte, único artefacto y tratamiento del scaffold/workflow? | RP; ms-users; tres responsables de contratos; frontend; APIM/infra | Proposed | Ubicación e implementaciones locales verificadas; sin acta de corte o revisión contractual aprobada; fecha pendiente |
+| Bloque | Aceptación registrada | Decisiones y evidencia aún requeridas | Roles para revisar los pendientes | Estado |
+|---|---|---|---|---|
+| Estrategia e identidad P01/P05/P16/P21 | RP, 2026-11-01: B ampliada, ambos métodos en primera versión, userId común, allowlist exacta y posesión verificada para básico; vínculo exige prueba, sin fusión por correo ni privilegios/clasificación por dominio | Perfil Google, alta/continuidad/recuperación y pruebas de control de métodos; no introducir requisito de matrícula/empleo | Funcional; ms-users; consumidores; frontend; SEG; RP para resolver pendientes | Núcleo Accepted; controles Proposed; conformidades técnicas pendientes |
+| JWT y claves P02–P09/P11–P14 | RP, 2026-11-01: ms-users emite; verificadores comparten emisor/claves públicas, nunca privadas | Algoritmo/tamaño/typ, claims, iss/aud, JWKS/cachés, custodio, rotación normal/emergencia y operador; no inferir aprobación RS256 | ms-users; APIM/infra; tres servicios; SEG; RP | Perfil Proposed; sin conformidades técnicas ni fecha de cierre |
+| Sesiones/enlaces P10/P15/P18/P23 | RP, 2026-11-01: ventana renovable 60 min, inactividad 30 min y máximo absoluto ocho horas desde login inicial sin reinicio; primer límite vence en servidor, aviso previo y renovación solo válida; sondeos no cuentan; expirada exige autenticación nueva | JWT 15 min candidato; aviso 5 min propuesto; cómputo de actividad, rotación/compromiso, reauth sensible, pestañas/carreras, cookies/CSRF/CORS/ámbitos, TTL/tasas/enlaces y residual | Funcional; ms-users; frontend; APIM; SEG; RP | Política funcional Accepted; mecanismos Proposed; residual no aceptado |
+| Autorización/fronteras P17/P19/P20/P22/P24 | RP, 2026-11-01: APIM admite y aplica políticas; servicios revalidan y autorizan; identidad de servicio/eventos/delegación explícita según 5 | Protección directa/origen, principal/capacidades, protocolos internos, rutas/excepciones exactas, cuotas/logs y evidencia Azure | Tres servicios; frontend; APIM/infra; SEG; RP | Reparto y comunicación Accepted; controles Proposed; Azure no verificado |
+| Contratos/transición 7.1/8.1 | Ninguna aprobación contractual ni corte operativo nuevos | Versión/consumo canónicos, compatibilidad, responsable/fecha de corte, único artefacto y tratamiento del scaffold/workflow | ms-users; tres responsables de contratos; frontend; APIM/infra; RP | Proposed; MTEC-15 sin aprobación conjunta |
 
 ### Condiciones de salida y pendientes por asignar
 
-1. Designar revisión de seguridad y mapear cada rol a una persona con autoridad expresa; no asumir que son distintas ni que el assignee de Jira cubre todos los roles.
-2. Resolver los **18 perfiles mínimos I y las partes conceptuales I de P13/P17/P22** de la sección 4 con valores, alcance/entornos y aceptación residual explícitos. No basta «RS256/15 min en ejemplo». Los valores reales de client IDs, issuer/audience, destinos y orígenes pueden permanecer como configuración de desarrollo aislada hasta F, pero su semántica/perfil debe quedar acordada antes de I; ninguna fixture `.invalid` representa infraestructura aprobada.
-3. Revisar/aprobar con MTEC-15 las interfaces de 8.1 que se implementarán. Confirmar alcance de MTEC-36 para ambos métodos/sesiones; mantenerlo To Do mientras MTEC-40 bloquee. MTEC-34/35 Done aportan dominio/persistencia, no sustituyen esta aprobación.
-4. Registrar responsable nominal y fecha/hito comprometido para cada detalle diferido P13/P14/P17/P20/P22/P24 y los parámetros de entorno de otras filas. Los plazos de sección 4 están propuestos, no aceptados. Faltan presupuesto/custodio, SLA de emergencia, matriz de recursos/excepciones y evidencia efectiva APIM/MI/origen para D; MTEC-12/37 conservan ese cierre.
-5. Documentar en esta acta conformidad/desacuerdo, justificación, referencia revisada, restricciones y aprobación explícita del RP; el PR revisado exigido por MTEC-40 corresponde a una fase posterior autorizada. No se abre PR en esta subfase ni se infiere consentimiento de un merge.
+1. Designar revisión de seguridad y mapear cada rol a persona con autoridad;
+   registrar referencia, conformidad o desacuerdo y condiciones. La aprobación
+   del RP no sustituye estas revisiones.
+2. Resolver las **20 filas con algún acuerdo técnico I pendiente** indicadas en
+   4, con valores/semántica, entornos y aceptación residual explícitos. Mantener
+   los alcances ya Accepted y sus pruebas; ninguna recomendación o fixture
+   aprueba parámetros. Issuer/audience/client IDs y URLs reales pueden cerrarse
+   antes de integrar su entorno, pero el perfil interoperable debe acordarse
+   antes de I.
+3. Revisar/aprobar con MTEC-15 cada interfaz de 8.1 antes de implementarla y
+   aplicar el alcance de ambos métodos y sesiones ya registrado en MTEC-36.
+   No modificar Jira ni comenzar MTEC-36 automáticamente; MTEC-40 sigue
+   In Progress y sus criterios no están completos.
+4. Asignar persona y fecha/hito comprometido para pendientes de 4, incluido
+   cómputo de actividad y cumplimiento de límites, acceso JWT, UX,
+   rotación/revocación,
+   continuidad, cookies y carreras. Los propietarios son roles y los plazos
+   propuestos, no compromisos humanos inventados. Custodio/presupuesto, SLA,
+   acceso directo y evidencia APIM/MI requieren cierre antes de D.
+5. Registrar conformidades/desacuerdos técnicos y de seguridad, acuerdos
+   mínimos, contratos y revisión formal exigida por MTEC-40. Su PR revisado
+   corresponde a fase posterior autorizada; no se crea aquí.
 
-La conformidad del RP no sustituye las revisiones técnicas y de seguridad requeridas por MTEC-40. Para cada rol deben constar persona, responsabilidad revisada, referencia, conformidad o desacuerdo y condición de salida; la matriz por rol se evalúa en el informe QA. Los riesgos residuales de bearer hasta expiración, XSS, buzón comprometido/reasignado, firma/caché y autorización quedan pendientes de aceptación; sus pruebas propuestas no se presentan como ejecutadas. **Aprobaciones de ADR-004 acreditadas: ninguna.** Hasta contar con evidencia formal, ADR-004 permanece **Proposed**; esta preparación para QA/revisión humana no cierra MTEC-40, no autoriza despliegue y no inicia MTEC-36.
+**Aprobación acreditada: arquitectura base por el responsable del proyecto,
+2026-11-01.** Las conformidades técnicas y de seguridad, el perfil exacto y la
+aceptación de riesgos residuales siguen pendientes. Sus pruebas no se presentan
+como ejecutadas. ADR-004 queda **Accepted con alcance delimitado**; MTEC-40 no
+se cierra, MTEC-36 no queda listo para implementación completa y Azure/APIM
+siguen no verificados.
