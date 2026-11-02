@@ -1,0 +1,130 @@
+[
+  {
+    "name": "inactivity-before",
+    "authenticatedAt": 0,
+    "renewedAt": 0,
+    "lastActivityAt": 0,
+    "now": 1799,
+    "active": true,
+    "deadline": 1800
+  },
+  {
+    "name": "inactivity-at",
+    "authenticatedAt": 0,
+    "renewedAt": 0,
+    "lastActivityAt": 0,
+    "now": 1800,
+    "active": false,
+    "deadline": 1800
+  },
+  {
+    "name": "inactivity-after",
+    "authenticatedAt": 0,
+    "renewedAt": 0,
+    "lastActivityAt": 0,
+    "now": 1801,
+    "active": false,
+    "deadline": 1800
+  },
+  {
+    "name": "window-before",
+    "authenticatedAt": 0,
+    "renewedAt": 0,
+    "lastActivityAt": 3500,
+    "now": 3599,
+    "active": true,
+    "deadline": 3600
+  },
+  {
+    "name": "window-at",
+    "authenticatedAt": 0,
+    "renewedAt": 0,
+    "lastActivityAt": 3500,
+    "now": 3600,
+    "active": false,
+    "deadline": 3600
+  },
+  {
+    "name": "window-after",
+    "authenticatedAt": 0,
+    "renewedAt": 0,
+    "lastActivityAt": 3500,
+    "now": 3601,
+    "active": false,
+    "deadline": 3600
+  },
+  {
+    "name": "absolute-before",
+    "authenticatedAt": 0,
+    "renewedAt": 28000,
+    "lastActivityAt": 28700,
+    "now": 28799,
+    "active": true,
+    "deadline": 28800
+  },
+  {
+    "name": "absolute-at",
+    "authenticatedAt": 0,
+    "renewedAt": 28000,
+    "lastActivityAt": 28700,
+    "now": 28800,
+    "active": false,
+    "deadline": 28800
+  },
+  {
+    "name": "absolute-after",
+    "authenticatedAt": 0,
+    "renewedAt": 28000,
+    "lastActivityAt": 28700,
+    "now": 28801,
+    "active": false,
+    "deadline": 28800
+  },
+  {
+    "name": "renewal-near-absolute",
+    "authenticatedAt": 0,
+    "renewedAt": 28799,
+    "lastActivityAt": 28700,
+    "now": 28799,
+    "active": true,
+    "deadline": 28800
+  },
+  {
+    "name": "revoked-before-deadline",
+    "authenticatedAt": 0,
+    "renewedAt": 0,
+    "lastActivityAt": 0,
+    "now": 1,
+    "revoked": true,
+    "active": false,
+    "deadline": 1800
+  },
+  {
+    "name": "polling-does-not-move-deadline",
+    "authenticatedAt": 0,
+    "renewedAt": 0,
+    "lastActivityAt": 0,
+    "now": 1800,
+    "pollTimes": [
+      900,
+      1700,
+      1799
+    ],
+    "active": false,
+    "deadline": 1800
+  },
+  {
+    "name": "automatic-refresh-does-not-move-window",
+    "authenticatedAt": 0,
+    "renewedAt": 0,
+    "lastActivityAt": 3500,
+    "now": 3600,
+    "rotateTimes": [
+      1000,
+      2000,
+      3500
+    ],
+    "active": false,
+    "deadline": 3600
+  }
+]
