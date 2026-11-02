@@ -4,6 +4,12 @@ Fecha: **2026-11-01**, America/Costa_Rica. Destinatarios: mantenedores,
 responsable del proyecto y revisores técnicos/funcionales de MTEC-40.
 Este informe es una auditoría técnica; no es un ADR ni un contrato.
 
+> **Vigencia:** los apartados A–G y la matriz por rol conservan el QA histórico
+> de la subfase 2 sobre de6192b. La aceptación delimitada posterior, el nuevo
+> estado Git y las validaciones de la versión sobre 1ca76fc se registran en
+> [H](#h-revisión-posterior--aceptación-delimitada-2026-11-01). Las afirmaciones
+> históricas «Proposed» o «ninguna aprobación» no describen esa versión nueva.
+
 **QA técnico-documental: QA PASS WITH NOTES**, después de las correcciones de F.
 **Aprobación arquitectónica: PENDING HUMAN APPROVAL.** ADR-004 sigue Proposed.
 
@@ -513,3 +519,494 @@ aprobación explícita del RP y PR revisado exigido por MTEC-40. No se abre PR n
 se inicia subfase 3 o MTEC-36, y no se modifica ningún ticket.
 
 **MTEC-40 — Subfase 2 auditada. ADR-004 permanece Proposed y pendiente de aprobación humana.**
+
+## H. Revisión posterior — aceptación delimitada 2026-11-01
+
+Fecha: **2026-11-01**, America/Costa_Rica. Destinatarios: mantenedores y
+revisores de MTEC-40. Esta revisión posterior acredita la versión nueva;
+el QA A–G se conserva como evidencia histórica, sin extender su dictamen.
+
+### Alcance, método y evidencia posterior
+
+Se releyeron íntegramente ADR-004, DECISION_LOG, este informe, ADR-001,
+IDENTITY_CONTRACT y Users OpenAPI. Se revisaron el diff inicial y el final,
+la gobernanza y el protocolo de mantenimiento, el código de login Angular,
+el scaffold ms-users y los validadores existentes. El diff inicial estaba
+vacío: el QA previo ya está en HEAD **1ca76fc0ef555ec9efb0fb227da999958a16d489**.
+La base reportada de6192b corresponde a la revisión histórica, no al HEAD
+de entrada de esta aceptación. No se descartó trabajo preexistente.
+
+**Verificado:** estado Git local, fetch origin, ancestry, dos worktrees,
+consulta de solo lectura a Jira MTEC-40/36/15/12, estructura documental,
+resultados de los validadores y preservación del QA histórico.
+**Verificado documentalmente:** aprobación expresa del responsable del
+proyecto del 2026-11-01, limitada al núcleo de ADR-004 §2.1; no procede de
+un merge ni de un dictamen técnico. No acredita implementación o firmas de
+otros revisores.
+**Inferido:** la estructura separa núcleo aceptado y parámetros pendientes
+sin exigir un ADR adicional; sus controles requieren revisión y pruebas.
+**Documentado pero no verificado:** controles futuros, pruebas y evidencia
+remota del repositorio independiente consignadas en A–G; no se repitió su
+auditoría ni su CI. **No determinado:** Azure efectivo, revisores nominales,
+conformidades técnicas, plazos comprometidos y corte operativo de ms-users.
+
+La consulta Jira mantiene MTEC-40 y MTEC-36 To Do; MTEC-15 y MTEC-12
+In Progress. MTEC-40 aún describe Proposed y 16 amenazas; MTEC-36 sigue
+centrado en Google. Se registra el desfase frente al núcleo Accepted y a
+T01–T18 sin modificar tickets. La guía primaria Google enlazada en C se
+reconsultó para confirmar el límite de autoridad sobre buzones externos;
+no se dedujo posesión actual solo de email_verified.
+
+### Sincronización e inventario conservador
+
+Repositorio verificado: **a-calderon-org/market_tec**. No se operó
+ms-users-market-tec. Los dos worktrees registrados se preservaron; el
+principal de OneDrive contiene main y el worktree de MTEC-40 es el de A.
+
+- main antes/después: de6192b4df8f75df1f58ad07b9c03710b2cc91c1.
+- origin/main tras fetch: 0e714333d86a744188cbd162e6dc402601dfd76e.
+- Comparación main...origin/main: 0 commits exclusivos locales, 2 remotos;
+  ancestry confirma avance posible mediante fast-forward.
+- Sincronización detenida por worktree main sucio: cuatro archivos
+  modificados en context/phase2 y dos sin seguimiento. No se ejecutó merge,
+  stash, reset, cambio de rama ni integración en MTEC-40.
+
+Cambios ajenos preservados en main:
+
+- context/phase2/API_AND_EVENTS.md
+- context/phase2/IMPLEMENTATION_ROADMAP.md
+- context/phase2/JIRA_BACKLOG.md
+- context/phase2/MICROSERVICES_ARCHITECTURE.md
+- MARKETTEC_JIRA_INVENTORY.md (sin seguimiento)
+- contracts/COLLABORATION.md (sin seguimiento)
+
+Inventario previo a cualquier borrado, confirmado al cierre:
+
+- **main**: SHA de6192b4df8f75df1f58ad07b9c03710b2cc91c1;
+  upstream origin/main. Es ancestro de origin/main. Activa en el worktree
+  principal; cuatro modificaciones y dos archivos sin seguimiento.
+  **Conservar:** rama principal protegida, activa y con trabajo pendiente.
+- **docs/mtec40-adr004-formal-review**:
+  SHA 1ca76fc0ef555ec9efb0fb227da999958a16d489;
+  upstream origin/docs/mtec40-adr004-formal-review.
+  Es ancestro de origin/main; cero commits fuera de ese historial.
+  Activa en su worktree; limpia al entrar, tres documentos modificados al
+  salir. **Conservar:** rama MTEC-40 expresamente protegida y activa.
+
+Resultado: **2 ramas evaluadas, 0 elegibles, 0 eliminadas**. Se comprobaron
+branch -vv, --merged/--no-merged origin/main, for-each-ref, merge-base
+--is-ancestor y worktree list --porcelain. No se borraron ramas remotas,
+worktrees o directorios ni se ejecutó prune.
+
+### Decisiones auditadas y riesgos retenidos
+
+Se revisaron las 24 filas, con estado separado por alcance:
+
+- **P01 Accepted:** B ampliada, ambos métodos en primera versión, identidad
+  y sesiones comunes. La conformidad técnica de componentes sigue pendiente.
+- **P05/P10/P16/P17/P19/P20/P22 Accepted parcial:** identidad interna,
+  política funcional de sesión, dominios/elegibilidad y límite de vínculo,
+  reparto de validación/autorización, propagación y clases de excepción.
+  Sus perfiles, mecanismos e interfaces conservan detalles Proposed.
+- **P02/P03/P04/P06/P07/P08/P09/P11/P12/P13/P14/P15/P18/P21/P23/P24
+  Proposed:** algoritmo/claims, issuer/audience, tiempos JWT, JWKS,
+  custodia/rotación, revocación, desafíos/enlaces, perfil Google,
+  navegador/CSRF/CORS/cookies y operación/cuotas/logs sin aprobación nueva.
+
+Recuento: **1 Accepted, 7 Accepted parcial, 16 Proposed**. P01 ya no es
+una elección pendiente; las otras **20 filas** históricamente ligadas a I
+conservan algún acuerdo técnico inicial por cerrar. P14/P20/P24 mantienen
+sus mínimos locales y propietarios/hitos F/D según ADR §4; no son nuevos
+bloqueos de infraestructura para fakes locales. P01 Accepted no acredita
+conformidad de servicios, frontend, APIM ni SEG.
+
+La elegibilidad básica ya está aprobada: posesión verificada en los tres
+dominios exactos, sin matrícula/empleo externos ni roles o clasificación
+por dominio. El riesgo de continuidad del titular de buzones reasignados
+sigue abierto en P16; no se convierte en barrera de afiliación al acceso
+básico. La no fusión automática y prueba reciente de ambos métodos para
+vincular se conservan. No se cambian atributos ni contratos.
+
+La ventana de sesión es **60 minutos**; aviso y opción de continuar con
+backend autoritativo. Nueva ventana de hasta 60 min solo con sesión,
+usuario y credencial válidos, rotación y anti-replay, dentro de un máximo
+absoluto aún pendiente. Sesión expirada se invalida en servidor y exige
+autenticación nueva; un clic no basta. Aviso a cinco minutos y acceso JWT
+de 15 minutos son candidatos. No se aprueban 8 h absolutas ni 30 min de
+inactividad. Siguen abiertos inactividad/máximo absoluto, compromiso,
+revocación/residual, cookies/CSRF/CORS/ámbitos, pestañas, carreras y prueba
+de reautenticación sensible.
+
+Se mantienen T01–T18 y los controles del QA previo: aud/azp e issuer
+Google, autoridad sobre email/hd, continuidad de cuenta, reautenticación,
+replay bearer, expiración de JWT distinta de sesión, compromiso con cachés
+calientes y consumo atómico de enlace. Ninguna amenaza se cierra por
+aceptación documental. La comunicación interna requiere identidad de
+servicio, autenticidad/integridad de eventos y delegación explícita
+acotada cuando corresponda; no se reenvían JWT indiscriminadamente.
+
+### Validación posterior reproducible
+
+- Contratos: **12/12** pruebas aprobadas, incluidas cuatro de JSON Schema
+  Draft 2020-12; entorno temporal fijado usado en E, sin instalar en el repo.
+- OpenAPI: **3/3 válidos, 0 errores y 6 advertencias**, idénticas a entrada:
+  info-license en info y operation-4xx-response en GET /health para cada
+  archivo. Comparación por regla, severidad y puntero; no se suprimen reglas.
+- Markdown: solo MD013. ADR **228 → 207**, LOG **9 → 4**, QA **78 → 78**;
+  total **315 → 289**, sin otras reglas fallidas ni aumento de advertencias.
+  Se ajustan líneas de prosa editada, sin reformatear tablas históricas.
+- Enlaces/anclas: **57 referencias locales válidas**, incluidas **8 anclas**;
+  entrada 54 referencias/4 anclas. Los destinos no se infieren de títulos.
+- Tablas/bloques: **31 tablas rectangulares**, bloques cercados cerrados;
+  entrada 29 tablas. P01–P24 y T01–T18 únicas, consecutivas y sin pérdida.
+- Semántica: ADR y LOG coinciden en núcleo Accepted, autoridad, fecha y
+  límites; conteo 1/7/16 y 20 acuerdos técnicos I pendientes comprobado.
+  Sin afirmación vigente de aceptación total o de ADR-004 todavía Proposed.
+- Preservación: A–G y matriz de roles idénticos byte a byte tras retirar
+  únicamente el aviso de vigencia y H; 17 contratos idénticos a entrada/HEAD.
+  Las seis rutas ajenas de main y ambos índices Git conservan SHA-256.
+- Diff: git diff --check correcto; solo los tres documentos autorizados,
+  staging vacío y rama/HEAD/worktrees preservados. Revisión completa del
+  delta de estado, políticas, tablas y evidencia histórica.
+
+Comandos de esta revisión, desde el worktree MTEC-40; herramientas de E:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 /private/tmp/mtec40-validation-venv/bin/python \
+  -m unittest discover -s contracts/tests -p 'test_*.py' -v
+# Usar el CLI Redocly fijado y disponible según E:
+node /private/tmp/mtec40-accepted-20261101/validate.mjs baseline
+node /private/tmp/mtec40-accepted-20261101/validate.mjs actual
+git diff --check
+git diff --cached --name-only
+git status --short --untracked-files=all
+```
+
+La validación complementaria usa markdownlint 0.38.0 y Markdown-it 14.1.0
+sin supresión de reglas; comprueba enlaces/anclas, tablas, bloques, estados,
+conteos y preservación histórica. Baseline se obtiene de los tres archivos
+antes de editar; el verificador y resultados auxiliares están fuera del repo
+en /private/tmp/mtec40-accepted-20261101. La comparación Redocly ejecuta el
+CLI 2.71.2 por archivo sobre los mismos 17 contratos, en baseline y salida.
+Python 3.15/Node 24.14.0 locales difieren del Python 3.12 del CI; no se
+atribuye reproducción de ese runtime ni reejecución remota del workflow.
+
+### Dictamen, limitaciones y acciones
+
+**QA posterior: QA PASS WITH NOTES. Arquitectura base: Accepted por el
+responsable del proyecto el 2026-11-01. Perfil de seguridad: pendiente.**
+Las notas son los riesgos abiertos de continuidad/reauth/residual,
+contratos, corte operativo/Azure y estilo MD013; no se declaran controles
+implementados ni revisiones humanas terminadas. La sincronización main
+quedó detenida por sus cambios locales; limpieza revisada sin ramas
+eliminables. Ambos límites son resultados conservadores de la inspección.
+
+La aprobación base no acredita perfil de seguridad, certificación,
+contratos MTEC-15, conformidades técnicas ni controles efectivos Azure.
+No se ejecutaron pruebas de autenticación aún no implementada, builds de
+aplicaciones sin cambios, Maven/SQL del independiente, barrido de todas
+las URLs externas, ataques, envío de correo o pruebas/configuración Azure.
+Los validadores contractuales verifican borradores, no seguridad operativa.
+
+Pendientes: designar SEG y revisores nominales; resolver parámetros I,
+continuidad/reauth y aceptación residual; aprobar interfaces MTEC-15;
+coordinar ambos métodos/sesiones en MTEC-36 y autoridad única de ms-users;
+asignar personas/fechas y obtener registro revisado de MTEC-40. La
+aprobación del RP se limita al núcleo y no sustituye ninguna conformidad
+técnica o de seguridad pendiente. No se declara terminada revisión humana.
+
+Solo se modifican ADR-004, DECISION_LOG y este addendum con su aviso de
+vigencia. Según UPDATE_PROTOCOL no cambian hechos de implementación;
+ADR-004 §9 identifica dueños para alineación posterior. No se modifican
+ADR-001/002/003, contratos, código, workflows, índice Git ni cambios locales
+ajenos. No hubo commit, push, PR, merge, cambios Jira, Azure o APIM.
+MTEC-40 sigue abierto; no se inicia MTEC-36 ni otra subfase automáticamente.
+
+## I. Conciliación de sesiones y bloqueo de main 2026-11-01
+
+Fecha: **2026-11-01**, America/Costa_Rica. Destinatarios: mantenedores y
+revisores de MTEC-40. Este addendum prevalece para sesiones, Jira y diagnóstico
+Git; A–H conservan sus resultados históricos íntegros. No acredita revisión
+humana de seguridad ni implementación de controles.
+
+### Alcance, metodología y evidencia
+
+Se contrastaron ADR-004, DECISION_LOG, este QA, ADR-001, contrato de identidad,
+Users OpenAPI, P01–P24, T01–T18 y validadores existentes. Se inspeccionaron los
+seis archivos de main y el diff completo de sus cuatro archivos versionados,
+HEAD, índices, worktrees, ancestry y rutas modificadas por origin/main.
+Se consultaron en solo lectura Jira MTEC-40/36/15 y MTEC-9/13/19/22/31 para
+identificar trabajo relacionado; no se modificaron tickets.
+
+**Verificado:** git ls-remote confirma main remoto en
+0e714333d86a744188cbd162e6dc402601dfd76e, igual a origin/main local.
+La consulta también solicitó docs/mtec40-adr004-formal-review y no devolvió esa
+rama remota; su referencia origin local permanece, pero no acredita existencia
+remota vigente. No se hizo fetch ni prune. El primer intento remoto falló por
+DNS restringido; la repetición de solo lectura completó.
+
+**Verificado documentalmente en Jira:** MTEC-40 está In Progress, sin
+comentarios; su descripción registra Accepted delimitado y límites 60/30/8.
+MTEC-36 sigue To Do y bloqueado por MTEC-40; ya incluye ambos métodos y sesiones.
+MTEC-15 sigue In Progress, con borradores/CI publicados y revisión conjunta
+pendiente. Actualizaciones consultadas del 2026-11-01: MTEC-40 a las 19:08:26,
+MTEC-36 a las 19:07:58 y MTEC-15 a las 19:08:29, todas -06:00. Las referencias
+de H a MTEC-40 To Do y MTEC-36 solo Google ya son históricas.
+Fuentes: [MTEC-40](https://allanaron06122005.atlassian.net/browse/MTEC-40),
+[MTEC-36](https://allanaron06122005.atlassian.net/browse/MTEC-36) y
+[MTEC-15](https://allanaron06122005.atlassian.net/browse/MTEC-15).
+La autoridad es la aprobación del responsable del proyecto el 2026-11-01,
+ratificada en las descripciones; no el merge, el estado del ticket o este QA.
+
+**Inferido:** relación de cambios de main con tickets por contenido; no prueba
+autoría, encargo ni aprobación. **Documentado pero no verificado:** CI histórico
+y controles futuros; no se reejecutó CI remoto ni se auditó ms-users independiente.
+**No determinado:** revisores nominales, conformidades técnicas/seguridad,
+actividad humana implementada, aprobación contractual conjunta y Azure efectivo.
+
+### Política conciliada y decisiones P01–P24
+
+Fuente canónica: [ADR-004 §3.4](../context/decisions/ADR-004-seguridad-autenticacion.md#34-expiración-renovación-revocación-y-replay),
+reflejada en §2.1, P10, §8, acta §10 y DECISION_LOG.
+
+- Ventana renovable de 60 minutos, inactividad de 30 minutos y máximo absoluto
+  de ocho horas desde el login inicial. Vence el primer límite aplicable.
+- Advertencia previa; renovación solo por solicitud válida mientras siga
+  vigente y expiración verificada en servidor. Al vencer se exige
+  reautenticación; ninguna renovación reinicia el máximo absoluto.
+- Sondeos automáticos no cuentan como actividad humana. Su señal, validación
+  y cómputo seguro necesitan especificación; polling/refresh o un timestamp
+  del navegador no bastan para mantener viva la sesión.
+- Renovación requiere mecanismos seguros por diseñar. JWT de 15 min, aviso
+  de 5 min, refresh rotatorio y sus detalles, cookies/CSRF/CORS, skew y claves
+  siguen Proposed. No se aprueba acceso residual tras vencer la sesión;
+  P10/P15 deben diseñar cómo cumplir esos límites en todos los validadores.
+
+P01–P24 mantienen **1 Accepted, 7 Accepted parcial y 16 Proposed**, con T01–T18
+completas. P10 sigue parcial: límites resueltos, mecanismos pendientes. Las
+20 filas con algún acuerdo técnico I pendiente conservan ese alcance.
+MTEC-36 sigue dependiendo de revisión MTEC-40 y contratos MTEC-15 por interfaz;
+la ampliación funcional en Jira no autoriza implementación interoperable completa.
+No se atribuyen nuevas conformidades técnicas ni certificaciones de seguridad.
+
+### Estado Git e inventario de main
+
+| Worktree | Rama y HEAD | Estado de entrada y salida |
+|---|---|---|
+| Principal OneDrive, market_tec | main, de6192b4df8f75df1f58ad07b9c03710b2cc91c1 | Cuatro modificados y dos sin seguimiento; staging vacío; preservados |
+| ~/Developer/MarketTec/worktrees/market-tec-mtec40 | docs/mtec40-adr004-formal-review, 1ca76fc0ef555ec9efb0fb227da999958a16d489 | Tres documentos modificados preexistentes; solo esos tres editados; staging vacío |
+
+main...origin/main: **0 commits exclusivos locales / 2 remotos**, sin divergencia;
+main es ancestro. Los commits 1ca76fc y 0e71433 solo cambian ADR-004, DECISION_LOG
+y docs/MTEC40_QA_REVIEW.md. Ninguna de las seis rutas siguientes está en ese delta;
+los dos archivos untracked tampoco existen en origin/main.
+
+| Archivo local | Cambio inspeccionado | Relación y conservación recomendada |
+|---|---|---|
+| context/phase2/API_AND_EVENTS.md | +33/-3: compatibilidad Angular plana, message.sent v1, borradores y corrección reintentos/DLQ | MTEC-15; filtros/paginación MTEC-9/13; eventos MTEC-31/22. Conservar delta en su ruta para revisión contractual |
+| context/phase2/IMPLEMENTATION_ROADMAP.md | +17/-2: ADR-001 Accepted, hitos y secuencia de PR | MTEC-15 y planificación por servicios. Conservar junto con COLLABORATION, enlazado desde este delta |
+| context/phase2/JIRA_BACKLOG.md | +17/-1: corte 29-10, cobertura contractual y recomendaciones sin duplicados | MTEC-15/9/13 e identidad/eventos. Conservar; revisar estados históricos y claves propuestas antes de adoptar |
+| context/phase2/MICROSERVICES_ARCHITECTURE.md | +19/-4: ADR-001 Accepted, ownership y eliminación de consulta síncrona por operación a users | ADR-001/MTEC-19 y MTEC-36/40. Conservar; la prosa JWT pendiente precede al núcleo Accepted actual |
+| MARKETTEC_JIRA_INVENTORY.md | Sin seguimiento: inventario técnico, evidencia, deuda y propuestas MTEC-1–18, corte 18-10 | Fuente citada por MTEC-9/13. Preservar íntegro; decidir después si conservar como auditoría histórica o consolidar, sin asumir estados vigentes |
+| contracts/COLLABORATION.md | Sin seguimiento: ownership A/B/C, fakes, contratos y secuencia de PR | MTEC-15 y coordinación de servicios. Conservar con roadmap; no convertir propuesta en asignación aprobada |
+
+La relación por contenido es **Inferida**; existencia y descripción de los
+tickets citados se verificaron en Jira. Los cambios son anteriores a esta tarea
+y requieren revisión propia de estados, arquitectura y planificación. No se
+corrigen automáticamente ni se incorporan al trabajo MTEC-40.
+
+Riesgo de conflicto con 0e71433: **bajo, sin intersección de rutas**. Persiste
+riesgo de perder trabajo al limpiar/cambiar de rama/mover untracked sin respaldo,
+y de introducir prosa obsoleta o romper el enlace roadmap/COLLABORATION.
+**Sincronización bloqueada: main continúa sucio.** No se declara sincronizado.
+
+### Procedimiento de preservación y sincronización; no ejecutado
+
+1. Conservar los seis archivos en el worktree principal y los tres documentos
+   MTEC-40 en su worktree actual. Releer estado, HEAD y main remoto antes de
+   cualquier operación futura; no asumir que 0e71433 seguirá vigente.
+2. En una operación posterior autorizada, guardar respaldo externo duradero
+   de los seis archivos completos, diff binario de los cuatro versionados,
+   estado/HEAD y hashes. Copiar untracked explícitamente: git diff no los
+   incluye. Respaldar los tres documentos y delta MTEC-40 por separado.
+   Verificar hashes y git apply --check sobre una copia de la base de6192b,
+   sin aplicar parches al worktree real.
+3. Revisar con el mantenedor qué conservar como cambio técnico o evidencia
+   histórica. Si después autoriza Git, preservar lo seleccionado en una rama
+   propia de documentación/contratos basada en de6192b, con commit revisado
+   y respaldo íntegro de lo restante. No trasladar ni eliminar untracked por
+   inferencia; su destino requiere decisión expresa. No mezclarlo con MTEC-40.
+4. Solo después de preservar el trabajo y dejar main limpio deliberadamente,
+   actualizar referencias, verificar ancestry/rutas y avanzar mediante
+   git merge --ff-only origin/main. Ante divergencia, colisión o cambios
+   locales, detenerse para revisión; no reset, clean, stash automático ni
+   sobrescritura. Repetir estado, diff --check y validación pertinente.
+
+No se ejecutaron traslado, limpieza, commit ni avance. La evidencia temporal
+externa de esta auditoría no sustituye el respaldo duradero recomendado.
+
+### Validaciones y preservación
+
+- Contratos: 12/12 pruebas aprobadas, incluidas cuatro formales JSON Schema.
+- OpenAPI: 3/3 válidos, cero errores y seis advertencias preexistentes:
+  info-license y operation-4xx-response en GET /health, dos por contrato.
+- Enlaces/anclas: 61 referencias locales válidas, incluidas 12 anclas;
+  33 tablas rectangulares y bloques cercados cerrados.
+- Markdown: solo MD013; ADR 207 → 208, LOG 4 → 3, QA 78 → 87;
+  total 289 → 298. Nueve avisos netos añadidos; ninguna otra regla fallida.
+  Se conservan tablas largas y resultados históricos, sin supresión de reglas.
+- Semántica: P01–P24/T01–T18 íntegras, estados 1/7/16 y 20 acuerdos técnicos
+  I pendientes; política y estado Jira coherentes en ADR/LOG y este addendum.
+- Preservación: A–H son prefijo idéntico byte a byte al QA de entrada;
+  25 hashes SHA-256 sin cambios: seis archivos de main, 17 contratos y ambos
+  índices Git. Solo los tres documentos autorizados difieren en MTEC-40.
+- git diff --check correcto en ambos worktrees; staging vacío, ramas y HEAD
+  sin cambios. main conserva cuatro modificados y dos sin seguimiento.
+
+Reproducción desde el worktree MTEC-40 con las herramientas fijadas de E:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 /private/tmp/mtec40-validation-venv/bin/python \
+  -m unittest discover -s contracts/tests -p 'test_*.py' -v
+node /Users/allanaron06122005gmail.com/Library/CloudStorage/OneDrive-EstudiantesITCR/design/market_tec/contracts/node_modules/@redocly/cli/bin/cli.js \
+  lint contracts/openapi/users.json contracts/openapi/catalog.json \
+  contracts/openapi/notifications.json --format=json
+node /private/tmp/mtec40-sessions-20261101/validate.mjs baseline
+node /private/tmp/mtec40-sessions-20261101/validate.mjs actual
+git diff --check
+git diff --cached --name-only
+```
+
+El verificador complementario adapta H a baseline Accepted y comprueba A–H
+como prefijo intacto, enlaces/anclas, tablas/cercas, P/T, estados y sesiones.
+Usa Markdown-it 14.1.0 y markdownlint 0.38.0 con reglas por defecto completas,
+sin supresiones. No prueba mecanismos de seguridad. No se instalaron módulos
+en el repositorio ni se ejecutaron builds sin cambios de código, pruebas de
+sesión aún no implementada, CI remoto, barrido HTTP de todas las URLs, Azure
+ni SQL. Python local 3.15 difiere de 3.12 en CI; Node local 24.14.0.
+
+### Dictamen de preparación y pendientes
+
+**QA documental: QA PASS WITH NOTES. ADR-004 Accepted exclusivamente para
+arquitectura y política funcional aprobadas; perfil de seguridad pendiente.**
+Las notas son MD013, actividad/renovación, revocación, contratos,
+continuidad/reauth, transición operativa y evidencia Azure.
+
+El delta es revisable para futuro commit/push de MTEC-40 por el mantenedor,
+con revisión de los cambios preexistentes y este addendum. No acredita cierre
+de MTEC-40, revisión técnica/seguridad ni inicio de MTEC-36. main no está
+preparado para sincronización mientras esos seis archivos sigan sin resolver.
+No hubo commit, push, merge, PR, staging, cambio de rama, reset, clean, stash,
+rebase, force push, prune ni operación Azure/Jira. No se inicia subfase 3.
+
+Según UPDATE_PROTOCOL solo cambian ADR-004, DECISION_LOG y este QA. No se
+alteran hechos de implementación, contratos ni configuración; no procede
+actualizar documentación de ejecución como si los controles ya existieran.
+
+## J. Validación de prepublicación — 2026-11-02
+
+Fecha: **2026-11-02**, America/Costa_Rica. Destinatarios: mantenedores y
+revisores técnicos de MTEC-40. Alcance: los tres documentos autorizados,
+compatibilidad del diff contra main remoto y repetición del QA documental.
+A–I se conservan íntegros; esta comprobación no añade aprobación de seguridad.
+
+### Metodología, evidencia y base de revisión
+
+**Verificado:** worktree MTEC-40 y rama docs/mtec40-adr004-formal-review,
+HEAD de entrada 1ca76fc0ef555ec9efb0fb227da999958a16d489; tres modificaciones
+preexistentes y staging vacío. Se leyeron íntegramente ADR-004, DECISION_LOG
+y este QA, además de gobernanza, ADR-001, identidad, Users OpenAPI y CI.
+Se contrastaron los flujos con código Angular y contratos, sin modificarlos.
+
+Tras git fetch origin, main remoto y origin/main coinciden en
+0e714333d86a744188cbd162e6dc402601dfd76e. El merge-base real con HEAD es
+1ca76fc0ef555ec9efb0fb227da999958a16d489. El único commit remoto adicional
+es el merge 0e71433, con árbol idéntico a HEAD:
+62e1ac646831ee2b75f5c00e27a96d4298bad50d. No introduce diferencias de
+archivos desde el ancestro común; el diff previsto del PR comprende únicamente
+ADR-004, DECISION_LOG y este QA. No se integra main en la rama.
+
+git ls-remote --heads origin confirmó main y la ausencia de la rama MTEC-40
+en GitHub antes de publicar; la referencia origin local antigua no demuestra
+su existencia remota. La consulta inicial sin acceso de red falló por DNS;
+la repetición con acceso de lectura completó correctamente.
+
+**Verificado documentalmente en Jira:** consulta de solo lectura de MTEC-40,
+MTEC-36, MTEC-15, MTEC-12 y MTEC-37: estados In Progress, To Do, In Progress,
+In Progress e In Progress respectivamente. MTEC-40 y MTEC-36 registran ambos
+métodos, los tres dominios exactos y sesiones 60 min/30 min/8 h; no hay nuevas
+conformidades técnicas acreditadas. No se modificó Jira.
+
+### Resultados reproducidos
+
+- Suite contractual: **12/12 aprobadas**, incluidas cuatro pruebas formales
+  de JSON Schema Draft 2020-12 y sus ejemplos positivos/negativos.
+- Redocly **2.71.2**: **3/3 OpenAPI válidos**, cero errores y seis avisos.
+  Comparación por regla, severidad y puntero contra contratos exportados de
+  HEAD: idénticos. Son info-license y operation-4xx-response en GET /health
+  para cada servicio; ningún contrato fue modificado.
+- Markdown-it **14.1.0**: **61 referencias locales válidas, 12 anclas,
+  33 tablas rectangulares**, cercas cerradas. Se analizan también enlaces
+  cuyos rótulos ocupan varias líneas.
+- P01–P24 y T01–T18 únicas y consecutivas; estados **1 Accepted, 7 Accepted
+  parcial, 16 Proposed**. Revisión de P10/P15, §2.1/3.4/8/10 y DECISION_LOG:
+  primer límite aplicable, renovación solo vigente, ocho horas sin reinicio,
+  reloj servidor y sondeos sin actividad humana coherentes. JWT/aviso exactos,
+  revocación y mecanismos de seguridad permanecen pendientes.
+- markdownlint **0.38.0**, todas las reglas por defecto: únicamente MD013.
+  HEAD → versión recibida/final: ADR **228 → 208**, LOG **9 → 3**,
+  QA **78 → 87**; total **315 → 298**. Por contenido de línea, ADR conserva
+  169 avisos, añade/cambia 39 y retira/cambia 59; LOG conserva tres y retira
+  seis; QA conserva 78 y añade nueve en H/I. Este apartado no añade avisos.
+  No se atribuyen todos al pasado ni se ocultan reglas. Su pertinencia es
+  de estilo: tablas, referencias y prosa larga; no justifica alterar decisiones.
+- Preservación: QA de entrada A–I es prefijo idéntico byte a byte; 17 contratos
+  idénticos a HEAD/entrada. main conserva HEAD de6192b, rama, índice, diff y
+  hashes de sus seis archivos (cuatro modificados y dos sin seguimiento).
+- git diff --check correcto; revisión del delta de los tres documentos sin
+  contratos, secretos, respaldos, logs privados ni cambios ajenos.
+
+Comandos ejecutados desde el worktree MTEC-40, con herramientas temporales:
+
+```sh
+QA_TMP=/private/tmp/mtec40-publication-20261102
+PYTHONDONTWRITEBYTECODE=1 "$QA_TMP/venv/bin/python" \
+  -m unittest discover -s contracts/tests -p 'test_*.py' -v
+python3 "$QA_TMP/openapi.py"
+node "$QA_TMP/validate.mjs" head
+node "$QA_TMP/validate.mjs" input
+node "$QA_TMP/validate.mjs" actual
+node "$QA_TMP/md013.mjs"
+python3 "$QA_TMP/snapshot.py" verify
+git diff --check
+git diff --cached --check
+```
+
+Se recrearon fuera del repositorio las dependencias fijadas en
+requirements-validation.txt y las versiones Markdown de E; el CLI Redocly
+ya disponible en el worktree principal se usó en lectura. Los auxiliares
+temporales exportan HEAD, ejecutan ese mismo CLI por archivo y comparan sus
+diagnósticos; analizan Markdown y huellas de preservación. No se versionan.
+El verificador histórico de E exige Proposed y no aplica al baseline Accepted:
+se adaptó a los estados reales y al análisis de enlaces con Markdown-it.
+
+### Dictamen, riesgos y acciones pendientes
+
+**QA de prepublicación: QA PASS WITH NOTES.** Arquitectura base Accepted por
+el responsable del proyecto el 2026-11-01; conformidades técnicas y de
+seguridad pendientes. No se detectan cambios remotos incompatibles ni fallos
+nuevos bloqueantes. Persisten continuidad de buzón, reautenticación, actividad,
+refresh/replay, revocación/residual, claves, contratos y acceso directo/Azure.
+
+Python local **3.15.0** y Node **24.14.0**; no se reproduce Python 3.12 del CI.
+GitHub Actions del nuevo candidato no se acredita ejecutado/aprobado. El
+workflow contractual solo se dispara por cambios en contracts o su workflow;
+este alcance documental no satisface ese filtro. No se ejecutan builds de
+aplicaciones sin cambios, autenticación no implementada, Maven/SQL del servicio
+independiente, barrido HTTP externo ni pruebas/configuración Azure.
+
+Pendientes: crear manualmente el PR como Draft, revisión por servicios,
+frontend, APIM y seguridad; acordar perfil y riesgos; aprobar interfaces en
+MTEC-15 y coordinar MTEC-36/MTEC-12/MTEC-37. MTEC-40 continúa In Progress;
+MTEC-36 permanece To Do. Según UPDATE_PROTOCOL, solo se publican las dos
+fuentes de decisión y este QA; no cambian hechos de ejecución ni contratos.
