@@ -1,0 +1,645 @@
+[
+  {
+    "name": "google-login",
+    "schema": "AuthResponse",
+    "valid": true,
+    "value": {
+      "token": "internal-jwt-placeholder",
+      "tokenType": "Bearer",
+      "expiresAt": 1790000900,
+      "user": {
+        "userId": "usr_abc123",
+        "email": "usuario@estudiantec.cr",
+        "nombre": "Ana López",
+        "fotoPerfil": "https://example.invalid/avatar.png"
+      },
+      "session": {
+        "sessionId": "session-placeholder",
+        "status": "active",
+        "serverTime": 1790000000,
+        "authenticatedAt": 1790000000,
+        "renewedAt": 1790000000,
+        "lastActivityAt": 1790000000,
+        "windowExpiresAt": 1790003600,
+        "inactivityExpiresAt": 1790001800,
+        "absoluteExpiresAt": 1790028800,
+        "expiresAt": 1790001800,
+        "warningAt": 1790001500
+      },
+      "csrfToken": "csrf-placeholder"
+    }
+  },
+  {
+    "name": "email-login-same-internal-user",
+    "schema": "AuthResponse",
+    "valid": true,
+    "value": {
+      "token": "internal-jwt-placeholder",
+      "tokenType": "Bearer",
+      "expiresAt": 1790000900,
+      "user": {
+        "userId": "usr_abc123",
+        "email": "usuario@estudiantec.cr",
+        "nombre": "Ana López",
+        "fotoPerfil": "https://example.invalid/avatar.png"
+      },
+      "session": {
+        "sessionId": "session-placeholder",
+        "status": "active",
+        "serverTime": 1790000000,
+        "authenticatedAt": 1790000000,
+        "renewedAt": 1790000000,
+        "lastActivityAt": 1790000000,
+        "windowExpiresAt": 1790003600,
+        "inactivityExpiresAt": 1790001800,
+        "absoluteExpiresAt": 1790028800,
+        "expiresAt": 1790001800,
+        "warningAt": 1790001500
+      },
+      "csrfToken": "csrf-placeholder"
+    }
+  },
+  {
+    "name": "google-attempt",
+    "schema": "AttemptResponse",
+    "valid": true,
+    "value": {
+      "attemptId": "attempt-placeholder",
+      "method": "google",
+      "purpose": "login",
+      "expiresAt": 1790000300,
+      "csrfToken": "csrf-placeholder",
+      "nonce": "nonce-placeholder"
+    }
+  },
+  {
+    "name": "email-attempt",
+    "schema": "AttemptResponse",
+    "valid": true,
+    "value": {
+      "attemptId": "email-attempt",
+      "method": "institutional-email",
+      "purpose": "login",
+      "expiresAt": 1790000600,
+      "csrfToken": "csrf-placeholder"
+    }
+  },
+  {
+    "name": "google-missing-attempt",
+    "schema": "GoogleAuthRequest",
+    "valid": false,
+    "value": {
+      "credential": "placeholder"
+    }
+  },
+  {
+    "name": "forged-principal-in-request",
+    "schema": "GoogleAuthRequest",
+    "valid": false,
+    "value": {
+      "credential": "placeholder",
+      "attemptId": "attempt",
+      "userId": "victim"
+    }
+  },
+  {
+    "name": "google-missing-nonce",
+    "schema": "AttemptResponse",
+    "valid": false,
+    "value": {
+      "attemptId": "attempt-placeholder",
+      "method": "google",
+      "purpose": "login",
+      "expiresAt": 1790000300,
+      "csrfToken": "csrf-placeholder"
+    }
+  },
+  {
+    "name": "email-cannot-carry-google-nonce",
+    "schema": "AttemptResponse",
+    "valid": false,
+    "value": {
+      "attemptId": "attempt-placeholder",
+      "method": "institutional-email",
+      "purpose": "login",
+      "expiresAt": 1790000300,
+      "csrfToken": "csrf-placeholder",
+      "nonce": "nonce-placeholder"
+    }
+  },
+  {
+    "name": "auth-no-session",
+    "schema": "AuthResponse",
+    "valid": false,
+    "value": {
+      "token": "internal-jwt-placeholder",
+      "tokenType": "Bearer",
+      "expiresAt": 1790000900,
+      "user": {
+        "userId": "usr_abc123",
+        "email": "usuario@estudiantec.cr",
+        "nombre": "Ana López",
+        "fotoPerfil": "https://example.invalid/avatar.png"
+      },
+      "csrfToken": "csrf-placeholder"
+    }
+  },
+  {
+    "name": "auth-no-refresh-secret-in-json",
+    "schema": "AuthResponse",
+    "valid": false,
+    "value": {
+      "token": "internal-jwt-placeholder",
+      "tokenType": "Bearer",
+      "expiresAt": 1790000900,
+      "user": {
+        "userId": "usr_abc123",
+        "email": "usuario@estudiantec.cr",
+        "nombre": "Ana López",
+        "fotoPerfil": "https://example.invalid/avatar.png"
+      },
+      "session": {
+        "sessionId": "session-placeholder",
+        "status": "active",
+        "serverTime": 1790000000,
+        "authenticatedAt": 1790000000,
+        "renewedAt": 1790000000,
+        "lastActivityAt": 1790000000,
+        "windowExpiresAt": 1790003600,
+        "inactivityExpiresAt": 1790001800,
+        "absoluteExpiresAt": 1790028800,
+        "expiresAt": 1790001800,
+        "warningAt": 1790001500
+      },
+      "csrfToken": "csrf-placeholder",
+      "refreshToken": "placeholder"
+    }
+  },
+  {
+    "name": "auth-no-google-sub-in-user",
+    "schema": "AuthResponse",
+    "valid": false,
+    "value": {
+      "token": "internal-jwt-placeholder",
+      "tokenType": "Bearer",
+      "expiresAt": 1790000900,
+      "user": {
+        "userId": "usr_abc123",
+        "email": "usuario@estudiantec.cr",
+        "nombre": "Ana López",
+        "fotoPerfil": "https://example.invalid/avatar.png",
+        "googleSub": "external-placeholder"
+      },
+      "session": {
+        "sessionId": "session-placeholder",
+        "status": "active",
+        "serverTime": 1790000000,
+        "authenticatedAt": 1790000000,
+        "renewedAt": 1790000000,
+        "lastActivityAt": 1790000000,
+        "windowExpiresAt": 1790003600,
+        "inactivityExpiresAt": 1790001800,
+        "absoluteExpiresAt": 1790028800,
+        "expiresAt": 1790001800,
+        "warningAt": 1790001500
+      },
+      "csrfToken": "csrf-placeholder"
+    }
+  },
+  {
+    "name": "all-logout-needs-fresh-proof",
+    "schema": "LogoutRequest",
+    "valid": false,
+    "value": {
+      "scope": "all"
+    }
+  },
+  {
+    "name": "proof-existing-method-required",
+    "schema": "ProofAttemptRequest",
+    "valid": false,
+    "value": {
+      "method": "google",
+      "purpose": "reauthenticate"
+    }
+  },
+  {
+    "name": "proof-link-cannot-select-existing-id",
+    "schema": "ProofAttemptRequest",
+    "valid": false,
+    "value": {
+      "method": "google",
+      "purpose": "link",
+      "authMethodId": "other"
+    }
+  },
+  {
+    "name": "poll-is-not-human-activity",
+    "schema": "ActivityRequest",
+    "valid": false,
+    "value": {
+      "interactionId": "poll",
+      "kind": "poll"
+    }
+  },
+  {
+    "name": "client-cannot-choose-activity-time",
+    "schema": "ActivityRequest",
+    "valid": false,
+    "value": {
+      "interactionId": "a",
+      "kind": "foreground-interaction",
+      "timestamp": 1790001500
+    }
+  },
+  {
+    "name": "complete-session-error",
+    "schema": "AuthErrorEnvelope",
+    "valid": true,
+    "value": {
+      "error": {
+        "code": "SESSION_EXPIRED",
+        "message": "Se requiere autenticación.",
+        "details": [],
+        "correlationId": "fixture",
+        "timestamp": 1790001800
+      }
+    }
+  },
+  {
+    "name": "error-missing-code",
+    "schema": "AuthErrorEnvelope",
+    "valid": false,
+    "value": {
+      "error": {
+        "message": "Se requiere autenticación.",
+        "details": [],
+        "correlationId": "fixture",
+        "timestamp": 1790001800
+      }
+    }
+  },
+  {
+    "name": "error-missing-message",
+    "schema": "AuthErrorEnvelope",
+    "valid": false,
+    "value": {
+      "error": {
+        "code": "SESSION_EXPIRED",
+        "details": [],
+        "correlationId": "fixture",
+        "timestamp": 1790001800
+      }
+    }
+  },
+  {
+    "name": "error-missing-details",
+    "schema": "AuthErrorEnvelope",
+    "valid": false,
+    "value": {
+      "error": {
+        "code": "SESSION_EXPIRED",
+        "message": "Se requiere autenticación.",
+        "correlationId": "fixture",
+        "timestamp": 1790001800
+      }
+    }
+  },
+  {
+    "name": "error-missing-correlationId",
+    "schema": "AuthErrorEnvelope",
+    "valid": false,
+    "value": {
+      "error": {
+        "code": "SESSION_EXPIRED",
+        "message": "Se requiere autenticación.",
+        "details": [],
+        "timestamp": 1790001800
+      }
+    }
+  },
+  {
+    "name": "error-missing-timestamp",
+    "schema": "AuthErrorEnvelope",
+    "valid": false,
+    "value": {
+      "error": {
+        "code": "SESSION_EXPIRED",
+        "message": "Se requiere autenticación.",
+        "details": [],
+        "correlationId": "fixture"
+      }
+    }
+  },
+  {
+    "name": "revoked-never-success",
+    "schema": "SessionSnapshot",
+    "valid": false,
+    "value": {
+      "sessionId": "session-placeholder",
+      "status": "revoked",
+      "serverTime": 1790000000,
+      "authenticatedAt": 1790000000,
+      "renewedAt": 1790000000,
+      "lastActivityAt": 1790000000,
+      "windowExpiresAt": 1790003600,
+      "inactivityExpiresAt": 1790001800,
+      "absoluteExpiresAt": 1790028800,
+      "expiresAt": 1790001800,
+      "warningAt": 1790001500
+    }
+  },
+  {
+    "name": "session-minimum-deadline",
+    "schema": "SessionSnapshot",
+    "valid": false,
+    "value": {
+      "sessionId": "session-placeholder",
+      "status": "active",
+      "serverTime": 1790000000,
+      "authenticatedAt": 1790000000,
+      "renewedAt": 1790000000,
+      "lastActivityAt": 1790000000,
+      "windowExpiresAt": 1790003600,
+      "inactivityExpiresAt": 1790001800,
+      "absoluteExpiresAt": 1790028800,
+      "expiresAt": 1790003600,
+      "warningAt": 1790001500
+    },
+    "semantic": "session"
+  },
+  {
+    "name": "session-absolute-never-reset",
+    "schema": "SessionSnapshot",
+    "valid": false,
+    "value": {
+      "sessionId": "session-placeholder",
+      "status": "active",
+      "serverTime": 1790000000,
+      "authenticatedAt": 1790000000,
+      "renewedAt": 1790000000,
+      "lastActivityAt": 1790000000,
+      "windowExpiresAt": 1790003600,
+      "inactivityExpiresAt": 1790001800,
+      "absoluteExpiresAt": 1790032400,
+      "expiresAt": 1790001800,
+      "warningAt": 1790001500
+    },
+    "semantic": "session"
+  },
+  {
+    "name": "session-equality-expired",
+    "schema": "SessionSnapshot",
+    "valid": false,
+    "value": {
+      "sessionId": "session-placeholder",
+      "status": "active",
+      "serverTime": 1790001800,
+      "authenticatedAt": 1790000000,
+      "renewedAt": 1790000000,
+      "lastActivityAt": 1790000000,
+      "windowExpiresAt": 1790003600,
+      "inactivityExpiresAt": 1790001800,
+      "absoluteExpiresAt": 1790028800,
+      "expiresAt": 1790001800,
+      "warningAt": 1790001500
+    },
+    "semantic": "session"
+  },
+  {
+    "name": "session-warning-must-precede-expiry",
+    "schema": "SessionSnapshot",
+    "valid": false,
+    "value": {
+      "sessionId": "session-placeholder",
+      "status": "active",
+      "serverTime": 1790000000,
+      "authenticatedAt": 1790000000,
+      "renewedAt": 1790000000,
+      "lastActivityAt": 1790000000,
+      "windowExpiresAt": 1790003600,
+      "inactivityExpiresAt": 1790001800,
+      "absoluteExpiresAt": 1790028800,
+      "expiresAt": 1790001800,
+      "warningAt": 1790001800
+    },
+    "semantic": "session"
+  },
+  {
+    "name": "access-never-outlives-session",
+    "schema": "AuthResponse",
+    "valid": false,
+    "value": {
+      "token": "internal-jwt-placeholder",
+      "tokenType": "Bearer",
+      "expiresAt": 1790001801,
+      "user": {
+        "userId": "usr_abc123",
+        "email": "usuario@estudiantec.cr",
+        "nombre": "Ana López",
+        "fotoPerfil": "https://example.invalid/avatar.png"
+      },
+      "session": {
+        "sessionId": "session-placeholder",
+        "status": "active",
+        "serverTime": 1790000000,
+        "authenticatedAt": 1790000000,
+        "renewedAt": 1790000000,
+        "lastActivityAt": 1790000000,
+        "windowExpiresAt": 1790003600,
+        "inactivityExpiresAt": 1790001800,
+        "absoluteExpiresAt": 1790028800,
+        "expiresAt": 1790001800,
+        "warningAt": 1790001500
+      },
+      "csrfToken": "csrf-placeholder"
+    },
+    "semantic": "auth"
+  },
+  {
+    "name": "internal-claims",
+    "schema": "InternalAccessClaims",
+    "valid": true,
+    "value": {
+      "iss": "https://identity.dev.markettec.invalid",
+      "aud": "markettec-api-dev",
+      "sub": "usr_abc123",
+      "sid": "session-placeholder",
+      "iat": 1790000000,
+      "exp": 1790000900,
+      "jti": "token-placeholder"
+    }
+  },
+  {
+    "name": "google-claims-not-internal",
+    "schema": "InternalAccessClaims",
+    "valid": false,
+    "value": {
+      "iss": "https://accounts.google.com",
+      "aud": "client-placeholder",
+      "sub": "google-sub-placeholder",
+      "iat": 1790000000,
+      "exp": 1790000900
+    }
+  },
+  {
+    "name": "public-jwks-structural-only",
+    "schema": "Jwks",
+    "valid": true,
+    "value": {
+      "keys": [
+        {
+          "kty": "RSA",
+          "use": "sig",
+          "alg": "RS256",
+          "kid": "key-placeholder",
+          "n": "public_modulus_placeholder",
+          "e": "AQAB"
+        }
+      ]
+    }
+  },
+  {
+    "name": "private-material-forbidden",
+    "schema": "Jwks",
+    "valid": false,
+    "value": {
+      "keys": [
+        {
+          "kty": "RSA",
+          "use": "sig",
+          "alg": "RS256",
+          "kid": "key-placeholder",
+          "n": "public_modulus_placeholder",
+          "e": "AQAB",
+          "d": "private-placeholder"
+        }
+      ]
+    }
+  },
+  {
+    "name": "mailbox-verification-bound-attempt",
+    "schema": "MailboxVerificationRequired",
+    "valid": true,
+    "value": {
+      "status": "mailbox-verification-required",
+      "attemptId": "attempt-placeholder",
+      "expiresAt": 1790000300
+    }
+  },
+  {
+    "name": "mailbox-verification-bound-attempt-invalid",
+    "schema": "MailboxVerificationRequired",
+    "valid": false,
+    "value": {
+      "status": "authenticated",
+      "attemptId": "attempt-placeholder",
+      "expiresAt": 1790000300
+    }
+  },
+  {
+    "name": "email-accepted-uniform",
+    "schema": "EmailAccepted",
+    "valid": true,
+    "value": {
+      "status": "accepted",
+      "message": "Si la solicitud es elegible, recibirás un enlace de acceso."
+    }
+  },
+  {
+    "name": "email-accepted-uniform-invalid",
+    "schema": "EmailAccepted",
+    "valid": false,
+    "value": {
+      "status": "accepted",
+      "message": "Cuenta no registrada."
+    }
+  },
+  {
+    "name": "protected-proof-grant",
+    "schema": "ProofGrant",
+    "valid": true,
+    "value": {
+      "proofId": "proof-placeholder",
+      "purpose": "reauthenticate",
+      "method": "google",
+      "verifiedAt": 1790000000,
+      "expiresAt": 1790000300
+    }
+  },
+  {
+    "name": "protected-proof-grant-invalid",
+    "schema": "ProofGrant",
+    "valid": false,
+    "value": {
+      "proofId": "proof-placeholder",
+      "purpose": "login",
+      "method": "google",
+      "verifiedAt": 1790000000,
+      "expiresAt": 1790000300
+    }
+  },
+  {
+    "name": "custom-identity-metadata",
+    "schema": "IdentityMetadata",
+    "valid": true,
+    "value": {
+      "issuer": "https://identity.markettec.invalid",
+      "jwks_uri": "https://identity.markettec.invalid/.well-known/jwks.json",
+      "audiences": [
+        "markettec-api-placeholder"
+      ],
+      "access_token_algorithms": [
+        "RS256"
+      ],
+      "access_token_type": "at+jwt",
+      "contract_version": "0.2.0-draft"
+    }
+  },
+  {
+    "name": "custom-identity-metadata-invalid",
+    "schema": "IdentityMetadata",
+    "valid": false,
+    "value": {
+      "issuer": "https://identity.markettec.invalid",
+      "jwks_uri": "https://identity.markettec.invalid/.well-known/jwks.json",
+      "audiences": [
+        "markettec-api-placeholder"
+      ],
+      "access_token_algorithms": [
+        "HS256"
+      ],
+      "access_token_type": "at+jwt",
+      "contract_version": "0.2.0-draft"
+    }
+  },
+  {
+    "name": "own-linked-methods",
+    "schema": "MethodsResponse",
+    "valid": true,
+    "value": {
+      "userId": "usr_internal_placeholder",
+      "methods": [
+        {
+          "authMethodId": "method-placeholder",
+          "method": "google"
+        }
+      ]
+    }
+  },
+  {
+    "name": "own-linked-methods-invalid",
+    "schema": "MethodsResponse",
+    "valid": false,
+    "value": {
+      "userId": "usr_internal_placeholder",
+      "methods": [
+        {
+          "authMethodId": "method-placeholder",
+          "method": "google"
+        }
+      ],
+      "sub": "external-google-sub-placeholder"
+    }
+  }
+]

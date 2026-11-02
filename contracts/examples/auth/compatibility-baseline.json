@@ -1,0 +1,25 @@
+{
+  "sourceCommit": "4c087f847be73ea1be59f41cabee95c8ca94448b",
+  "files": {
+    "contracts/openapi/catalog.json": "c10be17fc031c9017b47bd0c3823da9729dcff4e1b80ab49ebe4131b3d2e7c9e",
+    "contracts/openapi/notifications.json": "e04882fbe53bfd171871265b3605bd83bb4577d0c00c040288607fadbd7d4675",
+    "contracts/events/MESSAGE_SENT_V1.md": "bd1b773f864dcaf32bcfa6c10b43ab6ddeb6a226c833c42af1ceb678001ce8d9",
+    "contracts/events/common-event-envelope.schema.json": "4514a5da78ce2b7ce4b7d0233a504f2d4983d7cfd7d8137feba92e05a3572941",
+    "contracts/events/message-sent.v1.schema.json": "280d000e193c8e507c47596b4fb1f8faab26f12d93151389a90828e56b795ca6",
+    "contracts/examples/events/message.sent.v1.valid.json": "3d93d15b86cac4506d523cc7896bd5c83d265ec1b7928f990b888b61b7fa05a6",
+    "contracts/examples/events/invalid/message.sent.v1.milliseconds.json": "72f4fb0d9839dde9f8df306511fcafd2d6b1aa6a2cb884402131ae0d5b681c3a",
+    "contracts/examples/events/invalid/message.sent.v1.missing-recipient.json": "a159d81631a69d7f02beae0bbf5ca2330ed32fd6767523634c7c0498509f62c9",
+    "contracts/examples/events/invalid/message.sent.v1.same-participant.json": "6168da63241a2b6ea6ffe07508ef5b5261560cbe4b1bf6b9891cd1bde46a0ef1"
+  },
+  "usersSchemas": {
+    "UserId": "925a224890f8da8cc50cf1969bfd4ecbceb73f791a784d9c9ed3e88c9d455fa4",
+    "EpochSeconds": "eea985fbe5f8748209d6f57f5c6b32fba317fff9b6a7ddbc9a47670dcc7d683a",
+    "HealthResponse": "82fe6d892da8a8e070a2ebb7f24750266680a44307ae49e374a6e3c09a309f1a",
+    "AuthenticatedUser": "80c5a8ebc86799c5a3ed806a9fe935a277ba730d10532808187cf5dcd9a1067a",
+    "UserProfileV1": "3b15788176ddd4bb52ef5d628d8f690da428935003dfc65e61f2f8b123832a6f",
+    "UpdateUserRequest": "c862b0bd3f7e73a03d8e7552cc283ece96a6c8abfa454555df1282e50d844f7e",
+    "UpdateUserResponseV1": "907abd58de714a34ad63c4048957714f89cd17df7f75d220104f03ca179e6953",
+    "ErrorEnvelope": "7a50de75b53e1564badf5053201426a9d5a344bbc35ec7e9e10aa4be78c2f33a"
+  },
+  "health": "936fcb4105874ea26b66128845940f26e3b487f4768190555c1b151087ece16a"
+}
