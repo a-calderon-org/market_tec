@@ -22,7 +22,7 @@ No hay scripts `lint`, cobertura ni E2E configurados. `npm ci` está documentado
 
 ## Configuración local
 
-Crear el entorno a partir del esquema documentado en [dependencias frontend](frontend/DEPENDENCIES.md), sin versionar valores. El workflow genera las tres propiedades desde secrets. Nunca copiar valores a documentación o commits.
+Crear el entorno a partir del esquema documentado en [dependencias frontend](frontend/DEPENDENCIES.md), sin versionar valores. El job de despliegue genera las tres propiedades desde secrets; la validación de PR usa valores ficticios. Nunca copiar valores a documentación o commits.
 
 ## Convenciones observadas
 
@@ -30,4 +30,6 @@ Angular standalone, servicios `providedIn: 'root'`, signals para estado y formul
 
 ## Despliegue
 
-El workflow se activa en push/PR hacia `main`, genera `environment.ts`, construye `app/frontend` y publica `dist/market-tec-frontend/browser` en Azure Static Web Apps. No despliega `app/backend`.
+**Verificado en configuración:** el [workflow Azure](../.github/workflows/azure-static-web-apps-victorious-beach-0a55f0c1e.yml) valida el build Angular en PRs hacia `main` (`opened`, `synchronize`, `reopened`), incluidos Draft, con valores ficticios y sin referencias a secrets en el job de validación. Solo `push` a `refs/heads/main` habilita el job que genera `environment.ts` desde secrets, construye `app/frontend` y publica `dist/market-tec-frontend/browser` en Azure Static Web Apps. No despliega `app/backend`.
+
+Se conserva la acción `close` al cerrar PRs del mismo repositorio cuyo actor no sea Dependabot para retirar previews anteriores; no publica artefactos ni se ejecuta al abrir o actualizar PRs. Deshabilitar nuevos previews no elimina los ya publicados. La [CLI oficial de Azure](https://learn.microsoft.com/en-us/cli/azure/staticwebapp/environment#az-staticwebapp-environment-delete) permite retirar un entorno concreto sin cerrar su PR, previa autorización y verificación de su nombre y recurso; no debe seleccionarse el entorno de producción `default`.
