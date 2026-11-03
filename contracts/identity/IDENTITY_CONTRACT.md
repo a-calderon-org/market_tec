@@ -140,7 +140,7 @@ GIS no añade por sí solo este protocolo; no asumir `g_csrf_token` de otro modo
 | Método/ruta de servicio | Request → éxito | Seguridad y efecto |
 |---|---|---|
 | POST `/v1/auth/attempts` | `{method}` → `AttemptResponse` | Sin sesión; contexto navegador, propósito login y cliente GIS fijados por servidor |
-| POST `/v1/auth/google` | `{credential,attemptId}` → `AuthResponse` 200 o `MailboxVerificationRequired` 202 | Cookie intento + CSRF; firma/claims/nonce; consumo único antes de sesión |
+| POST `/v1/auth/google` | `{credential,attemptId}` → `AuthResponse` 200 Draft | Cuenta existente con vínculo Google exacto y activo; cookie intento + CSRF + Origin; consumo único y sesión básica |
 | POST `/v1/auth/email/requests` | `{attemptId,email}` → `EmailAccepted` 202 | Cookie intento + CSRF; emisión/reenvío sin enumeración |
 | POST `/v1/auth/email/confirm` | `{attemptId,token}` → `AuthResponse` 200 | Confirmación explícita, consumo atómico, continuidad; no GET de autenticación |
 | POST `/v1/auth/proofs/attempts` | `{method,purpose,authMethodId?}` → `AttemptResponse` | JWT + cookie + CSRF, propósito reauthenticate o link |
@@ -150,27 +150,34 @@ GIS no añade por sí solo este protocolo; no asumir `g_csrf_token` de otro modo
 | GET `/v1/me/auth-methods` | Sin body → `MethodsResponse` 200 | JWT interno; referencias propias sin sub Google ni correo |
 | POST `/v1/me/auth-methods` | `{reauthenticationProofId,newMethodProofId}` → `MethodsResponse` 200 | JWT + cookie + CSRF; ambas pruebas recientes, diferentes y consumidas en transacción |
 
-Para Google se propone verificar firma con biblioteca mantenida y claves de destino
-fijo, algoritmo permitido, emisor oficial, aud del cliente de ese intento, azp si
-presente, tipos/coherencia iat/exp/nbf, nonce y elegibilidad. RS256, aud única y
-canonicalización son pendientes P18/P21. `email_verified=true` sin autoridad de
-Google sobre buzón de terceros no basta: responder 202, retener evidencia Google
-verificada y requerir prueba institucional del mismo intento; no crear sesión,
-cuenta ni EmailIdentity implícita antes de completarla. El destinatario de esa
-prueba adicional queda fijado al email de la evidencia Google validada y al mismo
-issuer/sub, intento y propósito. No se puede acreditar esa identidad usando otro
-buzón: solicitar otro email conserva 202, sin envío ni cambio del destinatario;
-confirmar solo acepta el secreto emitido para esa evidencia. No se confía en hd del botón.
-[Google documenta la distinción de autoridad del buzón](https://developers.google.com/identity/gsi/web/guides/verify-google-id-token).
+La decisión formal de MTEC-40 del 2026-11-03 permite login Google básico
+únicamente a una cuenta existente con vínculo previo exacto `(GOOGLE, issuer,
+subject) → userId`, activo y autorizado. ms-users verifica token Google, nonce,
+intento y navegador; comprueba cuenta/vínculo en servidor antes de emitir. No exige
+prueba adicional del buzón para este caso. No crea cuenta ni fusiona por email,
+concede afiliación/privilegios TEC, historial sin continuidad acreditada,
+recuperación, vinculación ni operaciones sensibles B04. Identidad ausente,
+bloqueada o no autorizada obtiene rechazo genérico sin sesión/enumeración.
+El correo institucional continúa previsto para v1 con contratos pendientes.
 
-Nonce generado en servidor, CSPRNG 256 bits y TTL 300 s son candidatos ADR-004,
-no acuerdos nuevos. Intento fija navegador, propósito, cliente y nonce; la prueba
-Google puede consumirse una sola vez, incluso si luego espera buzón. Nueva
-autenticación tras fallo terminal usa otro intento. No reproducir credenciales
-ante respuesta perdida. En pruebas protegidas, reautenticación exige método ya
-vinculado; link fija identidad nueva. No intercambiar sus grants ni usar el mismo
-grant para ambos papeles. `iat`/nonce recientes no acreditan interacción reciente;
-B04 bloquea habilitar pruebas sensibles hasta acordar evidencia de frescura.
+**Verificado en G1 sin HTTP:** `GoogleLoginService` crea nonce y secreto de navegador,
+guarda hash del secreto, vence el intento en 300 s y consume una vez bajo transacción.
+G1 comprueba vínculo exacto y cuenta activa; `ExternalIdentity` aún carece de
+estado de bloqueo/activación del vínculo, por lo que falta ese control de política.
+**Propuesto para HTTP:** el secreto viaja solo en cookie de intento HttpOnly, Secure,
+host-only y sin Domain, con duración máxima de 300 s; token sincronizador CSRF
+entregado con `Cache-Control: no-store` y retenido solo en memoria; ambas operaciones
+validan Origin exacto y CORS configurado. El primer POST requiere Origin, JSON,
+header web permitido y límites de tasa; el segundo también cookie y CSRF.
+Replay, expiración o navegador distinto no crean sesión. Tras respuesta perdida se
+inicia intento nuevo. No registrar secretos ni incluirlos en URL o almacenamiento
+persistente. La APIM subscription key no puede ser secreto embebido en Angular.
+
+**No determinado:** hosts/orígenes productivos y SameSite, pendientes de topología
+verificada y aprobación. G1 devuelve JWT, sessionId, userId y deadline, pero no
+`AuthResponse` completo, cookie refresh, CSRF de sesión ni rutas HTTP. El adaptador
+de respuesta y transporte B06/B07 son dependencias antes de habilitar 200 HTTP.
+El contrato sigue Draft; no afirma aprobación B07 ni habilitación HTTP.
 
 Correo propone secreto CSPRNG 256 bits, verificador hash y plazo de hasta 600 s,
 acotado además al intento. Registrar en servidor propósito, destinatario verificado,
