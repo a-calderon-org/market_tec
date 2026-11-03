@@ -3,8 +3,8 @@
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "info": {
     "title": "MarketTec Users API",
-    "version": "0.2.0-draft",
-    "description": "Proposed — MTEC-15 subfase 1. Solo GET /health está implementado en la base inspeccionada. Interfaces de autenticación, perfil y claves pendientes de aprobación MTEC-15/MTEC-40. Ver contracts/identity/IDENTITY_CONTRACT.md."
+    "version": "0.3.0-draft",
+    "description": "Draft — candidata de consolidación MTEC-15/B07. Perfil delimitado B01–B06 aprobado por RP; interfaces, parámetros y conformidades pendientes. Solo GET /health implementado en esta fundación. Ver IDENTITY_CONTRACT y MTEC15_AUTH_CONTRACT_RELEASE_REVIEW."
   },
   "x-contract-status": "draft-pending-team-approval",
   "servers": [
@@ -107,7 +107,7 @@
                     "value": {
                       "token": "internal-jwt-placeholder",
                       "tokenType": "Bearer",
-                      "expiresAt": 1790000900,
+                      "expiresAt": 1790000240,
                       "user": {
                         "userId": "usr_abc123",
                         "email": "usuario@estudiantec.cr",
@@ -232,7 +232,8 @@
               }
             }
           }
-        }
+        },
+        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending"
       }
     },
     "/v1/usuarios/{userId}": {
@@ -355,7 +356,8 @@
         "x-idempotency": "GET sin efectos; PUT establece tres campos permitidos, timestamp puede cambiar; no cambia identidad/correo.",
         "x-confidentiality": "TLS y no-store; perfil solo propietario; sin credenciales en logs.",
         "x-angular-integration": "Forma DTO preservada; MTEC-10 debe usar userId interno de sesión o alias /me/profile.",
-        "x-apim-responsibility": "JWT interno en ruta exacta y backend revalida/autoriza propietario; correlation ID y envelope de errores coherentes."
+        "x-apim-responsibility": "JWT interno en ruta exacta y backend revalida/autoriza propietario; correlation ID y envelope de errores coherentes.",
+        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending"
       },
       "put": {
         "operationId": "updateUserProfile",
@@ -496,7 +498,8 @@
           {
             "$ref": "#/components/parameters/WebClient"
           }
-        ]
+        ],
+        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending"
       }
     },
     "/v1/auth/attempts": {
@@ -619,7 +622,8 @@
               }
             }
           }
-        }
+        },
+        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending"
       }
     },
     "/v1/auth/email/requests": {
@@ -745,14 +749,15 @@
               }
             }
           }
-        }
+        },
+        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending"
       }
     },
     "/v1/auth/email/confirm": {
       "post": {
         "operationId": "confirmInstitutionalLogin",
         "summary": "Confirmar enlace y establecer sesión interna",
-        "description": "Proposed — Solo confirmación explícita POST desde navegador iniciador con cookie/CSRF del intento, no IP/user-agent como vínculo. Validar secreto, propósito, email fijado, intento y plazo con reloj servidor; consumo atómico y una sola sesión/prueba. GET/previsualización/HEAD nunca consumen ni autentican: el enlace abre página Angular, no GET de API. Otro dispositivo reinicia allí autenticación; no transfiere sesión con enlace. Repetición 409, expiración 410, prueba alterada/ajena 401 genérico. Continuidad de buzón histórico B02 sin resolver: 409 CONTINUITY_REQUIRED, no acceso automático. No crea ni vincula cuentas por correo coincidente. Respuesta perdida exige intento nuevo. Al complementar Google, solo consume el enlace emitido al email fijado por la evidencia Google verificada de ese intento; emite la sesión de ese mapping y no una identidad de correo adicional.",
+        "description": "Proposed — Solo confirmación explícita POST desde navegador iniciador con cookie/CSRF del intento, no IP/user-agent como vínculo. Validar secreto, propósito, email fijado, intento y plazo con reloj servidor; consumo atómico y una sola sesión/prueba. GET/previsualización/HEAD nunca consumen ni autentican: el enlace abre página Angular, no GET de API. Otro dispositivo reinicia allí autenticación; no transfiere sesión con enlace. Repetición 409, expiración 410, prueba alterada/ajena 401 genérico. B02 aprueba passkeys/códigos de un uso por userId, opcionales para básico; protocolos aún bloqueados: 409 CONTINUITY_REQUIRED, no acceso automático. No crea ni vincula cuentas por correo coincidente. Respuesta perdida exige intento nuevo. Al complementar Google, solo consume el enlace emitido al email fijado por la evidencia Google verificada de ese intento; emite la sesión de ese mapping y no una identidad de correo adicional.",
         "x-implementation-status": "proposed",
         "x-approval-status": "proposed",
         "x-route-class": "attempt-proof",
@@ -801,7 +806,7 @@
                     "value": {
                       "token": "internal-jwt-placeholder",
                       "tokenType": "Bearer",
-                      "expiresAt": 1790000900,
+                      "expiresAt": 1790000240,
                       "user": {
                         "userId": "usr_abc123",
                         "email": "usuario@estudiantec.cr",
@@ -908,7 +913,8 @@
               }
             }
           }
-        }
+        },
+        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending"
       }
     },
     "/v1/auth/session": {
@@ -1019,14 +1025,15 @@
         "x-idempotency": "GET sin efectos; POST de prueba/refresh consume atómicamente y no reproduce credenciales. Reintentos específicos en IDENTITY_CONTRACT §3/4.",
         "x-confidentiality": "TLS; redactar body, Authorization, cookies, CSRF, enlaces y pruebas; no-store salvo metadata pública.",
         "x-angular-integration": "MTEC-10: fetch HttpClient JSON, withCredentials en contexto cookie, leer X-Correlation-ID; no Google bearer como sesión.",
-        "x-apim-responsibility": "Admisión por método/ruta exactos, origen y tamaño/tasa, correlación, CORS, saneamiento de identidad; preservar cookies/CSRF. No sustituye validación y autorización ms-users."
+        "x-apim-responsibility": "Admisión por método/ruta exactos, origen y tamaño/tasa, correlación, CORS, saneamiento de identidad; preservar cookies/CSRF. No sustituye validación y autorización ms-users.",
+        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending"
       }
     },
     "/v1/auth/refresh": {
       "post": {
         "operationId": "refreshSession",
         "summary": "Rotar acceso o solicitar continuación voluntaria",
-        "description": "Proposed — No exige access JWT vigente. Valida cookie/familia, CSRF y sesión antes de consumir; a serverTime>=expiresAt rechaza sin renovar. mode=rotate no modifica renewedAt/window ni lastActivityAt; mode=continue solicita ventana min(now+3600,absoluteExpiresAt) solo vigente y con controles de actividad pendientes B03. Ningún modo cuenta por sí solo como actividad. Rotación estricta sin gracia Proposed: compare-and-swap atómico, reuso de cookie consumida revoca familia y responde 401 REFRESH_REUSED; una carrera puede invalidar también credenciales del ganador. Frontend serializa pestañas. No reintentar automáticamente tras respuesta perdida; reautenticar. No altera authenticatedAt/absoluteExpiresAt.",
+        "description": "Proposed — No exige access JWT vigente. Valida cookie/familia, CSRF y sesión antes de consumir; a serverTime>=expiresAt rechaza sin renovar. mode=rotate no modifica renewedAt/window ni lastActivityAt; mode=continue solicita ventana min(now+3600,absoluteExpiresAt) solo vigente y con controles de actividad pendientes B03. Ningún modo cuenta por sí solo como actividad. B06 aprueba serialización entre pestañas sin gracia general. Detalle Draft pendiente de protocolo/pruebas: compare-and-swap atómico, reuso de cookie consumida revoca familia y responde 401 REFRESH_REUSED; una carrera puede invalidar también credenciales del ganador. Frontend serializa pestañas. No reintentar automáticamente tras respuesta perdida; reautenticar. No altera authenticatedAt/absoluteExpiresAt.",
         "x-implementation-status": "proposed",
         "x-approval-status": "proposed",
         "x-route-class": "session-cookie",
@@ -1075,7 +1082,7 @@
                     "value": {
                       "token": "internal-jwt-placeholder",
                       "tokenType": "Bearer",
-                      "expiresAt": 1790000900,
+                      "expiresAt": 1790000240,
                       "user": {
                         "userId": "usr_abc123",
                         "email": "usuario@estudiantec.cr",
@@ -1167,20 +1174,23 @@
           }
         },
         "x-refresh-rotation": {
-          "status": "proposed",
+          "status": "draft-detail-under-approved-policy",
           "atomicConsumeAndReplace": true,
           "graceWindow": false,
           "reissueOnRetry": false,
           "consumedGenerationReuse": "revoke-family-including-winner",
-          "lostResponse": "reauthenticate"
-        }
+          "lostResponse": "reauthenticate",
+          "serializedAcrossTabs": true,
+          "protocolAndConcurrencyTests": "pending"
+        },
+        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending"
       }
     },
     "/v1/auth/logout": {
       "post": {
         "operationId": "logoutSession",
         "summary": "Revocar sesión actual o todas las sesiones propias",
-        "description": "Proposed — current: revocación idempotente de familia actual y borrado cookie incluso vencida/revocada; cookie ausente responde 204 sin efecto servidor, solo tras Origin/JSON/X-MTEC-Client. Con cookie, CSRF obligatorio. all: exige cookie aún vigente y prueba reciente consumible propia; sin ellas 401/403, jamás degradar a current. Repetir all con sesión ya revocada devuelve 401 sin nuevo efecto. 204 confirma cambio en ms-users, NO corte inmediato de access JWT distribuido; garantía de acceso bloqueada por B01. Baja/compromiso futuro deberá usar misma revocación global, sin nuevo endpoint aquí.",
+        "description": "Proposed — current: revocación idempotente de familia actual y borrado cookie incluso vencida/revocada; cookie ausente responde 204 sin efecto servidor, solo tras Origin/JSON/X-MTEC-Client. Con cookie, CSRF obligatorio. all: exige cookie aún vigente y prueba reciente consumible propia; sin ellas 401/403, jamás degradar a current. Repetir all con sesión ya revocada devuelve 401 sin nuevo efecto. 204 confirma cambio en ms-users, NO corte inmediato de access JWT distribuido; residual ordinario <=300 s requerido pero no demostrado; D4/D5 pendientes. Baja/compromiso futuro deberá usar misma revocación global, sin nuevo endpoint aquí.",
         "x-implementation-status": "proposed",
         "x-approval-status": "proposed",
         "x-route-class": "session-cookie",
@@ -1286,14 +1296,15 @@
               }
             }
           }
-        }
+        },
+        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending"
       }
     },
     "/v1/auth/session/activity": {
       "post": {
         "operationId": "recordSessionActivity",
         "summary": "Presentar una señal de actividad para evaluación",
-        "description": "Proposed — Interfaz condicional, bloqueada por B03. JWT/sid y cookie deben identificar misma sesión vigente. Servidor deduplica interactionId, valida señal con protocolo aún no acordado y solo entonces fija lastActivityAt con SU reloj; no recibe timestamp cliente. Rechazada 409 ACTIVITY_NOT_ACCEPTED sin cambio. No extender ventana ni absoluto; polling/refresh/heartbeats no se aceptan. Un click indicado por JS no prueba humanidad. Sin señal verificable aprobada, no habilitar endpoint.",
+        "description": "Draft bloqueado por protocolo B03: solo actividad elegible con evidencia autenticada de servidor, tiempo real de ejecución y cómputo único; procesamiento hasta 60 s después, nunca resucitar sesión expirada. Comprobar estado previo vigente antes de actualizar lastActivityAt=max(previo,tEjecución). interactionId/kind no bastan; no usar hora de recepción ni cliente. Allowlist, productores/correlación/reloj/deduplicación atómica pendientes. No mover renewedAt/absoluto; polling/refresh no cuentan ni prueba humanidad.",
         "x-implementation-status": "proposed",
         "x-approval-status": "proposed",
         "x-route-class": "authenticated-session",
@@ -1429,7 +1440,8 @@
               }
             }
           }
-        }
+        },
+        "x-integration-readiness": "blocked-pending-approved-evidence-protocol"
       }
     },
     "/v1/auth/proofs/attempts": {
@@ -1574,7 +1586,8 @@
               }
             }
           }
-        }
+        },
+        "x-integration-readiness": "blocked-pending-approved-evidence-protocol"
       }
     },
     "/v1/auth/proofs/google": {
@@ -1724,7 +1737,8 @@
               }
             }
           }
-        }
+        },
+        "x-integration-readiness": "blocked-pending-approved-evidence-protocol"
       }
     },
     "/v1/auth/proofs/email/requests": {
@@ -1851,14 +1865,15 @@
               }
             }
           }
-        }
+        },
+        "x-integration-readiness": "blocked-pending-approved-evidence-protocol"
       }
     },
     "/v1/auth/proofs/email/confirm": {
       "post": {
         "operationId": "verifyEmailMethodProof",
         "summary": "Confirmar prueba de correo protegida",
-        "description": "Proposed — Solo confirmación explícita POST desde navegador iniciador con cookie/CSRF del intento, no IP/user-agent como vínculo. Validar secreto, propósito, email fijado, intento y plazo con reloj servidor; consumo atómico y una sola sesión/prueba. GET/previsualización/HEAD nunca consumen ni autentican: el enlace abre página Angular, no GET de API. Otro dispositivo reinicia allí autenticación; no transfiere sesión con enlace. Repetición 409, expiración 410, prueba alterada/ajena 401 genérico. Continuidad de buzón histórico B02 sin resolver: 409 CONTINUITY_REQUIRED, no acceso automático. No crea ni vincula cuentas por correo coincidente. Respuesta perdida exige intento nuevo. Aquí retorna ProofGrant del propósito original y no AuthResponse. Si complementa Google, method=google; no añade EmailIdentity. B02/B04 pueden impedir emitir la prueba.",
+        "description": "Proposed — Solo confirmación explícita POST desde navegador iniciador con cookie/CSRF del intento, no IP/user-agent como vínculo. Validar secreto, propósito, email fijado, intento y plazo con reloj servidor; consumo atómico y una sola sesión/prueba. GET/previsualización/HEAD nunca consumen ni autentican: el enlace abre página Angular, no GET de API. Otro dispositivo reinicia allí autenticación; no transfiere sesión con enlace. Repetición 409, expiración 410, prueba alterada/ajena 401 genérico. B02 aprueba passkeys/códigos de un uso por userId, opcionales para básico; protocolos aún bloqueados: 409 CONTINUITY_REQUIRED, no acceso automático. No crea ni vincula cuentas por correo coincidente. Respuesta perdida exige intento nuevo. Aquí retorna ProofGrant del propósito original y no AuthResponse. Si complementa Google, method=google; no añade EmailIdentity. B02/B04 pueden impedir emitir la prueba.",
         "x-implementation-status": "proposed",
         "x-approval-status": "proposed",
         "x-route-class": "authenticated-session",
@@ -1983,14 +1998,15 @@
               }
             }
           }
-        }
+        },
+        "x-integration-readiness": "blocked-pending-approved-evidence-protocol"
       }
     },
     "/.well-known/jwks.json": {
       "get": {
         "operationId": "getPublicSigningKeys",
         "summary": "Publicar solo claves de verificación",
-        "description": "Proposed — Proposed RS256 y kid único por emisor. Sin claves privadas ni secretos. Publicar nueva antes de firmar y retener anterior según exp/skew/cachés aprobados. Kid desconocido: refresco limitado a destino fijado, si no resuelve rechazar; no seguir jku/x5u del token. Quitar clave no purga caché ni revoca inmediatamente.",
+        "description": "Draft: RS256/RSA-2048 y públicas/JWKS aprobados. Sin privados, kid único y válido. Aprovisionar públicas a APIM/validadores; publicar antes de firmar y demostrar propagación/solapamiento/retirada. Cache/frescura/intervalos pendientes, sin valores inventados. Kid desconocido no confiable se rechaza; no seguir jku/x5u. Retirar JWKS no purga cachés ni demuestra corte crítico.",
         "x-implementation-status": "proposed",
         "x-approval-status": "proposed",
         "x-route-class": "public-metadata",
@@ -2038,14 +2054,15 @@
         "x-idempotency": "GET idempotente; publicar configuración/claves públicas sin credenciales.",
         "x-confidentiality": "TLS; redactar body, Authorization, cookies, CSRF, enlaces y pruebas; no-store salvo metadata pública.",
         "x-angular-integration": "Sin consumo Angular obligatorio; destinos fijados por validadores.",
-        "x-apim-responsibility": "Disponible sin JWT, cookie ni subscription key; sin ciclo de arranque. No asumir discovery compatible."
+        "x-apim-responsibility": "Disponible sin JWT, cookie ni subscription key; sin ciclo de arranque. No asumir discovery compatible.",
+        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending"
       }
     },
     "/.well-known/markettec-identity": {
       "get": {
         "operationId": "getIdentityMetadata",
         "summary": "Publicar metadata propia de validación",
-        "description": "Proposed — Metadata mínima propia, sin claim de conformidad OIDC; destinos HTTPS/issuer/audiencias por entorno fijados fuera del token. No es endpoint para openid-config de APIM: resolver B05 mediante aprovisionamiento público controlado o discovery compatible aprobado, sin inventar endpoints OAuth.",
+        "description": "Proposed — Metadata mínima propia, sin claim de conformidad OIDC; destinos HTTPS/issuer/audiencias por entorno fijados fuera del token. No es endpoint para openid-config de APIM: B05/D2 aprueba aprovisionamiento público controlado; su procedimiento y pruebas pendientes, sin inventar endpoints OAuth.",
         "x-implementation-status": "proposed",
         "x-approval-status": "proposed",
         "x-route-class": "public-metadata",
@@ -2093,7 +2110,8 @@
         "x-idempotency": "GET idempotente; publicar configuración/claves públicas sin credenciales.",
         "x-confidentiality": "TLS; redactar body, Authorization, cookies, CSRF, enlaces y pruebas; no-store salvo metadata pública.",
         "x-angular-integration": "Sin consumo Angular obligatorio; destinos fijados por validadores.",
-        "x-apim-responsibility": "Disponible sin JWT, cookie ni subscription key; sin ciclo de arranque. No asumir discovery compatible."
+        "x-apim-responsibility": "Disponible sin JWT, cookie ni subscription key; sin ciclo de arranque. No asumir discovery compatible.",
+        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending"
       }
     },
     "/v1/me/profile": {
@@ -2200,7 +2218,8 @@
         "x-idempotency": "GET sin efectos; POST de prueba/refresh consume atómicamente y no reproduce credenciales. Reintentos específicos en IDENTITY_CONTRACT §3/4.",
         "x-confidentiality": "TLS; redactar body, Authorization, cookies, CSRF, enlaces y pruebas; no-store salvo metadata pública.",
         "x-angular-integration": "MTEC-10: fetch HttpClient JSON, withCredentials en contexto cookie, leer X-Correlation-ID; no Google bearer como sesión.",
-        "x-apim-responsibility": "Admisión por método/ruta exactos, origen y tamaño/tasa, correlación, CORS, saneamiento de identidad; preservar cookies/CSRF. No sustituye validación y autorización ms-users."
+        "x-apim-responsibility": "Admisión por método/ruta exactos, origen y tamaño/tasa, correlación, CORS, saneamiento de identidad; preservar cookies/CSRF. No sustituye validación y autorización ms-users.",
+        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending"
       },
       "put": {
         "operationId": "updateOwnUserProfile",
@@ -2327,7 +2346,8 @@
               }
             }
           }
-        }
+        },
+        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending"
       }
     },
     "/v1/me/auth-methods": {
@@ -2412,7 +2432,8 @@
         "x-idempotency": "GET sin efectos; POST de prueba/refresh consume atómicamente y no reproduce credenciales. Reintentos específicos en IDENTITY_CONTRACT §3/4.",
         "x-confidentiality": "TLS; redactar body, Authorization, cookies, CSRF, enlaces y pruebas; no-store salvo metadata pública.",
         "x-angular-integration": "MTEC-10: fetch HttpClient JSON, withCredentials en contexto cookie, leer X-Correlation-ID; no Google bearer como sesión.",
-        "x-apim-responsibility": "Admisión por método/ruta exactos, origen y tamaño/tasa, correlación, CORS, saneamiento de identidad; preservar cookies/CSRF. No sustituye validación y autorización ms-users."
+        "x-apim-responsibility": "Admisión por método/ruta exactos, origen y tamaño/tasa, correlación, CORS, saneamiento de identidad; preservar cookies/CSRF. No sustituye validación y autorización ms-users.",
+        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending"
       },
       "post": {
         "operationId": "linkOwnAuthMethod",
@@ -2542,7 +2563,8 @@
               }
             }
           }
-        }
+        },
+        "x-integration-readiness": "blocked-pending-approved-evidence-protocol"
       }
     }
   },
@@ -2552,7 +2574,7 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT",
-        "description": "JWT interno propuesto; issuer, audience y firma siguen pendientes de aprobación."
+        "description": "JWT interno RS256/RSA-2048, sub=userId/sid; validar firma/alg/iss/aud/tiempos en APIM y backend, TTL<=240 y cero leeway positivo. Valores iss/aud y márgenes/pruebas pendientes."
       },
       "apimSubscriptionKey": {
         "type": "apiKey",
@@ -2570,7 +2592,7 @@
         "type": "apiKey",
         "in": "cookie",
         "name": "__Host-mtec-refresh",
-        "description": "Proposed: renovación opaca rotatoria HttpOnly/Secure/Path=/, sin Domain, verificable solo por ms-users. SameSite pendiente B06."
+        "description": "Refresh opaco rotatorio HttpOnly/Secure/host-only aprobado B06. Nombre __Host y Path=/ son propuesta conjunta; SameSite/hosts/topología y protocolo pendientes. Solo ms-users verifica; no propagar a negocio."
       }
     },
     "parameters": {
@@ -3514,7 +3536,7 @@
             "maxLength": 256
           }
         },
-        "description": "Proposed 0.2: conserva token/tokenType/expiresAt/user, añade sesión común. expiresAt es del JWT y nunca supera session.expiresAt. Cookie de renovación solo en Set-Cookie."
+        "description": "Draft 0.3: expiresAt debe ser exp del JWT, no superar serverTime+240 ni session.expiresAt. Emisión descuenta margen medido; igualdad expira y el Schema no prueba relaciones ni firma. Access/CSRF solo en memoria; refresh solo Set-Cookie."
       },
       "AuthenticatedUser": {
         "type": "object",
@@ -4010,7 +4032,7 @@
             "$ref": "#/components/schemas/EpochSeconds"
           }
         },
-        "description": "Proposed: solo sesión vigente en 2xx. Relaciones temporales en IDENTITY_CONTRACT §4; JSON Schema no prueba desigualdades entre campos. warningAt calculado con anticipación pendiente B06."
+        "description": "Draft: solo sesión active en 2xx; primer deadline 60/30/8, igualdad expira. warningAt relativo a expiresAt de sesión; anticipo 300 s candidato, protocolo pendiente. Actividad B03 usa ejecución real, no recepción tardía."
       },
       "SessionResponse": {
         "type": "object",
@@ -4138,7 +4160,7 @@
             "const": "foreground-interaction"
           }
         },
-        "description": "Interfaz condicional Proposed, no habilitable hasta B03. El servidor decide si reconoce actividad; un booleano/click/timestamp del cliente no basta."
+        "description": "B03 política aprobada, interfaz bloqueada: interactionId/kind solos no aportan evidencia autenticada del servidor ni instante real/cómputo único. Protocolo de productores/allowlist/deduplicación pendiente; sin timestamps cliente ni reactivar sesión."
       },
       "ProofAttemptRequest": {
         "type": "object",
@@ -4252,7 +4274,7 @@
             "$ref": "#/components/schemas/EpochSeconds"
           }
         },
-        "description": "Ligada en servidor a userId, sid, identidad exacta, propósito y frescura comprobada. No aceptar iat reciente de GIS como prueba de interacción reciente. B04 bloquea emisión sensible."
+        "description": "Draft bloqueado B04 y D4/D5 aplicables: evidencia reciente por método/acción, una vez, usuario/sid/identidad exactos. verifiedAt/iat recientes no rejuvenecen evidencia. Frescura <300 s condicionada; falta interfaz de acción/destinatarios y prueba técnica. No habilitar."
       },
       "LinkMethodsRequest": {
         "type": "object",
@@ -4363,7 +4385,7 @@
             "type": "string"
           }
         },
-        "description": "Perfil JWT Proposed. sub es userId interno; Google/correo solo en ms-users. sid es propuesta para correlación de sesión, no revocación por sí solo. No PII ni roles por dominio."
+        "description": "Claims Draft bajo B05/D1 aprobado: sub=userId opaco, sid de sesión, iss/aud/iat/exp/jti obligatorios; kid solo JOSE. Reglas semánticas: 0<exp-iat<=240, exp acotado a sesión y sin tolerancia positiva; firma y configuración se validan fuera del Schema. Valores iss/aud y pruebas pendientes."
       },
       "AuthenticatedPrincipal": {
         "type": "object",
@@ -4445,7 +4467,7 @@
             "pattern": "^[A-Za-z0-9_-]+$"
           }
         },
-        "description": "Proposed RS256. Solo pública; rechazar d,p,q,dp,dq,qi,oth,k y kid duplicados. Tamaño RSA y validez criptográfica requieren validación runtime, no solo Schema."
+        "description": "RS256/RSA-2048 aprobado: únicamente material público. Rechazar privados, kid duplicados, módulo RSA de tamaño distinto o inválido; tamaño/validez requieren semántica/criptografía, no solo Schema."
       },
       "Jwks": {
         "type": "object",
@@ -4507,10 +4529,10 @@
             "const": "at+jwt"
           },
           "contract_version": {
-            "const": "0.2.0-draft"
+            "const": "0.3.0-draft"
           }
         },
-        "description": "Proposed metadata propia para validadores configurados. NO es OpenID Provider Discovery ni acredita servidor OAuth/OIDC. No pasar esta URL a APIM openid-config. B05 exige aprovisionar claves públicas o diseñar discovery conforme en revisión posterior."
+        "description": "Metadata propia Draft, NO discovery OIDC. B05/D2 aprueba aprovisionamiento controlado de públicas APIM/validadores y JWKS; procedimiento/cache/propagación pendientes. No usar en openid-config ni inventar endpoints OAuth."
       },
       "AuthErrorEnvelope": {
         "allOf": [
@@ -4571,32 +4593,56 @@
           }
         ],
         "description": "Mismo envelope compartido, códigos Proposed. details=[] para auth; nunca claims, existencia de cuenta, correo, secretos o método ajeno."
+      },
+      "InternalAccessHeader": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "alg",
+          "typ",
+          "kid"
+        ],
+        "properties": {
+          "alg": {
+            "const": "RS256"
+          },
+          "typ": {
+            "const": "at+jwt"
+          },
+          "kid": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "description": "Draft JOSE header: alg/kid aprobados B05/D1; typ=at+jwt conserva candidato 0.2. Clave solo del emisor configurado; nunca claim kid, jku/x5u o clave del token."
       }
     }
   },
   "x-design-review": {
     "status": "proposed",
     "ticket": "MTEC-15",
-    "securityApproval": "pending-MTEC-40",
-    "previousVersion": "0.1.0-draft",
+    "securityApproval": "partial-policy-approved-parameters-and-evidence-pending-MTEC-40",
+    "previousVersion": "0.2.0-draft",
     "breakingChanges": [
-      "GoogleAuthRequest requiere attemptId, cookie del intento y CSRF; credential solo deja de ser suficiente.",
-      "AuthResponse añade session y csrfToken obligatorios; additionalProperties:false del consumidor antiguo los rechaza.",
-      "GET perfil se restringe a propietario; no es directorio de perfiles públicos."
+      "JWT nominal máximo 240 s sustituye candidato 900 s; cero leeway positivo de exp y RSA-2048 requieren adaptación de emisor/validadores.",
+      "IdentityMetadata.contract_version cambia const de 0.2.0-draft a 0.3.0-draft.",
+      "Persisten incompatibilidades heredadas 0.1→0.2: intento/cookie/CSRF Google, campos session/csrfToken y perfil solo propietario."
     ],
     "metadataMode": "custom-not-oidc-discovery",
     "blockers": [
-      "B01-session-enforcement",
-      "B02-mailbox-continuity",
-      "B03-human-activity",
-      "B04-fresh-reauthentication",
-      "B05-jwt-keys-apim",
-      "B06-browser-transport",
-      "B07-signoffs"
+      "B01-D4-inflight-sensitive-cutoff",
+      "B01-D5-infrastructure-critical-incidents",
+      "B02-continuity-and-isolated-basic-registration-protocols",
+      "B03-server-evidence-allowlist-deduplication",
+      "B04-fresh-authentication-evidence",
+      "B05-exact-environment-profile-cache-rotation-and-propagation",
+      "B06-browser-topology-csrf-refresh-protocols",
+      "B07-consumer-signoffs"
     ]
   },
   "x-session-policy": {
-    "status": "accepted-functional-policy-only",
+    "status": "accepted-policy-implementation-and-guarantees-unverified",
     "renewableWindowSeconds": 3600,
     "inactivityTimeoutSeconds": 1800,
     "absoluteLifetimeSeconds": 28800,
@@ -4605,18 +4651,103 @@
     "backgroundPollingIsActivity": false,
     "refreshResetsAbsoluteLifetime": false,
     "accessTokenLifetimeSeconds": {
-      "status": "proposed",
-      "candidate": 900
+      "status": "approved-conditional-on-demonstration",
+      "maximum": 240,
+      "boundedByEffectiveSessionDeadline": true
     },
     "warningLeadSeconds": {
-      "status": "pending-approval"
+      "status": "proposed-protocol-pending",
+      "candidate": 300,
+      "relativeTo": "effective-session-deadline-not-access-jwt"
     },
-    "enforcementStrategy": "unresolved-B01"
+    "enforcementStrategy": "unresolved-B01",
+    "ordinaryRevocationResidualSeconds": {
+      "maximum": 300,
+      "status": "requirement-not-demonstrated"
+    },
+    "activity": {
+      "status": "approved-policy-protocol-pending",
+      "timestamp": "real-server-validated-execution-time",
+      "maximumProcessingDelaySeconds": 60,
+      "singleCount": true,
+      "neverReviveExpiredSession": true,
+      "requestAloneIsEvidence": false
+    }
   },
   "x-principal-schema": {
     "$ref": "#/components/schemas/AuthenticatedPrincipal"
   },
   "x-internal-access-claims-schema": {
     "$ref": "#/components/schemas/InternalAccessClaims"
+  },
+  "x-jwt-policy": {
+    "status": "approved-profile-exact-parameters-and-interoperability-pending",
+    "algorithm": "RS256",
+    "rsaBits": 2048,
+    "joseHeaderRequired": [
+      "alg",
+      "kid"
+    ],
+    "claimsRequired": [
+      "iss",
+      "aud",
+      "sub",
+      "sid",
+      "iat",
+      "exp",
+      "jti"
+    ],
+    "positiveExpirationLeewaySeconds": 0,
+    "maximumNominalLifetimeSeconds": 240,
+    "issuerAudienceValues": "pending-per-environment-and-validator",
+    "clockAndAdmissionMargins": "unverified-no-numeric-skew-approved",
+    "signatureValidation": "required-at-APIM-and-each-backend",
+    "failClosed": "when-required-guarantees-cannot-be-verified"
+  },
+  "x-browser-policy": {
+    "status": "approved-policy-protocol-and-topology-pending",
+    "accessAndCsrfStorage": "memory-only",
+    "refresh": "opaque-rotating-cookie",
+    "cookieRequiredAttributes": [
+      "HttpOnly",
+      "Secure",
+      "host-only-no-Domain"
+    ],
+    "cookieSameSitePathHosts": "pending-topology-tests",
+    "csrf": "synchronizer",
+    "cors": "explicit-origins-methods-headers-routes-credentials-no-wildcard-with-credentials",
+    "refreshSerializedAcrossTabs": true,
+    "generalReuseGrace": false,
+    "logout": "authoritative-server-revocation-no-later-issuance"
+  },
+  "x-jwks-policy": {
+    "status": "approved-policy-propagation-and-cutoff-unverified",
+    "privateKeyCustody": "ms-users-only",
+    "validators": "public-material-only",
+    "distribution": "public-JWKS-and-controlled-public-key-provisioning",
+    "cacheFreshnessRotationIntervals": "pending-no-verified-values",
+    "unknownKid": "reject-until-trusted-public-key-available-no-token-directed-fetch",
+    "rotation": "publish-and-provision-before-signing-verify-all-validators-overlap-and-retire-with-evidence",
+    "emergency": "removing-JWKS-does-not-purge-caches-cutoff-must-be-demonstrated-before-production"
+  },
+  "x-internal-access-header-schema": {
+    "$ref": "#/components/schemas/InternalAccessHeader"
+  },
+  "x-identity-policy": {
+    "status": "approved-policy-protocols-pending",
+    "v1AccessMethods": [
+      "google",
+      "institutional-email-link"
+    ],
+    "automaticMergeByEmail": false,
+    "automaticHistoryTransfer": false,
+    "continuityRequiredForBasicAccess": false,
+    "approvedContinuityMechanisms": [
+      "passkey-bound-to-userId",
+      "single-use-recovery-code"
+    ],
+    "historicalAccess": "requires-pre-established-verified-independent-continuity",
+    "exceptionalRecovery": "pending-no-automatic-restitution",
+    "webauthnEndpoints": "not-specified"
   }
 }

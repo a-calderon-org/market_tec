@@ -1,20 +1,21 @@
 # Contrato compartido de identidad y autenticación
 
 **Estado:** Proposed — pendiente de aprobación MTEC-15/MTEC-40
-**Versión de diseño:** 0.2.0-draft (sustituye el borrador 0.1, con incompatibilidades explícitas)
+**Versión de diseño:** 0.3.0-draft (candidata; diferencias frente a 0.2 en §8)
 **Destinatarios:** mantenedores de Angular, ms-users, ms-catalog, ms-notifications y APIM
-**Base examinada:** `market_tec@4c087f847be73ea1be59f41cabee95c8ca94448b`, 2026-11-02
+**Base examinada:** `origin/main@c5dc74ffbe66d1d800972ad11402d8ac9becc3d9`, 2026-11-02
 
 ## 1. Autoridad y estado
 
 [ADR-001](../../context/decisions/ADR-001-distribucion-microservicios.md) y
 [ADR-004 §2.1](../../context/decisions/ADR-004-seguridad-autenticacion.md#21-arquitectura-base-aceptada-y-límites-de-aprobación)
-son la autoridad de las responsabilidades y del núcleo aceptado. Este documento
+y las [aprobaciones delimitadas de ADR-004 §3.4.1](../../context/decisions/ADR-004-seguridad-autenticacion.md#341-consolidación-de-aprobaciones-y-pendientes--2026-11-02)
+son la autoridad de responsabilidades y perfil aceptado. Este documento
 propone su interfaz compartida; no aprueba criptografía, almacenamiento, topología
 ni controles de seguridad pendientes. [Users OpenAPI](../openapi/users.json)
 especifica métodos, rutas, headers, cuerpos, esquemas, respuestas y errores. El
 [informe de revisión](../../docs/MTEC15_AUTH_CONTRACT_REVIEW.md) contiene evidencia,
-comparación de alternativas, compatibilidad y bloqueos, sin constituir otro contrato.
+comparación histórica. La [revisión candidata B07](../../docs/MTEC15_AUTH_CONTRACT_RELEASE_REVIEW.md) recoge compatibilidad, QA y bloqueos vigentes, sin constituir otro contrato.
 
 **Verificado:** solo `GET /health` está implementado en la fundación ms-users de
 esta base. Google, perfiles y todas las nuevas operaciones de este contrato siguen
@@ -28,8 +29,8 @@ esta base. Google, perfiles y todas las nuevas operaciones de este contrato sigu
 | Métodos | Google y enlace institucional simultáneamente desde v1 | Protocolos, TTL, tasas, pruebas y errores de las operaciones siguientes |
 | Elegibilidad | Control verificado de correo de dominio exacto `estudiantec.cr`, `itcr.ac.cr` o `tec.ac.cr`; acceso básico sin prueba de matrícula/empleo | Canonicalización técnica, alta idempotente y continuidad de cuentas históricas |
 | Identidad | `userId` interno opaco, estable, generado por ms-users; no fusión por email | Mapping contractual, namespace de EmailIdentity y prueba reciente de ambos métodos |
-| Sesión | 60 min renovables, 30 min inactividad, 8 h absolutas; primer límite, servidor, aviso y reautenticación; sondeos no son actividad | Actividad, refresh, transporte, anticipación del aviso y cumplimiento distribuido |
-| Confianza | ms-users autentica/emite/publica claves; APIM admite; cada backend revalida y autoriza su dominio | Perfil JWT, claves, rotación, protección de origen y reglas efectivas APIM |
+| Sesión | 60 min renovables, 30 min inactividad, 8 h absolutas; primer límite, servidor, aviso y reautenticación; sondeos no son actividad | B03 aprueba política de actividad; B06 transporte/serialización. Protocolos, aviso candidato y cumplimiento distribuido pendientes |
+| Confianza | ms-users autentica/emite/publica claves; APIM admite; cada backend revalida y autoriza su dominio | RS256/RSA-2048 y JWKS aprobados; parámetros/propagación, protección de origen y reglas efectivas APIM pendientes |
 | Comunicación | Identidad de servicio para trabajo interno y delegación explícita/acotada cuando actúa por usuario | Protocolo específico de workloads/delegación, fuera de esta propuesta HTTP |
 
 El dominio nunca concede privilegios ni una categoría visible estudiante/funcionario.
@@ -47,15 +48,15 @@ resolver establemente el mismo `userId`, incluso bajo concurrencia.
   ms-users. Cambiar email no reasigna la identidad vinculada. Canonicalizar las
   formas oficiales de issuer solo después de validarlas evita mappings duplicados.
 - Correo usa una identidad propia, nunca un `sub` Google inventado. La dirección
-  verificada no es el ID interno. Namespace y prueba de continuidad siguen B02.
+  verificada no es el ID interno. B02 aprueba passkeys por userId y códigos de recuperación de un uso, opcionales para básico; namespace y protocolos siguen pendientes.
 - Proposed: alta transaccional idempotente tras verificar identidad y elegibilidad.
   Si la política de alta no está aprobada, no habilitarla; `REGISTRATION_REQUIRED`
   expresa registro necesario tras prueba válida. Un conflicto no crea otra cuenta,
   fusiona usuarios ni reasigna una identidad.
 - Coincidir en email con una cuenta de otro método requiere vinculación explícita.
   No se promete deduplicación de personas a partir de direcciones.
-- Un buzón reasignado prueba posesión actual, no titularidad histórica. Mientras B02
-  no tenga procedimiento aprobado, no devolver la cuenta histórica basándose solo
+- Un buzón reasignado prueba posesión actual, no titularidad histórica. Mientras los protocolos B02
+  no estén aprobados, no devolver la cuenta histórica basándose solo
   en un enlace: `409 CONTINUITY_REQUIRED` tras prueba válida, sin datos de la cuenta.
 
 La normalización propuesta conserva parte local (mayúsculas, puntos y alias) y
@@ -112,14 +113,14 @@ para evitar fugas. No se añade un envelope de éxito incompatible a perfiles o 
   sin analítica, con `Referrer-Policy: no-referrer`; retirar secreto de barra/historial
   antes de otras navegaciones. No usar redirectUri de entrada arbitrario.
 
-### Cookies y CSRF: propuesta pendiente B06
+### Cookies y CSRF: política B06 aprobada, parámetros/protocolo Draft
 
 | Cookie propuesta | Uso | Atributos candidatos |
 |---|---|---|
 | `__Host-mtec-attempt` | Vínculo aleatorio del navegador e intentos de login; no sesión | HttpOnly, Secure, Path=/, sin Domain; vencimiento no mayor al intento |
 | `__Host-mtec-refresh` | Renovación opaca, familia/usuario/sid, solo ms-users | HttpOnly, Secure, Path=/, sin Domain; máximo acotado al absoluto, servidor aplica antes inactividad/ventana/revocación |
 
-Nombres/Path son propuestas, no configuración vigente. SameSite=Lax sería candidato
+B06 aprueba HttpOnly/Secure/host-only y sincronizador CSRF. Nombres/Path son propuestas, no configuración vigente. SameSite=Lax sería candidato
 solo para topología same-site; None+Secure requiere justificación, CSRF y pruebas de
 cookies de terceros. Hosts/orígenes reales y soporte de navegadores no están
 determinados. No rebajar HttpOnly/Secure para integrar. Con Path=/ hay que limitar
@@ -203,7 +204,7 @@ unlink y cambio de correo quedan fuera hasta política aprobada.
 El servidor usa su propio reloj y estado; el cliente no fija tiempos ni vigencia.
 Todos los tiempos de estos DTOs son segundos enteros, sin aprobar ADR-003 general.
 Sea `a` autenticación inicial, `r` última continuación voluntaria aprobada y `h`
-última actividad humana reconocida por servidor. Inicialmente `r=h=a`.
+última actividad elegible respaldada por servidor (B03), no prueba de humanidad. Inicialmente `r=h=a`.
 
 ```text
 absoluteExpiresAt   = a + 28800
@@ -227,7 +228,7 @@ puede renovarse solo si cookie y sesión aún vigentes. Sesión agotada/revocada
 `warningAt < expiresAt` es obligatorio: lo calcula servidor con anticipación
 aprobada por UX/seguridad; cinco minutos es solo candidato. Angular avisa al recibir
 snapshot ya dentro del intervalo, corrige reloj usando serverTime y no toma su
-temporizador como autoridad. JWT propuesto de hasta 900 s no equivale a ventana de
+temporizador como autoridad. JWT nominal máximo aprobado de 240 s, con garantía temporal pendiente, no equivale a ventana de
 60 min; `AuthResponse.expiresAt <= session.expiresAt`. Sin vigencia restante positiva
 no emitir. Credencial nunca puede autorizar acceso más allá del límite real exigido;
 skew positivo no puede extenderlo implícitamente.
@@ -241,12 +242,17 @@ skew positivo no puede extenderlo implícitamente.
 | POST `/v1/auth/session/activity` `{interactionId,kind}` → snapshot | JWT + cookie coincidentes + CSRF | Condicional a B03: deduplica y evalúa señal; no confía en timestamps cliente |
 | POST `/v1/auth/logout` `{scope,reauthenticationProofId?}` → 204 | Cookie + CSRF si existe; all requiere sesión vigente y prueba reciente | current revoca familia y elimina cookie; all revoca todas las sesiones propias |
 
-La señal de actividad no demuestra humanidad por ser enviada desde JS. B03 debe
-definir reconocimiento, antifalsificación, reloj y coordinación entre APIM/servicios;
-si no puede demostrarse, mantener bloqueado, no sustituirlo por un booleano cliente.
-Actividad sin sesión vigente o simultánea a expiración no resucita sesión.
+B03 aprueba solo actividad de negocio elegible respaldada por evidencia autenticada
+de servidor, con timestamp del instante real de ejecución y cómputo único. Se
+admite procesamiento tardío de hasta 60 s, únicamente si la sesión sigue vigente
+con su estado **previo** a aplicar la señal; igualdad con el deadline ya expira.
+Nunca usar recepción tardía como actividad nueva ni reactivar sesión expirada.
+La actualización propuesta es `h=max(h,tEjecución)`, sin mover `r` ni `a`.
+Allowlist, evidencia, productor/correlación, reloj y deduplicación atómica requieren
+contrato y pruebas. `ActivityRequest` actual solo lleva interactionId/kind y no
+demuestra ese respaldo: sigue bloqueado, sin inventar un protocolo de productores.
 
-Rotación estricta sin gracia es **Proposed**, conforme a la alternativa ADR-004:
+B06/D6 aprueba serialización incluso entre pestañas, sin gracia general. Detalle **Draft**, pendiente de protocolo y pruebas:
 verificar/consumir la generación actual y emitir siguiente atómicamente. Dos usos
 concurrentes: uno gana; reconocer la generación consumida en el segundo revoca la
 familia, incluido el reemplazo del ganador, y responde `401 REFRESH_REUSED`. Es coste
@@ -268,11 +274,13 @@ futura. B01 impide prometer revocación distribuida por la mera respuesta de log
 **Bloqueo B01:** validación local de firma/exp por sí sola no observa cambios de
 estado. Acotar `exp` a los deadlines conocidos al emitir impide sobrepasar esos
 deadlines fijos (sin skew adicional), pero no corta revocación posterior ni garantiza
-la medición/consistencia de actividad. Logout puede dejar aceptación hasta `exp`
-más skew/desfase. `sid`, `jti`, versión de sesión, borrar cookie o retirar una clave
+la medición/consistencia de actividad. Logout puede dejar aceptación de JWT previos dentro del residual ordinario
+≤300 s solo si se demuestran las cotas de B01; cero leeway positivo no elimina
+desfase de reloj. Esa garantía está **Documentada pero no verificada**. `sid`, `jti`, versión de sesión, borrar cookie o retirar una clave
 de JWKS sin distribuir el cambio no resuelven eso. El informe compara estrategias;
-ninguna queda seleccionada. No se acepta residual tras vencimiento de sesión ni se
-promete SLA de corte sin decisión y prueba en todos los validadores.
+ninguna queda seleccionada. No se acepta residual tras vencimiento de sesión. D4/D5 siguen Proposed: no
+se especifica como definitiva la entrega/confirmación de operaciones en curso ni
+la infraestructura o respuesta a incidentes críticos; sin garantías, bloquear lo afectado.
 
 ## 5. Perfil propio, errores y compatibilidad Angular
 
@@ -299,7 +307,7 @@ dirección o proveedor en detalles. Error desconocido no habilita fallback de id
 
 MTEC-10 deberá consumir los intentos/login, session/refresh/logout, snapshot/aviso,
 perfil propio y, si se habilita UI de vínculo, pruebas y métodos. Sustituir ID token
-Google guardado como sesión por AuthResponse interno; guardar acceso preferentemente
+Google guardado como sesión por AuthResponse interno; guardar acceso y sincronizador CSRF solo
 en memoria y usar withCredentials solo en destinos/rutas autorizados. Google `sub`
 no se pasa a perfiles/publicaciones. `USR-001` se sustituye por user.userId o perfil
 propio; publicaciones propias aún necesitan contrato de catálogo revisado después.
@@ -312,14 +320,34 @@ no disparador de refresh. Errores tardíos no invalidan sesión nueva. Cookie au
 bloqueada requiere reautenticación y diagnóstico UX, no almacenamiento alternativo
 inseguro. Todo es evaluación futura: Angular no se modifica aquí.
 
-## 6. JWT, JWKS y metadata (Proposed)
+## 6. JWT, JWKS y metadata: perfil aprobado, interfaz Draft
 
-Perfil candidato: RS256 únicamente, `kid` obligatorio, tipo JOSE `at+jwt`, iss HTTPS
-exacto por entorno, aud explícita, sub interno, sid, iat/exp/jti obligatorios; nbf
-validado si existe. Scopes sin privilegios implícitos. Valores reales, tamaños RSA,
-skew, vida máxima, namespaces, custodia y permisos requieren MTEC-40. Los valores
-`.invalid` de fixtures son aislados, no entornos existentes. JWT firmado no cifra
-claims; omitir PII y secretos. Esquema de claims no verifica firma ni origen del ID.
+RS256/RSA-2048 aprobado; claims obligatorios `iss`, `aud`, `sub=userId` interno,
+`sid`, `iat`, `exp`, `jti`. **`kid` en encabezado JOSE, nunca como claim.**
+Header `typ=at+jwt`, tipos NumericDate enteros, aud string y `nbf` opcional
+son restricciones de diseño Draft existentes; valores exactos de issuer/audience
+y perfil final por entorno/validador deben cerrarse antes de implementación.
+Validar estrictamente firma, algoritmo permitido, clave pública confiable, issuer,
+audiencia y tiempos. `0 < exp-iat ≤240 s`, sin tolerancia positiva a `exp`:
+igualdad expira. `nbf` presente exige tipo/coherencia y no aceptar antes de él.
+No seguir `jku`/`x5u` ni claves embebidas del token. No PII sensible ni roles por
+dominio; un schema no valida firma ni origen del identificador.
+
+`exp` efectivo y `AuthResponse.expiresAt` se acotan al primer deadline de sesión;
+la respuesta debe reflejar el exp del token. La emisión debe descontar un margen
+seguro medido para reloj y demora hasta admisión; `exp≤deadline` por sí solo no
+demuestra el corte real. La fórmula de diseño `exp=floor(min(iat+240,Ds)-m)`
+requiere demostrar `m`; no se asigna valor. `TTL+presupuestoTotal≤300 s` exige
+prueba end-to-end desde revocación autoritativa hasta admisión en cada validador,
+además del corte estricto 60/30/8. Los 60 s aritméticos restantes no son skew
+aprobado ni los 60 s de procesamiento de actividad B03. Si no cabe, reducir TTL
+o rechazar. Ordenar emisión/refresh con revocación para no emitir después.
+
+Fail-closed B01/D2 si falta firma, algoritmo, clave/frescura, reloj o tiempo
+verificable. Caída de ms-users impide autenticación/refresh dependientes, pero
+permite JWT previos localmente verificables con confianza y tiempo vigentes;
+no introduce consulta a ms-users por request. D4/D5 siguen sin resolver el
+trabajo en curso y la contención crítica. Los hosts `.invalid` son solo fixtures.
 
 APIM y cada backend validan perfil y claves configurados, sin fallback Google,
 `none`, HMAC, URL de clave del token ni headers de identidad del navegador. JWT del
@@ -329,7 +357,7 @@ No se diseña token exchange de workloads ni se comparte firma privada.
 
 | GET público propuesto | Contrato | Restricción |
 |---|---|---|
-| `/.well-known/jwks.json` | `Jwks` con keys públicas kty/use/alg/kid/n/e | Sin privados, kid único, RSA válido/tamaño aprobado en runtime |
+| `/.well-known/jwks.json` | `Jwks` con keys públicas kty/use/alg/kid/n/e | Sin privados, kid único, RSA-2048 válido en runtime |
 | `/.well-known/markettec-identity` | `IdentityMetadata`: issuer, jwks_uri, audiences, algorithms, type, version | Metadata propia; no OpenID Provider Discovery ni OAuth/OIDC completo |
 
 Publicación sin bearer/cookie/subscription key evita ciclo de arranque. Fijar destinos
@@ -341,9 +369,9 @@ de firmar, comprobar propagación, solapar hasta último exp/skew/cachés y reti
 evidencia. Compromiso requiere retirar confianza en todos o suspender rutas hasta
 recuperación; no basta quitar clave de JWKS.
 
-**B05:** no usar metadata propia en `openid-config` APIM. Microsoft exige metadata
-conforme de OpenID y documenta cachés; decidir aprovisionamiento de claves públicas
-controlado o una futura interfaz conforme, probar Java/Node/Python/APIM antes de
+**B05/D2 aprobado:** JWKS público y aprovisionamiento controlado de públicas para APIM/validadores; no usar metadata propia en `openid-config` APIM. Microsoft exige metadata
+conforme de OpenID y documenta cachés; cerrar procedimiento de aprovisionamiento, caché/frescura/rotación y
+propagación, probar Java/Node/Python/APIM antes de
 integrar. Esta propuesta no inventa authorization/token endpoints para aparentar
 un proveedor OIDC. [Referencia primaria APIM](https://learn.microsoft.com/en-us/azure/api-management/validate-jwt-policy).
 
@@ -361,7 +389,7 @@ un proveedor OIDC. [Referencia primaria APIM](https://learn.microsoft.com/en-us/
 | Operaciones internas | Ninguna ruta nueva aquí | Identidad de servicio y delegación explícita futura; eventos no transportan credenciales |
 
 Preflight OPTIONS se limita a origen/método/headers permitidos; no ejecuta la
-operación ni autoriza negocio. B06 debe cerrar cookies/CORS/headers expuestos
+operación ni autoriza negocio. B06 aprueba sincronizador CSRF/CORS explícito y preferencia same-site; cerrar topología, cookies y headers expuestos
 X-Correlation-ID/Retry-After y manejo de error gateway con mismo envelope.
 No wildcard de excepción `/auth/*` que habilite pruebas protegidas.
 Backend requiere origen gateway autenticado además de revalidar JWT según
@@ -369,24 +397,29 @@ ADR-004; control real de red/certificados queda MTEC-12, no asumido aquí.
 
 ## 8. Versionado, aprobación y pruebas
 
-0.2.0-draft declara incompatibilidad respecto de 0.1: Google requiere intento y
-CSRF/cookie; AuthResponse añade campos requeridos que el esquema anterior cerrado
-rechaza; perfil GET se limita a propietario. No se sirve silenciosamente sobre
-una implementación 0.1: acordar corte de consumidores/versión de API antes de
-implementar. Se conservan rutas previas, DTOs de perfil, health, contratos ajenos y
-eventos. Las rutas añadidas son aditivas en inventario; eso no demuestra compatibilidad
-del flujo de sesión ni de validadores estrictos.
+**Candidata 0.3.0-draft**, pendiente de B07 y aprobación MTEC-15. Frente a
+0.2.0-draft conserva rutas/DTOs de perfil, health, eventos y contratos ajenos;
+cambia reglas temporales y metadatos de versión:
 
-Bloqueos de aprobación: B01 cumplimiento/revocación distribuidos; B02 continuidad,
-namespace/alta y perfil inicial email; B03 actividad humana; B04 reautenticación
-reciente; B05 perfil JWT/JWKS/APIM; B06 transporte/UX/errores de sesión; B07
-conformidades de responsables y consumo canónico/corte de repositorio. Detalle,
-riesgos, alternativas y preguntas en el informe de revisión; no hay aprobación
-implícita de ninguno por pasar un linter.
+| Diferencia | Compatibilidad / condición |
+|---|---|
+| JWT de candidato 900 s a máximo 240 s, RS256/RSA-2048, kid JOSE y cero leeway positivo | Cambio semántico incompatible con emisores/validadores antiguos, aunque claims conserven forma. Revisión coordinada; sin fallback al perfil anterior |
+| `contract_version` de metadata 0.3.0-draft | Incompatible con validadores que fijan const 0.2.0-draft; acordar consumo/corte |
+| Header JOSE explícito y políticas JWT/JWKS/transporte | Aditivo en descripción/schema; no demuestra interoperabilidad ni aprueba parámetros candidatos |
+| B02 continuidad y B03 tiempo real/cómputo único | Políticas aprobadas; las interfaces existentes no bastan para evidencia/alta aislada. Mantener bloqueadas, sin inventar endpoints |
+| Access/CSRF solo memoria, cookie segura host-only y refresh entre pestañas | Política aprobada; protocolo/topología/errores aún Draft. Angular actual requiere migración |
+| Aviso | Se basa en deadline efectivo de sesión; 300 s es candidato y protocolo pendiente, no preaviso del JWT |
 
-Validar Redocly, Schema Draft 2020-12, referencias, fixtures positivos/negativos,
-límites temporales y regresión de contratos ajenos. Pruebas contractuales describen
-formas e invariantes; no implementan ni certifican verificación criptográfica,
-consumo transaccional, humanidad, continuidad, CORS o revocación. Faltan pruebas
-backend y navegadores, interoperabilidad Java/Node/Python, y luego evidencia APIM
-autorizada. No iniciar MTEC-36 ni modificar ADR-004/DECISION_LOG para aprobar esto.
+La incompatibilidad heredada 0.1→0.2 permanece: intento/cookie/CSRF en Google,
+session/csrfToken requeridos en AuthResponse cerrado y perfil restringido al dueño.
+No desplegar silenciosamente sobre consumidores antiguos. La [release review B07](../../docs/MTEC15_AUTH_CONTRACT_RELEASE_REVIEW.md)
+registra superficies listas, condicionadas/bloqueadas y checklist de conformidades.
+
+Validar OpenAPI, Schema 2020-12, referencias, fixtures y límites entre campos.
+Los vectores JWT sintéticos verifican rechazo con un **oráculo de prueba** aislado;
+no implementan autenticación de aplicación ni certifican Java/Node/Python/APIM.
+Quedan **Documentados pero no verificados** residual ≤300 s, clocks, propagación,
+carreras, cookies/CSRF/CORS y evidencia real de continuidad/frescura/actividad.
+Conservar B01 D4/D5, B04, protocolos B02/B03 y parámetros B05/B06 como pendientes.
+B07 requiere conformidades explícitas y consumo canónico; pasar QA estático no
+aprueba contratos, no inicia MTEC-36 ni cambia estados Jira.

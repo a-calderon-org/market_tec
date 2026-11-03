@@ -56,6 +56,7 @@ def validate_session(snapshot):
 def validate_auth(value):
     validate_session(value["session"])
     assert value["session"]["serverTime"] < value["expiresAt"] <= value["session"]["expiresAt"], "access beyond session"
+    assert value["expiresAt"] - value["session"]["serverTime"] <= 240, "access lifetime exceeds 240"
 
 
 def validate_semantics(schema, value):
@@ -97,7 +98,7 @@ class AuthContractsTest(unittest.TestCase):
         for route, method in required:
             self.assertEqual("proposed", self.api["paths"][route][method]["x-implementation-status"])
         self.assertEqual("draft-pending-team-approval", self.api["x-contract-status"])
-        self.assertEqual("0.2.0-draft", self.api["info"]["version"])
+        self.assertEqual("0.3.0-draft", self.api["info"]["version"])
         self.assertGreaterEqual(len(self.api["x-design-review"]["breakingChanges"]), 3)
 
     def test_login_refresh_and_metadata_have_no_bearer_bootstrap_cycle(self):
@@ -328,12 +329,56 @@ class AuthContractsTest(unittest.TestCase):
 
     def test_refresh_concurrency_policy_is_explicit_and_not_idempotent_reissuance(self):
         rotation = self.api["paths"]["/v1/auth/refresh"]["post"]["x-refresh-rotation"]
-        self.assertEqual("proposed", rotation["status"])
+        self.assertEqual("draft-detail-under-approved-policy", rotation["status"])
+        self.assertTrue(rotation["serializedAcrossTabs"])
+        self.assertEqual("pending", rotation["protocolAndConcurrencyTests"])
         self.assertTrue(rotation["atomicConsumeAndReplace"])
         self.assertFalse(rotation["graceWindow"])
         self.assertFalse(rotation["reissueOnRetry"])
         self.assertEqual("revoke-family-including-winner", rotation["consumedGenerationReuse"])
         self.assertEqual("reauthenticate", rotation["lostResponse"])
+
+
+    def test_short_access_lifetime_and_profile_policy_are_explicit(self):
+        policy = self.api["x-jwt-policy"]
+        self.assertEqual(("RS256", 2048, 240, 0), tuple(policy[k] for k in (
+            "algorithm", "rsaBits", "maximumNominalLifetimeSeconds", "positiveExpirationLeewaySeconds"
+        )))
+        self.assertEqual(["alg", "kid"], policy["joseHeaderRequired"])
+        self.assertNotIn("kid", policy["claimsRequired"])
+        self.assertEqual(240, self.api["x-session-policy"]["accessTokenLifetimeSeconds"]["maximum"])
+        auth = next(c["value"] for c in self.cases if c["name"] == "google-login")
+        for ttl in (239, 240, 241, 900):
+            value = copy.deepcopy(auth)
+            value["expiresAt"] = value["session"]["serverTime"] + ttl
+            if ttl <= 240:
+                validate_auth(value)
+            else:
+                with self.assertRaises(AssertionError):
+                    validate_auth(value)
+
+    def test_identity_and_browser_policies_preserve_safety_boundaries(self):
+        identity = self.api["x-identity-policy"]
+        self.assertFalse(identity["automaticMergeByEmail"])
+        self.assertFalse(identity["automaticHistoryTransfer"])
+        self.assertFalse(identity["continuityRequiredForBasicAccess"])
+        self.assertEqual(["passkey-bound-to-userId", "single-use-recovery-code"], identity["approvedContinuityMechanisms"])
+        browser = self.api["x-browser-policy"]
+        self.assertEqual("memory-only", browser["accessAndCsrfStorage"])
+        self.assertEqual("opaque-rotating-cookie", browser["refresh"])
+        self.assertTrue(browser["refreshSerializedAcrossTabs"])
+        self.assertFalse(browser["generalReuseGrace"])
+        self.assertEqual("effective-session-deadline-not-access-jwt",
+                         self.api["x-session-policy"]["warningLeadSeconds"]["relativeTo"])
+
+    def test_activity_contract_does_not_claim_client_request_is_evidence(self):
+        activity = self.api["x-session-policy"]["activity"]
+        self.assertEqual(60, activity["maximumProcessingDelaySeconds"])
+        self.assertTrue(activity["singleCount"])
+        self.assertTrue(activity["neverReviveExpiredSession"])
+        self.assertFalse(activity["requestAloneIsEvidence"])
+        op = self.api["paths"]["/v1/auth/session/activity"]["post"]
+        self.assertEqual("blocked-pending-approved-evidence-protocol", op["x-integration-readiness"])
 
     def test_public_key_schemas_cannot_expose_private_material(self):
         public = next(c["value"] for c in self.cases if c["name"] == "public-jwks-structural-only")

@@ -6,7 +6,7 @@
     "value": {
       "token": "internal-jwt-placeholder",
       "tokenType": "Bearer",
-      "expiresAt": 1790000900,
+      "expiresAt": 1790000240,
       "user": {
         "userId": "usr_abc123",
         "email": "usuario@estudiantec.cr",
@@ -36,7 +36,7 @@
     "value": {
       "token": "internal-jwt-placeholder",
       "tokenType": "Bearer",
-      "expiresAt": 1790000900,
+      "expiresAt": 1790000240,
       "user": {
         "userId": "usr_abc123",
         "email": "usuario@estudiantec.cr",
@@ -466,7 +466,7 @@
       "sub": "usr_abc123",
       "sid": "session-placeholder",
       "iat": 1790000000,
-      "exp": 1790000900,
+      "exp": 1790000240,
       "jti": "token-placeholder"
     }
   },
@@ -593,7 +593,7 @@
         "RS256"
       ],
       "access_token_type": "at+jwt",
-      "contract_version": "0.2.0-draft"
+      "contract_version": "0.3.0-draft"
     }
   },
   {
@@ -640,6 +640,60 @@
         }
       ],
       "sub": "external-google-sub-placeholder"
+    }
+  },
+  {
+    "name": "jose-header",
+    "schema": "InternalAccessHeader",
+    "valid": true,
+    "value": {
+      "alg": "RS256",
+      "typ": "at+jwt",
+      "kid": "fixture-key"
+    }
+  },
+  {
+    "name": "jose-none-rejected",
+    "schema": "InternalAccessHeader",
+    "valid": false,
+    "value": {
+      "alg": "none",
+      "typ": "at+jwt",
+      "kid": "fixture-key"
+    }
+  },
+  {
+    "name": "jose-hmac-rejected",
+    "schema": "InternalAccessHeader",
+    "valid": false,
+    "value": {
+      "alg": "HS256",
+      "typ": "at+jwt",
+      "kid": "fixture-key"
+    }
+  },
+  {
+    "name": "jose-kid-missing",
+    "schema": "InternalAccessHeader",
+    "valid": false,
+    "value": {
+      "alg": "RS256",
+      "typ": "at+jwt"
+    }
+  },
+  {
+    "name": "kid-is-not-a-claim",
+    "schema": "InternalAccessClaims",
+    "valid": false,
+    "value": {
+      "iss": "https://identity.dev.markettec.invalid",
+      "aud": "markettec-api-dev",
+      "sub": "usr_abc123",
+      "sid": "session-placeholder",
+      "iat": 1790000000,
+      "exp": 1790000240,
+      "jti": "token-placeholder",
+      "kid": "fixture-key"
     }
   }
 ]
