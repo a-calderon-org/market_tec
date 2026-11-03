@@ -73,7 +73,7 @@ producen un código de salida distinto de cero.
 
 ## Candidata de autenticación
 
-Users/identidad `0.3.0-draft` consolida decisiones aprobadas B01–B06 sin aprobar
+Users/identidad `0.3.0-draft` consolida decisiones aprobadas B01–B06 y propone registro Google explícito sin aprobar
 interfaces ni conformidades B07. Cambios, compatibilidad y límites de QA en
 [release review](../docs/MTEC15_AUTH_CONTRACT_RELEASE_REVIEW.md); reglas canónicas
 en [identidad](identity/IDENTITY_CONTRACT.md). Los vectores criptográficos usan

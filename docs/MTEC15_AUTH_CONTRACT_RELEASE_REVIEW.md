@@ -1,6 +1,6 @@
 # MTEC-15 — Revisión candidata de autenticación y conformidades B07
 
-**Fecha:** 2026-11-02 (America/Costa_Rica). **Destinatarios:** mantenedores de
+**Fecha:** 2026-11-03 (America/Costa_Rica). **Destinatarios:** mantenedores de
 ms-users, Angular, ms-catalog, ms-notifications, APIM y revisión de seguridad.
 **Candidata:** `0.3.0-draft`. **QA contractual:** PASS WITH NOTES.
 **Aprobación de interfaces/integración:** BLOCKED por decisiones, protocolos y B07.
@@ -44,11 +44,11 @@ No se duplican propuestas completas ni se atribuyen conformidades a equipos.
 | JWT | Candidato 900 s sustituido por máximo nominal 240 s; RS256/RSA-2048, sub=userId, sid y kid en JOSE; validación estricta y cero leeway positivo. Incompatible con emisores/validadores que mantengan 900 s, otra clave/perfil o tolerancia positiva |
 | Metadata | `contract_version` cambia a const `0.3.0-draft`; incompatible con validadores que fijen 0.2.0. Header JOSE y extensiones de política son aditivos |
 | Sesión | Se conservan 60/30/8, igualdad expira y primer deadline. exp acotado con margen medido, no inventado; residual ordinario ≤300 s requerido, sin demostración |
-| Identidad | B02 passkey por userId/código de un uso, opcionales para básico; sin merge ni transferencia de historial. Sin endpoints WebAuthn/recuperación ni protocolo de alta aislada inventados |
+| Identidad | B02 passkey por userId/código de un uso, opcionales para básico; sin merge ni transferencia de historial. Sin endpoints WebAuthn/recuperación; el registro Google explícito se propone abajo sin habilitación HTTP |
 | Actividad | B03 usa ejecución real respaldada por servidor, cómputo único y procesamiento ≤60 s sin reactivación; request actual no basta y permanece bloqueado |
 | Navegador | Access/CSRF solo memoria, refresh opaco cookie HttpOnly/Secure/host-only, sincronizador/CORS explícito y serialización entre pestañas sin gracia general. Protocolo, SameSite/Path/hosts pendientes |
 | Refresh/logout/aviso | Bloqueo de emisión tras revocación, carreras/duplicados/pérdida explícitos. Detalle Draft de revocar familia ante reuso y reautenticar tras pérdida; pruebas pendientes. Aviso candidato 300 s antes del deadline de sesión, nunca del JWT |
-| Regresión | Mismas 21 operaciones: health implementada, 20 propuestas. Perfil/DTOs existentes, eventos, Catalog y Notifications conservados; baseline de hashes pasa |
+| Regresión | 22 operaciones: health implementada, 21 propuestas; se añade registro Google explícito. Perfil/DTOs existentes, eventos, Catalog y Notifications conservados; baseline de hashes pasa |
 
 **Verificado estáticamente:** Angular todavía deriva `id` de Google `sub`
 (`google-auth.service.ts`), guarda token en sessionStorage (`auth-token.service.ts`)
@@ -74,7 +74,7 @@ No consta compatibilidad dinámica ni conformidad de ningún consumidor.
 
 | Endpoints existentes en Draft | Condición antes de implementación interoperable |
 |---|---|
-| `POST /v1/auth/attempts`, `/v1/auth/google`, `/v1/auth/email/requests`, `/v1/auth/email/confirm` | Aprobar protocolos Google/enlace, alta/perfil inicial/continuidad aplicable, intentos, TTL/tasas/anti-replay y B07; probar elegibilidad y no enumeración |
+| `POST /v1/auth/attempts`, `/v1/auth/google`, `/v1/auth/google/registrations`, `/v1/auth/email/requests`, `/v1/auth/email/confirm` | Aprobar protocolos Google/enlace, alta/perfil inicial/continuidad aplicable, intentos, TTL/tasas/anti-replay y B07; probar elegibilidad y no enumeración |
 | `GET /v1/auth/session`, `POST /v1/auth/refresh`, logout `scope=current` | Cerrar CSRF/refresh/concurrencia/pérdida y topología; estado/tiempo autoritativos y emisión/revocación ordenadas; D4/D5 aplicables y B07. Snapshot/aviso y tests navegador pendientes |
 | `GET /.well-known/jwks.json`, `GET /.well-known/markettec-identity` | Cerrar issuer/audience/configuración, custodia local, procedimiento de públicas/caché/frescura/rotación y B07. Aprovisionamiento APIM/pruebas antes de integrar; no metadata custom como discovery OIDC |
 | `GET/PUT /v1/usuarios/{userId}`, `GET/PUT /v1/me/profile`, `GET /v1/me/auth-methods` | Adaptador de principal/JWT, ownership, reglas por operación y contratos B07; ejecución protegida depende del perfil/validador revisado |
@@ -89,7 +89,7 @@ pasar este QA. Los módulos aislados no prueban las garantías distribuidas.
 - `/v1/auth/proofs/*`, `POST /v1/me/auth-methods`, logout `scope=all` y efectos
   sensibles: B04 requiere evidencia reciente ligada a acción/usuario/sid y
   consumo único; <300 s aún condicionado; resolver D4/D5 aplicables.
-- Passkeys/códigos, recuperación excepcional, alta aislada y recuperación de
+- Passkeys/códigos, recuperación excepcional, otras altas aisladas y recuperación de
   historial: política B02 aprobada, protocolos/contratos no disponibles. No
   inventar rutas ni exigir continuidad como requisito para básico.
 - Corte de operaciones/entregas en vuelo y contención crítica: B01 D4/D5 siguen
@@ -119,9 +119,40 @@ esta revisión; aprobar política RP no equivale a conformidad de consumidor.
   parámetros mínimos y excepciones/riesgos con responsable e hito; no sustituir
   pruebas por declaraciones. Acordar versión/corte y aprobación final MTEC-15.
 
+## Revisión B07 del registro Google explícito (2026-11-03)
+
+**Alcance y método:** comparación del contrato local contra el HEAD inicial
+`3b5aeaac4150921ab72081b5b594f6f9ad93728f`, lectura de identidad,
+Users OpenAPI, pruebas y perfiles Catalog/Notifications; validación estática y
+suite contractual. No se inspeccionó el repositorio independiente ms-users ni
+Azure. El backend G2B-D con check verde es contexto comunicado, no verificación
+local de una ruta HTTP ni de seguridad desplegada.
+
+| Área B07 | Cambio, compatibilidad y revisión requerida |
+|---|---|
+| Operaciones | `POST /v1/auth/attempts` acepta `purpose=register` solo con Google y conserva omisión como login; `POST /v1/auth/google` acepta solo intento login; nuevo `POST /v1/auth/google/registrations` exige intento register. Ambos éxitos reutilizan `AuthResponse`, cookie refresh y CSRF de sesión Draft. |
+| Frente al borrador anterior | Se agrega `GoogleRegistrationRequest` con `credential,attemptId`; `AttemptResponse.purpose` admite register. El nuevo endpoint y propósito son aditivos. Login sigue sin alta implícita ni activación de PENDING. |
+| Versionado | Consumidores estrictos de enums pueden rechazar `register`; versionar cliente/servidor juntos y no enviar ese propósito antes de su soporte. El nuevo método debe incorporarse a la tabla APIM por ruta exacta. El perfil JWT/sesión 0.3 se conserva. |
+| Angular | Ofrecer acciones separadas de login y registro; obtener intento de propósito correcto y nonce del servidor; presentar GIS y enviar token por POST con cookie, CSRF y Origin permitidos. Mantener access/CSRF solo en memoria; refresh con credenciales por destino y coordinación de pestañas. Tratar 401 de registro como rechazo genérico, sin mostrar existencia/estado de cuenta. Sustituir Google sub por userId interno. |
+| ms-users | Adaptador HTTP debe exigir propósito exacto, token Google verificado, nonce, cookie de navegador, CSRF y Origin; creación atómica de userId nuevo, cuenta básica y vínculo ACTIVE solo ante ausencia de vínculo exacto en cualquier estado. Rechazar PENDING sin mutarlo, evitar merge por correo, historial/privilegios TEC y duplicados por carrera. Producir AuthResponse, cookie opaca rotatoria y sesión 60/30/8; revocación/logout. El backend interno no acredita este adaptador. |
+| ms-catalog | Aceptar solo JWT interno RS256/RSA-2048 con `sub=userId` opaco, `iss/aud/exp/sid/jti` válidos y ≤240 s; verificar firma localmente y autorización de vendedor/propiedad con userId. No inferir afiliación o privilegios TEC de un alta Google ni usar sub Google. |
+| ms-notifications | Igual validación JWT y destinatario=userId interno. SSE debe probar admisión, revalidación/corte de conexión ante expiración/revocación aplicable y no transportar bearer por URL. Esto requiere revisión del consumidor; no se modificó el contrato `message.sent`. |
+| APIM | Admitir intento, login y registro por método/ruta exactos sin ciclo de bearer; CORS con orígenes concretos y credenciales, nunca wildcard; preservar Set-Cookie/CSRF/correlación, filtrar headers de identidad y secretos, aplicar cuotas. Validar JWT interno en rutas protegidas sin sustituir revalidación de servicios. Aislamiento real y límite de revocación distribuida siguen sin demostrar. |
+| Pruebas pendientes | Integración HTTP positiva/negativa de token, nonce, propósito cruzado, vínculo ACTIVE/PENDING/ausente, concurrencia, email coincidente, cuenta básica sin privilegios, respuesta perdida, 60/30/8, refresh/logout, cookies/CSRF/CORS, JWT y SSE; ejecutar en stacks y APIM reales antes de conformidad. |
+| Decisiones humanas | Responsables funcional, seguridad, Angular, ms-users, ms-catalog, ms-notifications y APIM deben registrar conformidad por versión/commit. Aprobar topología y orígenes reales, Cookie Path/SameSite, hosts, protocolo CSRF, parámetros de refresh/revocación B01 D4/D5, y corte/versionado de B07. Same-site+Lax o cross-site+None/Secure son alternativas condicionadas a pruebas de navegador y riesgo de cookies de terceros; ninguna se adopta aquí. |
+
+**Evidencia:** 40 pruebas contractuales PASS; Redocly tres OpenAPI sin errores,
+nueve warnings preexistentes. `git diff --check` PASS. **Documentado pero no
+verificado:** G2B-D interno y su check remoto; adaptador HTTP, seguridad real de
+APIM, límite de revocación distribuida y conformidad de consumidores.
+**No determinado:** hosts, Cookie Path, SameSite, orígenes Azure y soporte de
+navegador. **Inferido:** los consumidores pueden conservar operaciones previas si
+ignoran el nuevo propósito hasta actualizarse; requiere prueba en sus clientes.
+**B07 sigue Draft y sin aprobación de consumidores.**
+
 ## Evidencia reproducible de QA y límites
 
-**Verificado:** suite local **37/37 PASS**, incluidos 27 vectores JWT sintéticos,
+**Verificado:** suite local **40/40 PASS**, incluidos 27 vectores JWT sintéticos,
 formas/referencias/ejemplos Schema 2020-12, bordes 60/30/8 antes/en/después,
 refresh/logout/errores, política sin merge por email y baseline de compatibilidad.
 Oráculo aislado en `test_jwt_profile.py`: OpenSSL verifica firmas; se rechazan
@@ -129,9 +160,7 @@ algoritmo, firma/clave ajena, issuer/aud incorrectos, kid ausente/desconocido,
 claims/tipos, vida >240 s y exp en igualdad/después. No se importa desde servicios.
 Privadas efímeras descartadas; fixtures solo públicas/tokens para `.invalid`.
 
-**Verificado:** Redocly 2.71.2 valida los tres OpenAPI sin errores, **9 warnings**:
-6 previos de license/health, 2 previos de claims/principal auxiliares y 1 nuevo
-de header JOSE auxiliar usado por extensión/tests, no como cuerpo HTTP.
+**Verificado:** Redocly 2.71.2 valida los tres OpenAPI sin errores, **9 warnings**, todos preexistentes respecto de este cambio: 6 de license/health, 2 de claims/principal auxiliares y 1 de header JOSE auxiliar usado por extensión/tests, no como cuerpo HTTP.
 `git diff --check` y whitespace de archivos nuevos: sin errores.
 
 Comandos desde el worktree (tras instalar herramientas fijadas según contracts/README):
@@ -161,7 +190,7 @@ de integración, navegador, Azure ni CI remoto de esta candidata local.
 
 Falta aprobación RP de D4 (corte/entregas/efecto sensible) y D5 (infraestructura y
 contención crítica), y ratificación técnica B04 por método/acción. Protocolos
-WebAuthn/recuperación, alta aislada/perfil inicial, actividad y CSRF/refresh/aviso,
+WebAuthn/recuperación, perfil inicial y otras altas aisladas, actividad y CSRF/refresh/aviso,
 issuer/aud y procedimientos de claves deben cerrarse con sus responsables. No
 se reabre la política ya aprobada RS256/RSA-2048, 240 s, 60/30/8 ni básico B02.
 

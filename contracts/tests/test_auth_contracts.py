@@ -83,6 +83,7 @@ class AuthContractsTest(unittest.TestCase):
     def test_required_operations_exist_and_remain_proposed(self):
         required = {
             ("/v1/auth/attempts", "post"), ("/v1/auth/google", "post"),
+            ("/v1/auth/google/registrations", "post"),
             ("/v1/auth/email/requests", "post"), ("/v1/auth/email/confirm", "post"),
             ("/v1/auth/session", "get"), ("/v1/auth/refresh", "post"),
             ("/v1/auth/logout", "post"), ("/v1/auth/session/activity", "post"),
@@ -318,6 +319,34 @@ class AuthContractsTest(unittest.TestCase):
                 else:
                     status, code = result.split("-", 1)
                     self.assertIn(code, op["x-error-codes"][status])
+
+    def test_google_registration_is_explicit_and_separate(self):
+        response = self.api["components"]["schemas"]["AttemptResponse"]
+        self.assertTrue(validator(self.api, "LoginAttemptRequest").is_valid({"method": "google"}))
+        self.assertTrue(validator(self.api, "LoginAttemptRequest").is_valid({"method": "google", "purpose": "register"}))
+        self.assertFalse(validator(self.api, "LoginAttemptRequest").is_valid({"method": "email", "purpose": "register"}))
+        self.assertIn("register", response["properties"]["purpose"]["enum"])
+        login = self.api["paths"]["/v1/auth/google"]["post"]
+        registration = self.api["paths"]["/v1/auth/google/registrations"]["post"]
+        self.assertEqual("login", login["x-registration-separation"]["acceptedAttemptPurpose"])
+        self.assertFalse(login["x-registration-separation"]["createsAccount"])
+        policy = registration["x-registration-policy"]
+        self.assertEqual("register", policy["acceptedAttemptPurpose"])
+        self.assertNotIn("x-registration-separation", registration)
+        self.assertEqual("generic-rejection-no-mutation", policy["existingLinkAnyStatus"])
+        self.assertEqual("ACTIVE", policy["googleLink"])
+        for field in ("mergeByEmail", "historyTransfer", "automaticTecPrivileges"):
+            self.assertFalse(policy[field])
+        self.assertEqual("proposed", registration["x-implementation-status"])
+        self.assertEqual([{"attemptCookie": []}], registration["security"])
+        self.assertEqual("#/components/schemas/GoogleRegistrationRequest", registration["requestBody"]["content"]["application/json"]["schema"]["$ref"])
+        self.assertEqual("#/components/schemas/AuthResponse", registration["responses"]["200"]["content"]["application/json"]["schema"]["$ref"])
+        self.assertEqual(["AUTH_PROOF_INVALID"], registration["x-error-codes"]["401"])
+        self.assertNotIn("REGISTRATION_REQUIRED", registration["x-error-codes"]["401"])
+        for value in ({"credential": "synthetic", "attemptId": "one"},):
+            validator(self.api, "GoogleRegistrationRequest").validate(value)
+            for forbidden in ("userId", "email", "roles", "privileges"):
+                self.assertFalse(validator(self.api, "GoogleRegistrationRequest").is_valid({**value, forbidden: "test"}))
 
     def test_google_and_email_use_same_internal_user_shape(self):
         logins = [case["value"] for case in self.cases if case["name"] in {"google-login", "email-login-same-internal-user"}]

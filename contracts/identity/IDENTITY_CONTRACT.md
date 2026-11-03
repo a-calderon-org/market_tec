@@ -139,8 +139,9 @@ GIS no añade por sí solo este protocolo; no asumir `g_csrf_token` de otro modo
 
 | Método/ruta de servicio | Request → éxito | Seguridad y efecto |
 |---|---|---|
-| POST `/v1/auth/attempts` | `{method}` → `AttemptResponse` | Sin sesión; contexto navegador, propósito login y cliente GIS fijados por servidor |
-| POST `/v1/auth/google` | `{credential,attemptId}` → `AuthResponse` 200 Draft | Cuenta existente con vínculo Google exacto y activo; cookie intento + CSRF + Origin; consumo único y sesión básica |
+| POST `/v1/auth/attempts` | `{method,purpose?}` → `AttemptResponse` | Sin sesión; omisión=login; register solo Google, intención fija, contexto navegador y cliente GIS fijados por servidor |
+| POST `/v1/auth/google` | `{credential,attemptId}` → `AuthResponse` 200 Draft | Solo intento login; cuenta existente con vínculo Google exacto ACTIVE y cuenta activa; nunca crea cuenta ni activa PENDING |
+| POST `/v1/auth/google/registrations` | `{credential,attemptId}` → `AuthResponse` 200 Draft | Solo intento register Google; identidad exacta sin vínculo previo de ningún estado; alta atómica de cuenta básica, userId nuevo y vínculo ACTIVE; rechazo genérico de identidad vinculada |
 | POST `/v1/auth/email/requests` | `{attemptId,email}` → `EmailAccepted` 202 | Cookie intento + CSRF; emisión/reenvío sin enumeración |
 | POST `/v1/auth/email/confirm` | `{attemptId,token}` → `AuthResponse` 200 | Confirmación explícita, consumo atómico, continuidad; no GET de autenticación |
 | POST `/v1/auth/proofs/attempts` | `{method,purpose,authMethodId?}` → `AttemptResponse` | JWT + cookie + CSRF, propósito reauthenticate o link |
@@ -159,6 +160,8 @@ concede afiliación/privilegios TEC, historial sin continuidad acreditada,
 recuperación, vinculación ni operaciones sensibles B04. Identidad ausente,
 bloqueada o no autorizada obtiene rechazo genérico sin sesión/enumeración.
 El correo institucional continúa previsto para v1 con contratos pendientes.
+
+**Registro Google Proposed:** G2B-D existe solo como backend interno según el alcance reportado; este repositorio no demuestra el endpoint HTTP. El intento `register` no se reutiliza en login, ni uno `login` en registro. ms-users verifica Google y nonce, navegador, CSRF y Origin antes de crear un `userId` opaco nuevo, cuenta básica y vínculo ACTIVE en una transacción. Cualquier vínculo exacto previo, incluso PENDING, se rechaza de modo genérico sin activarlo. Coincidencia de email no fusiona cuentas ni transfiere historial; tampoco confiere privilegios TEC. El resultado de éxito usa la misma sesión interna, JWT RS256/RSA-2048 con `sub=userId`, access ≤240 s, refresh opaco rotatorio en cookie HttpOnly/Secure/host-only y CSRF solo en memoria. Se aplican 60/30/8, revocación/logout y Origin como en §4. Hosts, Path y SameSite requieren validación de topología; los nombres de cookie anteriores son candidatos.
 
 **Verificado en G1 sin HTTP:** `GoogleLoginService` crea nonce y secreto de navegador,
 guarda hash del secreto, vence el intento en 300 s y consume una vez bajo transacción.
