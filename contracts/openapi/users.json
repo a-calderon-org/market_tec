@@ -4477,7 +4477,8 @@
                   "enum": [
                     "login",
                     "reauthenticate",
-                    "link"
+                    "link",
+                    "register"
                   ]
                 },
                 "expiresAt": {

@@ -348,6 +348,27 @@ class AuthContractsTest(unittest.TestCase):
             for forbidden in ("userId", "email", "roles", "privileges"):
                 self.assertFalse(validator(self.api, "GoogleRegistrationRequest").is_valid({**value, forbidden: "test"}))
 
+    def test_attempt_response_google_login_and_registration_purposes(self):
+        check = validator(self.api, "AttemptResponse")
+        google = {
+            "attemptId": "attempt-1", "method": "google", "purpose": "login",
+            "expiresAt": 1790000300, "csrfToken": "csrf-1", "nonce": "nonce-1",
+        }
+        for purpose in ("login", "register", "reauthenticate", "link"):
+            with self.subTest(method="google", purpose=purpose):
+                self.assertTrue(check.is_valid({**google, "purpose": purpose}))
+                self.assertFalse(check.is_valid({
+                    key: value for key, value in {**google, "purpose": purpose}.items()
+                    if key != "nonce"
+                }))
+        for purpose in ("unknown", "", None):
+            with self.subTest(method="google", rejected_purpose=purpose):
+                self.assertFalse(check.is_valid({**google, "purpose": purpose}))
+        email = {key: value for key, value in google.items() if key != "nonce"}
+        email["method"] = "institutional-email"
+        self.assertTrue(check.is_valid(email))
+        self.assertFalse(check.is_valid({**email, "purpose": "register"}))
+
     def test_google_and_email_use_same_internal_user_shape(self):
         logins = [case["value"] for case in self.cases if case["name"] in {"google-login", "email-login-same-internal-user"}]
         self.assertEqual(2, len(logins))
