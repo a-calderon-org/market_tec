@@ -5,6 +5,52 @@ ms-users, Angular, ms-catalog, ms-notifications, APIM y revisión de seguridad.
 **Candidata:** `0.3.0-draft`. **QA contractual local:** 37/37 PASS; Redocly válido con 9 warnings conocidos.
 **Aprobación de interfaces/integración:** BLOCKED por decisiones, protocolos y B07.
 
+## Corte de interoperabilidad sobre PR #25 — 2026-11-04
+
+**Alcance y método:** lectura estática de `market_tec` PR #25
+`0275d3dc2e7e72626c2415748278e1eaa5f00f37`, `ms-users/main@3f776f6`,
+Angular y los contratos de Catalog/Notifications; ejecución local de la suite y
+Redocly sobre el worktree del commit del PR; consulta de CI, reviews y Jira.
+
+**Resultado verificado:** 37/37 pruebas contractuales PASS; perfil JWT dirigido
+2/2 PASS; tres OpenAPI válidos y 9 warnings Redocly conocidos; enlaces locales y
+`git diff --check` correctos; búsqueda de patrones de secretos sin hallazgos.
+CI [Contracts #41798011630](https://github.com/a-calderon-org/market_tec/actions/runs/41798011630)
+success y [Angular #41798011496](https://github.com/a-calderon-org/market_tec/actions/runs/41798011496)
+success con despliegue omitido. No constan reviews formales, hilos de revisión ni
+reviewers solicitados en el PR para este corte. MTEC-15 y MTEC-40 siguen In
+Progress; MTEC-36 figura In Progress en Jira. Los pasajes históricos siguientes
+que indican CI pendiente o MTEC-36 To Do describen cortes anteriores.
+
+**Desfase a conciliar antes de aprobar Google/registro:** ms-users ya expone
+`POST /v1/auth/attempts`, `/v1/auth/google`, `/v1/auth/google/registrations`,
+`GET /v1/auth/session`, refresh `mode=rotate` y logout `scope=current`. El OpenAPI
+marca las operaciones completas como `proposed`, lo cual evita afirmar conformidad
+de implementación. No define `/v1/auth/google/registrations`; el flujo de alta
+real y el flujo propuesto de respuesta Google `202` más prueba de buzón deben
+reconciliarse y versionarse antes de aprobar la interfaz de registro. Angular aún
+usa Google `sub` como ID y conserva el token en `sessionStorage`; su migración
+es trabajo posterior a la aprobación de diseño. Catalog y Notifications solo
+requieren conformidad sobre JWT/principal, identidad opaca y autorización propia.
+
+**Conformidades B07:** ms-users, Angular, APIM, seguridad, ms-catalog,
+ms-notifications y responsable del proyecto: todas PENDING; el PASS técnico no
+constituye aceptación humana. La ruta de registro sin contrato y los protocolos
+indefinidos bloquean aprobación de esas operaciones. Auditoría durable de replay,
+revocación autorizada, concurrencia multiinstancia, navegador entre pestañas,
+Azure/APIM efectivo y residual JWT medido son condiciones de implementación
+posterior bajo MTEC-40/MTEC-12/MTEC-36/MTEC-37.
+
+**Recomendación:** opción B, publicable solo como `0.3.0-draft` controlado si el
+responsable del proyecto autoriza expresamente ese corte. El merge documental no
+aprobaría la interfaz ni autorizaría producción. No fusionar el PR con la
+aprobación contractual aún pendiente. La identidad GitHub de los responsables
+distintos del autor no está acreditada por las asignaciones Jira ni por similitud
+de nombres; solicitar reviews nominales cuando se confirme esa asociación.
+
+**Límites:** no se ejecutaron Java, pruebas SQL, navegador ni Azure; la lectura
+estática no demuestra comportamiento desplegado ni conformidad de consumidores.
+
 ## Alcance y metodología
 
 Consolidación de decisiones, actualización de identidad/Users OpenAPI, fixtures,
