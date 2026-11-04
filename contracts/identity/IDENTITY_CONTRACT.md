@@ -17,9 +17,13 @@ especifica métodos, rutas, headers, cuerpos, esquemas, respuestas y errores. El
 [informe de revisión](../../docs/MTEC15_AUTH_CONTRACT_REVIEW.md) contiene evidencia,
 comparación histórica. La [revisión candidata B07](../../docs/MTEC15_AUTH_CONTRACT_RELEASE_REVIEW.md) recoge compatibilidad, QA y bloqueos vigentes, sin constituir otro contrato.
 
-**Verificado:** solo `GET /health` está implementado en la fundación ms-users de
-esta base. Google, perfiles y todas las nuevas operaciones de este contrato siguen
-`x-implementation-status: proposed`; el estado global es
+**Verificado en `ms-users/main@3f776f6`:** `GET /health` es la única operación
+marcada `implemented` en este contrato. El servicio ya expone adaptadores parciales
+de Google, sesión, refresh `mode=rotate` y logout `scope=current`; ninguna de esas
+operaciones acredita todavía la interfaz completa candidata y conservan
+`x-implementation-status: proposed`. También expone
+`POST /v1/auth/google/registrations`, ausente de este OpenAPI: su interfaz requiere
+conciliación antes de aprobación B07. El estado global es
 `draft-pending-team-approval`. **No determinado:** configuración efectiva Azure/APIM.
 
 ### Núcleo aceptado y detalles propuestos
