@@ -10,6 +10,14 @@ conformidades técnicas y de seguridad permanecen pendientes.
 
 No se encontraron ADR históricos verificables previos a Fase II. Las decisiones inferidas del código (Angular standalone, APIM, Express) no se atribuyen como decisiones formales.
 
+## Decisión de refresh replay — 2026-11-04
+
+**Estado: Approved. Responsable: responsable del proyecto. Alcance: MarketTec v1.** [MTEC-40](https://allanaron06122005.atlassian.net/browse/MTEC-40) aprueba expresamente la alternativa **C — detección y respuesta escalonada**, descrita en [ADR-004 §3.4](ADR-004-seguridad-autenticacion.md#34-expiración-renovación-revocación-y-replay) y en el [documento del PR #27](../../docs/MTEC40_REFRESH_REPLAY_DECISION_PROPOSAL.md). Cada refresh consumido se rechaza sin gracia ni reemisión; la pareja histórica refresh + CSRF coincidente se clasifica internamente y debe auditarse sin secretos. La respuesta pública es `401 REFRESH_INVALID`. Un replay aislado no revoca automáticamente la sesión ganadora; la revocación requiere logout autorizado, recuperación conforme a protocolo aprobado o compromiso confirmado con evidencia independiente y autorización registrada.
+
+**Justificación y riesgos aceptados:** se evitan revocaciones incorrectas por carreras o respuestas perdidas, aceptando menor contención automática que B. Un atacante que gane la primera rotación con cookie robada puede conservar la nueva generación hasta expiración o revocación efectiva; el replay no identifica al actor legítimo. Una respuesta perdida después del commit puede exigir reautenticación. Revocar refresh no invalida JWT ya emitidos. El CSRF recuperable mediante `/v1/auth/session` con cookie válida y controles HTTP no es segunda prueba criptográfica independiente. La pauta de revocación por reuse de RFC 9700 para OAuth rotatorio es más estricta; C no acredita conformidad con ella.
+
+**Dependencias:** auditoría estructurada y procedimiento de incidente/revocación en ms-users, pruebas de concurrencia entre instancias, serialización y recuperación segura en Angular, verificación de APIM/App Service y presupuesto real de exposición JWT ≤300 s. [MTEC-15 y PR #25](https://github.com/a-calderon-org/market_tec/pull/25) deben reemplazar `consumedGenerationReuse = revoke-family-including-winner` y revisar `REFRESH_REUSED` frente a `REFRESH_INVALID` con consumidores. **Esta aprobación no autoriza despliegue ni demuestra que todos los controles estén implementados.** MTEC-40 continúa In Progress; las demás decisiones pendientes de autenticación conservan su estado.
+
 ## ADRs de Fase II
 
 | ADR | Fecha | Estado | Título | Sustituye |
@@ -58,8 +66,10 @@ y solo renueva por solicitud válida mientras la sesión siga vigente. Debe habe
 advertencia previa y reautenticación obligatoria al vencer; los sondeos
 automáticos no cuentan como actividad humana. La renovación requiere mecanismos
 seguros, cuyo protocolo está pendiente. Aviso cinco minutos antes y JWT de
-15 minutos siguen propuestos. Medición de actividad, rotación/anti-replay,
-revocación, cookies/CSRF/CORS, pestañas, carreras y reautenticación sensible
+15 minutos siguen propuestos en el corte histórico de 2026-11-01. La política C
+sobre refresh replay se aprobó después, el 2026-11-04, con el alcance registrado
+arriba. Medición de actividad, auditoría operativa de replay, revocación por
+incidente, cookies/CSRF/CORS, pestañas, carreras y reautenticación sensible
 requieren revisión; no se aprueba acceso residual tras vencer la sesión.
 Fuente canónica: [ADR-004
 §3.4](ADR-004-seguridad-autenticacion.md#34-expiración-renovación-revocación-y-replay)

@@ -362,7 +362,9 @@ de renovación y anti-replay, rotación/compromiso, CSRF/SameSite/CORS/cookies,
 pestañas concurrentes, carreras y reautenticación sensible. Los mecanismos
 siguientes conservan estado **Proposed**; no se modifica el contrato vigente.
 
-La credencial de renovación sería rotatoria y revocable, vinculada a la sesión y al usuario interno, con almacenamiento seguro de verificadores. Cada uso válido invalidaría la anterior atómicamente y emitiría un reemplazo; la reutilización detectada exigiría revocar la familia de sesión afectada y reautenticar, con manejo de concurrencia/reintentos por aprobar. Logout, baja de cuenta y eventos de seguridad deben tener semántica explícita de revocación de sesiones. La [RFC 9700, sección 4.14](https://www.rfc-editor.org/rfc/rfc9700.html#section-4.14) orienta la rotación/detección de replay; usarla como referencia no declara un servidor OAuth implementado.
+**Política C de refresh replay: Approved para MarketTec v1 el 2026-11-04 por el responsable del proyecto**, según [MTEC-40](https://allanaron06122005.atlassian.net/browse/MTEC-40) y el [documento de decisión](../../docs/MTEC40_REFRESH_REPLAY_DECISION_PROPOSAL.md). Toda generación consumida se rechaza sin gracia ni reemisión; la pareja histórica refresh + CSRF coincidente se clasifica internamente como replay y produce evidencia de auditoría sin secretos. La respuesta pública al refresh inválido o consumido es `401 REFRESH_INVALID`. Un replay aislado no revoca automáticamente a la generación ganadora. La revocación corresponde a logout autorizado, recuperación conforme a protocolo aprobado o compromiso confirmado con evidencia independiente y autorización registrada. IP, User-Agent, Origin o repetición aislada no atribuyen por sí solos compromiso. Ninguna rotación reactiva sesiones vencidas ni amplía indebidamente los límites 60/30/8.
+
+La aprobación de política no acredita auditoría estructurada, revocación por incidente operativa, pruebas entre instancias, comportamiento Angular, políticas APIM ni el presupuesto de exposición JWT ≤300 s. La alternativa C evita revocaciones incorrectas, pero acepta menor contención automática que B: un atacante que gane la primera rotación puede conservar la nueva generación hasta expiración o revocación efectiva; el replay no identifica al actor legítimo. Una respuesta perdida después del commit puede requerir reautenticación, y revocar refresh no invalida JWT ya emitidos. El CSRF no es una segunda prueba criptográfica independiente cuando `/v1/auth/session` puede recuperarlo con cookie válida y controles HTTP. La respuesta de revocación al reuse descrita en [RFC 9700 §4.14.2](https://www.rfc-editor.org/rfc/rfc9700.html#section-4.14.2) para tokens OAuth rotatorios es más estricta; C no se declara conforme con esa pauta. MTEC-15 y el [PR #25](https://github.com/a-calderon-org/market_tec/pull/25) deben alinear `consumedGenerationReuse` y `REFRESH_REUSED` antes de aprobar el contrato.
 
 La renovación usaría cookie `HttpOnly`, `Secure` y política `SameSite` explícita acorde con el despliegue. Nombre, ámbito, duración y elección Lax/Strict o necesidad justificada de None están pendientes; None requeriría Secure. Se propone JWT de acceso preferentemente en memoria, protección CSRF en login/renovación/logout/vinculación y CORS con orígenes explícitos coherentes con cookies. SameSite no sustituye CSRF; HttpOnly no elimina XSS. Atributos y límites se revisarán conforme a [OWASP Session Management](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html), sin introducir secretos en Angular ni en documentación.
 
@@ -383,12 +385,12 @@ y la reautenticación sensible siguen pendientes. Los 5 min de frescura de
 vínculo de 3.1 siguen siendo una propuesta separada. Al confirmar login se
 propone rotar el contexto previo para impedir fijación.
 
-La base propuesta es rotación estricta atómica, sin gracia: serializar refresh
-en frontend, invalidar el anterior y revocar la familia ante reutilización de
-una credencial consumida. Una respuesta perdida obliga a reautenticar, sin
-reemitir tokens al poseedor del refresh anterior. La alternativa de reintento
-idempotente/gracia acotada requiere protocolo y prueba adicionales; no se acepta
-una ventana reutilizable implícita. El vencimiento de la ventana de sesión, del
+La rotación estricta atómica y el rechazo sin gracia de la generación consumida
+son política aprobada en esta sección. La serialización entre pestañas, la
+auditoría y las pruebas de concurrencia siguen pendientes. Una respuesta perdida
+puede obligar a reautenticar, sin reemitir tokens al poseedor del refresh
+anterior. No se acepta una ventana reutilizable implícita ni revocación
+automática de la familia por replay aislado. El vencimiento de la ventana de sesión, del
 máximo absoluto o del timeout de inactividad impide renovar y exige invalidación
 de sesión en servidor; no invalida automáticamente el access JWT ya emitido.
 P10/P15 deben diseñar cómo hacer efectivos los límites de sesión en todos los
