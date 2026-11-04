@@ -252,16 +252,31 @@ Allowlist, evidencia, productor/correlación, reloj y deduplicación atómica re
 contrato y pruebas. `ActivityRequest` actual solo lleva interactionId/kind y no
 demuestra ese respaldo: sigue bloqueado, sin inventar un protocolo de productores.
 
-B06/D6 aprueba serialización incluso entre pestañas, sin gracia general. Detalle **Draft**, pendiente de protocolo y pruebas:
-verificar/consumir la generación actual y emitir siguiente atómicamente. Dos usos
-concurrentes: uno gana; reconocer la generación consumida en el segundo revoca la
-familia, incluido el reemplazo del ganador, y responde `401 REFRESH_REUSED`. Es coste
-de disponibilidad explícito. Preservar verificadores consumidos lo suficiente para
-detectar reuso, con retención pendiente. No asumir que dos pestañas sean atacante.
-Frontend serializa renovación entre solicitudes/pestañas; respuesta perdida exige
-reautenticación, sin retry ciego. Gracia o idempotencia con reemisión necesita otro
-protocolo/revisión, no una ventana reutilizable implícita. Referencia de rotación:
-[RFC 9700 §4.14](https://www.rfc-editor.org/rfc/rfc9700.html#section-4.14), sin declarar OAuth implementado.
+B06/D6 aprueba serialización incluso entre pestañas, sin gracia general. La
+[política C aprobada](../../docs/MTEC40_REFRESH_REPLAY_DECISION_PROPOSAL.md)
+exige consumo único y reemplazo atómico: una carrera produce como máximo una
+ganadora. Una pareja histórica refresh + CSRF coincidente de sesión aún vigente se
+clasifica internamente como replay y exige auditoría estructurada sin secretos;
+generación inexistente o CSRF distinto son prueba inválida, no replay confirmado.
+Toda generación consumida se rechaza sin reemitir credenciales. La respuesta
+pública de refresh inválido, consumido o sesión cerrada es `401 REFRESH_INVALID`,
+con envelope genérico y sin JWT, CSRF ni cookie nueva. Un replay aislado no revoca
+automáticamente la generación ganadora ni cambia deadlines. Revocar por compromiso
+requiere evidencia independiente y autorización registrada; el evento estructurado
+y el procedimiento de incidente siguen pendientes de implementación y pruebas.
+
+Frontend serializa renovación entre solicitudes/pestañas y evita retries automáticos.
+Si la respuesta se pierde después del commit y llegó la cookie nueva, puede
+recuperar CSRF/estado mediante GET `/v1/auth/session`; si conserva la cookie
+consumida, debe reautenticar. Una sesión vencida o revocada nunca se reactiva y
+refresh no extiende por sí solo los límites 60/30/8. `mode=rotate` y logout
+`scope=current` están implementados en ms-users; `mode=continue` y
+`scope=all` siguen pendientes. La interfaz completa continúa **Draft** hasta
+MTEC-15/B07. El riesgo aceptado es que un atacante que gane la primera rotación
+puede conservar la generación activa hasta vencimiento o revocación efectiva.
+[RFC 9700 §4.14](https://www.rfc-editor.org/rfc/rfc9700.html#section-4.14)
+informa el análisis de rotación; no se declara OAuth implementado ni conformidad
+con su pauta de revocación automática.
 
 Logout current es idempotente: 204 para familia ya cerrada y para cookie ausente
 (sin efecto servidor); origen/JSON/header web siguen requeridos y, con cookie,
@@ -294,7 +309,7 @@ PUT solo cambia nombreUsuario/nombre/apellidos; no correo, roles, verificado ni 
 Fechas string e ID string previos permanecen; createdAt sigue opcional pendiente ADR-003.
 
 Errores Proposed: 400 solicitud inválida; 401 credencial/prueba/sesión inválida,
-vencida, revocada o refresh reusado; 403 principal sin permiso, origen/CSRF o
+vencida, revocada o refresh inválido/consumido; 403 principal sin permiso, origen/CSRF o
 reautenticación insuficiente; 404 recurso propio inexistente; 409 conflicto/consumo/
 continuidad/registro/actividad no aceptada; 410 intento expirado; 429 tasa global/origen
 con Retry-After; 503 verificación/emisión no disponible sin degradar seguridad.
@@ -315,7 +330,7 @@ propio; publicaciones propias aún necesitan contrato de catálogo revisado desp
 El interceptor necesitará distinguir rutas de login/metadata/cookie y de negocio,
 no adjuntar Google bearer, coordinar un refresh a la vez y evitar bucles de 401.
 ACCESS_TOKEN_EXPIRED permite intentar refresh solo con sesión vigente; SESSION_EXPIRED,
-SESSION_REVOKED y REFRESH_REUSED terminan sesión y requieren login. 403 es denegación,
+SESSION_REVOKED y REFRESH_INVALID requieren reautenticación cuando no existe una cookie nueva vigente. Un 401 por carrera en otra pestaña no debe cerrar la sesión ganadora; Angular debe verificar el estado compartido antes de descartarla. 403 es denegación,
 no disparador de refresh. Errores tardíos no invalidan sesión nueva. Cookie ausente/
 bloqueada requiere reautenticación y diagnóstico UX, no almacenamiento alternativo
 inseguro. Todo es evaluación futura: Angular no se modifica aquí.

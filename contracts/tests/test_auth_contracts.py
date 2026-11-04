@@ -257,12 +257,10 @@ class AuthContractsTest(unittest.TestCase):
         with self.assertRaises(AssertionError):
             validate_auth(expired_access)
 
-    def test_expired_revoked_and_reused_session_errors_are_declared(self):
-        for route in ("/v1/auth/session", "/v1/auth/refresh"):
-            method = "get" if route.endswith("session") else "post"
-            codes = self.api["paths"][route][method]["x-error-codes"]["401"]
-            self.assertTrue({"SESSION_EXPIRED", "SESSION_REVOKED"}.issubset(codes))
-        self.assertIn("REFRESH_REUSED", self.api["paths"]["/v1/auth/refresh"]["post"]["x-error-codes"]["401"])
+    def test_session_errors_and_public_refresh_error_are_declared(self):
+        session_codes = self.api["paths"]["/v1/auth/session"]["get"]["x-error-codes"]["401"]
+        self.assertTrue({"SESSION_EXPIRED", "SESSION_REVOKED"}.issubset(session_codes))
+        self.assertEqual(["REFRESH_INVALID"], self.api["paths"]["/v1/auth/refresh"]["post"]["x-error-codes"]["401"])
 
     def test_mail_proof_is_only_consumed_by_post_not_preview_get(self):
         for route in ("/v1/auth/email/confirm", "/v1/auth/proofs/email/confirm"):
@@ -329,14 +327,32 @@ class AuthContractsTest(unittest.TestCase):
 
     def test_refresh_concurrency_policy_is_explicit_and_not_idempotent_reissuance(self):
         rotation = self.api["paths"]["/v1/auth/refresh"]["post"]["x-refresh-rotation"]
-        self.assertEqual("draft-detail-under-approved-policy", rotation["status"])
+        self.assertEqual("approved-policy-draft-protocol-and-tests-pending", rotation["status"])
         self.assertTrue(rotation["serializedAcrossTabs"])
         self.assertEqual("pending", rotation["protocolAndConcurrencyTests"])
         self.assertTrue(rotation["atomicConsumeAndReplace"])
         self.assertFalse(rotation["graceWindow"])
         self.assertFalse(rotation["reissueOnRetry"])
-        self.assertEqual("revoke-family-including-winner", rotation["consumedGenerationReuse"])
-        self.assertEqual("reauthenticate", rotation["lostResponse"])
+        self.assertEqual("reject-and-audit-without-automatic-winner-revocation", rotation["consumedGenerationReuse"])
+        self.assertFalse(rotation["winnerRevokedOnIsolatedReplay"])
+        self.assertEqual("confirmed-only-when-refresh-and-csrf-match", rotation["historicalPairClassification"])
+        self.assertEqual("invalid-proof-not-confirmed-replay", rotation["unknownGenerationOrWrongCsrf"])
+        self.assertEqual("401 REFRESH_INVALID", rotation["publicError"])
+        self.assertEqual("REFRESH_INVALID", rotation["publicErrorExample"]["error"]["code"])
+        self.assertEqual([], rotation["publicErrorExample"]["error"]["details"])
+        public_error = self.api["paths"]["/v1/auth/refresh"]["post"]["responses"]["401"]
+        self.assertNotIn("Set-Cookie", public_error["headers"])
+        self.assertNotIn("token", json.dumps(public_error["content"]["application/json"]["examples"]))
+        self.assertEqual({"REFRESH_INVALID"}, {public_error["content"]["application/json"]
+                         ["schema"]["allOf"][1]["properties"]["error"]["properties"]["code"]["const"]})
+        self.assertEqual("structured-without-secrets-required-not-yet-implemented", rotation["audit"])
+        self.assertEqual("independent-evidence-and-recorded-authorization", rotation["compromiseRevocation"])
+        self.assertEqual("recover-session-if-new-cookie-arrived-otherwise-reauthenticate", rotation["lostResponse"])
+        self.assertEqual({"rotate": "implemented-in-ms-users", "continue": "pending"}, rotation["modeImplementation"])
+        self.assertEqual({"current": "implemented-in-ms-users", "all": "pending"},
+                         self.api["paths"]["/v1/auth/logout"]["post"]["x-scope-implementation"])
+        self.assertNotIn("REFRESH_REUSED", json.dumps(self.api))
+        self.assertEqual("draft-pending-team-approval", self.api["x-contract-status"])
 
 
     def test_short_access_lifetime_and_profile_policy_are_explicit(self):

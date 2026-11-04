@@ -6,9 +6,18 @@ ampliado el 2026-10-31 con ADR-004. Revisión técnica y aceptación delimitada 
 2026-11-01: el responsable del proyecto aprueba la arquitectura base de ADR-004;
 la conciliación posterior incorpora los límites de sesión 60 min/30 min/8 h
 ratificados ese día. La consolidación del 2026-11-02 incorpora las aprobaciones delimitadas
-B01–B06 de MTEC-40; parámetros, demostraciones y conformidades siguen pendientes.
+B01–B06 de MTEC-40; la política C de replay se aprobó el 2026-11-04.
+Parámetros, demostraciones y conformidades siguen pendientes.
 
 No se encontraron ADR históricos verificables previos a Fase II. Las decisiones inferidas del código (Angular standalone, APIM, Express) no se atribuyen como decisiones formales.
+
+## Decisión de refresh replay — 2026-11-04
+
+**Estado: Approved. Responsable: responsable del proyecto. Alcance: MarketTec v1.** [MTEC-40](https://allanaron06122005.atlassian.net/browse/MTEC-40) aprueba expresamente la alternativa **C — detección y respuesta escalonada**, descrita en [ADR-004 §3.4](ADR-004-seguridad-autenticacion.md#34-expiración-renovación-revocación-y-replay) y en el [documento del PR #27](../../docs/MTEC40_REFRESH_REPLAY_DECISION_PROPOSAL.md). Cada refresh consumido se rechaza sin gracia ni reemisión; la pareja histórica refresh + CSRF coincidente se clasifica internamente y debe auditarse sin secretos. La respuesta pública es `401 REFRESH_INVALID`. Un replay aislado no revoca automáticamente la sesión ganadora; la revocación requiere logout autorizado, recuperación conforme a protocolo aprobado o compromiso confirmado con evidencia independiente y autorización registrada.
+
+**Justificación y riesgos aceptados:** se evitan revocaciones incorrectas por carreras o respuestas perdidas, aceptando menor contención automática que B. Un atacante que gane la primera rotación con cookie robada puede conservar la nueva generación hasta expiración o revocación efectiva; el replay no identifica al actor legítimo. Una respuesta perdida después del commit puede exigir reautenticación. Revocar refresh no invalida JWT ya emitidos. El CSRF recuperable mediante `/v1/auth/session` con cookie válida y controles HTTP no es segunda prueba criptográfica independiente. La pauta de revocación por reuse de RFC 9700 para OAuth rotatorio es más estricta; C no acredita conformidad con ella.
+
+**Dependencias:** auditoría estructurada y procedimiento de incidente/revocación en ms-users, pruebas de concurrencia entre instancias, serialización y recuperación segura en Angular, verificación de APIM/App Service y presupuesto real de exposición JWT ≤300 s. La candidata del [PR #25](https://github.com/a-calderon-org/market_tec/pull/25) alinea OpenAPI e identidad con esta política; su aprobación MTEC-15/B07 y las conformidades de consumidores siguen pendientes. **Esta aprobación no autoriza despliegue ni demuestra que todos los controles estén implementados.** MTEC-40 continúa In Progress; las demás decisiones pendientes de autenticación conservan su estado.
 
 ## ADRs de Fase II
 
@@ -50,18 +59,27 @@ vincular exige prueba reciente suficiente de ambos métodos. B02 aprueba passkey
 continuidad, opcionales para básico; no aprueba sus protocolos ni recuperación
 excepcional, fusión o transferencia de historial.
 
-La política 60 minutos renovables / 30 minutos de inactividad / ocho horas desde
-login inicial permanece estricta; igualdad expira y ninguna renovación reinicia
-el absoluto. B01 D1–D3 aprueban residual ordinario máximo verificable de 300 s,
-fail-closed condicionado a garantías y JWT nominal máximo de 240 s sujeto a
-demostración. Sustituye el candidato 900 s. No hay garantía operativa demostrada.
-B03 aprueba actividad elegible con respaldo servidor, instante real, cómputo único
-y hasta 60 s de procesamiento tardío sin resucitar sesión; no acredita humanidad.
-B05/B06 aprueban el perfil RS256/RSA-2048, kid en JOSE, claves públicas/JWKS,
-expiración sin leeway positivo, transporte en memoria/cookie segura host-only,
-sincronizador CSRF/CORS explícito y refresh serializado entre pestañas sin gracia
-general, con cierre en servidor. No fijan topología, tiempos de caché ni protocolo
-final; aviso candidato 300 s antes del deadline efectivo de sesión, no del JWT.
+La política funcional de sesiones aprobada el **2026-11-01** comprende ventana
+renovable de 60 minutos, 30 minutos de inactividad y máximo absoluto de ocho
+horas desde el login inicial. Vence el primer límite aplicable; igualdad expira
+y ninguna renovación reinicia el absoluto. El servidor solo renueva una sesión
+vigente, avisa antes del vencimiento y exige reautenticación al vencer. Los
+sondeos automáticos no cuentan como actividad elegible.
+
+B01 D1–D3, aprobados el 2026-11-02, requieren residual ordinario máximo
+verificable de 300 s, fail-closed condicionado a garantías y JWT nominal máximo
+de 240 s; sustituyen el candidato histórico de 900 s y no prueban cumplimiento
+operativo. B03 aprueba actividad elegible respaldada por servidor, instante real,
+cómputo único y procesamiento tardío de hasta 60 s sin reactivar sesión; no
+acredita humanidad. B05/B06 aprueban RS256/RSA-2048, kid en JOSE, JWKS público,
+cero leeway positivo, access/CSRF en memoria, refresh en cookie segura host-only,
+CSRF/CORS explícitos y serialización entre pestañas sin gracia general. La
+política C posterior, aprobada el 2026-11-04, rige el replay como se registra
+arriba. Topología, auditoría operativa, revocación por incidente, protocolo
+final, pruebas y conformidades siguen pendientes; aviso de 300 s antes del
+deadline de sesión es candidato, no decisión cerrada. Fuente canónica:
+[ADR-004 §3.4](ADR-004-seguridad-autenticacion.md#34-expiración-renovación-revocación-y-replay)
+y P10/P15/P23.
 
 La matriz canónica de aprobaciones/pendientes y su evidencia de Jira está en
 [ADR-004 §3.4.1](ADR-004-seguridad-autenticacion.md#341-consolidación-de-aprobaciones-y-pendientes--2026-11-02).

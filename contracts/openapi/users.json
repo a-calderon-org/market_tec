@@ -184,8 +184,7 @@
             "ACCESS_TOKEN_EXPIRED",
             "SESSION_EXPIRED",
             "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
+            "REFRESH_INVALID"
           ],
           "403": [
             "FORBIDDEN",
@@ -326,8 +325,7 @@
             "ACCESS_TOKEN_EXPIRED",
             "SESSION_EXPIRED",
             "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
+            "REFRESH_INVALID"
           ],
           "403": [
             "FORBIDDEN",
@@ -460,8 +458,7 @@
             "ACCESS_TOKEN_EXPIRED",
             "SESSION_EXPIRED",
             "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
+            "REFRESH_INVALID"
           ],
           "403": [
             "FORBIDDEN",
@@ -706,8 +703,7 @@
             "ACCESS_TOKEN_EXPIRED",
             "SESSION_EXPIRED",
             "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
+            "REFRESH_INVALID"
           ],
           "403": [
             "FORBIDDEN",
@@ -865,8 +861,7 @@
             "ACCESS_TOKEN_EXPIRED",
             "SESSION_EXPIRED",
             "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
+            "REFRESH_INVALID"
           ],
           "403": [
             "FORBIDDEN",
@@ -1005,8 +1000,7 @@
             "ACCESS_TOKEN_EXPIRED",
             "SESSION_EXPIRED",
             "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
+            "REFRESH_INVALID"
           ],
           "403": [
             "FORBIDDEN",
@@ -1033,7 +1027,7 @@
       "post": {
         "operationId": "refreshSession",
         "summary": "Rotar acceso o solicitar continuación voluntaria",
-        "description": "Proposed — No exige access JWT vigente. Valida cookie/familia, CSRF y sesión antes de consumir; a serverTime>=expiresAt rechaza sin renovar. mode=rotate no modifica renewedAt/window ni lastActivityAt; mode=continue solicita ventana min(now+3600,absoluteExpiresAt) solo vigente y con controles de actividad pendientes B03. Ningún modo cuenta por sí solo como actividad. B06 aprueba serialización entre pestañas sin gracia general. Detalle Draft pendiente de protocolo/pruebas: compare-and-swap atómico, reuso de cookie consumida revoca familia y responde 401 REFRESH_REUSED; una carrera puede invalidar también credenciales del ganador. Frontend serializa pestañas. No reintentar automáticamente tras respuesta perdida; reautenticar. No altera authenticatedAt/absoluteExpiresAt.",
+        "description": "Proposed — No exige access JWT vigente. Valida cookie, CSRF y sesión antes de consumir; a serverTime>=expiresAt rechaza sin renovar. mode=rotate está implementado en ms-users; mode=continue permanece pendiente y solo podría solicitar ventana min(now+3600,absoluteExpiresAt) con controles B03. Ningún modo cuenta por sí solo como actividad ni modifica authenticatedAt/absoluteExpiresAt; rotate tampoco cambia renewedAt/window ni lastActivityAt. Política C aprobada: cada generación se consume una vez, sin gracia ni reemisión; la pareja histórica refresh + CSRF coincidente se clasifica internamente como replay y requiere auditoría sin secretos. Una generación desconocida o CSRF distinto no es replay confirmado. La respuesta pública para refresh inválido, consumido o sesión cerrada es 401 REFRESH_INVALID, sin credenciales nuevas; un replay aislado no revoca automáticamente la generación ganadora. Revocación por compromiso exige evidencia independiente y autorización registrada. Angular debe serializar entre pestañas y evitar retries automáticos. Si se pierde la respuesta tras commit, recuperar CSRF mediante /v1/auth/session solo si llegó la cookie nueva; en otro caso reautenticar. Protocolo y pruebas distribuidas pendientes de B07.",
         "x-implementation-status": "proposed",
         "x-approval-status": "proposed",
         "x-route-class": "session-cookie",
@@ -1113,7 +1107,70 @@
             "$ref": "#/components/responses/Auth400"
           },
           "401": {
-            "$ref": "#/components/responses/Auth401"
+            "description": "HTTP 401 de refresh: REFRESH_INVALID para prueba inválida, generación consumida o sesión cerrada; no revela replay ni emite credenciales.",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              },
+              "WWW-Authenticate": {
+                "$ref": "#/components/headers/Authenticate"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/AuthErrorEnvelope"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "const": "REFRESH_INVALID"
+                            },
+                            "message": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "details": {
+                              "type": "array",
+                              "maxItems": 0
+                            },
+                            "correlationId": {
+                              "type": "string",
+                              "maxLength": 128
+                            },
+                            "timestamp": {
+                              "$ref": "#/components/schemas/EpochSeconds"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                "examples": {
+                  "consumedGeneration": {
+                    "value": {
+                      "error": {
+                        "code": "REFRESH_INVALID",
+                        "message": "No se pudo completar la operación.",
+                        "details": [],
+                        "correlationId": "mtec15-synthetic",
+                        "timestamp": 1790000000
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "403": {
             "$ref": "#/components/responses/Auth403"
@@ -1130,13 +1187,7 @@
             "INVALID_REQUEST"
           ],
           "401": [
-            "AUTH_PROOF_INVALID",
-            "UNAUTHORIZED",
-            "ACCESS_TOKEN_EXPIRED",
-            "SESSION_EXPIRED",
-            "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
+            "REFRESH_INVALID"
           ],
           "403": [
             "FORBIDDEN",
@@ -1174,14 +1225,33 @@
           }
         },
         "x-refresh-rotation": {
-          "status": "draft-detail-under-approved-policy",
+          "status": "approved-policy-draft-protocol-and-tests-pending",
           "atomicConsumeAndReplace": true,
           "graceWindow": false,
           "reissueOnRetry": false,
-          "consumedGenerationReuse": "revoke-family-including-winner",
-          "lostResponse": "reauthenticate",
+          "consumedGenerationReuse": "reject-and-audit-without-automatic-winner-revocation",
+          "lostResponse": "recover-session-if-new-cookie-arrived-otherwise-reauthenticate",
           "serializedAcrossTabs": true,
-          "protocolAndConcurrencyTests": "pending"
+          "protocolAndConcurrencyTests": "pending",
+          "historicalPairClassification": "confirmed-only-when-refresh-and-csrf-match",
+          "unknownGenerationOrWrongCsrf": "invalid-proof-not-confirmed-replay",
+          "publicError": "401 REFRESH_INVALID",
+          "winnerRevokedOnIsolatedReplay": false,
+          "compromiseRevocation": "independent-evidence-and-recorded-authorization",
+          "audit": "structured-without-secrets-required-not-yet-implemented",
+          "modeImplementation": {
+            "rotate": "implemented-in-ms-users",
+            "continue": "pending"
+          },
+          "publicErrorExample": {
+            "error": {
+              "code": "REFRESH_INVALID",
+              "message": "No se pudo completar la operación.",
+              "details": [],
+              "correlationId": "mtec15-synthetic",
+              "timestamp": 1790000000
+            }
+          }
         },
         "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending"
       }
@@ -1259,8 +1329,7 @@
             "ACCESS_TOKEN_EXPIRED",
             "SESSION_EXPIRED",
             "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
+            "REFRESH_INVALID"
           ],
           "403": [
             "FORBIDDEN",
@@ -1297,7 +1366,11 @@
             }
           }
         },
-        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending"
+        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending",
+        "x-scope-implementation": {
+          "current": "implemented-in-ms-users",
+          "all": "pending"
+        }
       }
     },
     "/v1/auth/session/activity": {
@@ -1395,8 +1468,7 @@
             "ACCESS_TOKEN_EXPIRED",
             "SESSION_EXPIRED",
             "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
+            "REFRESH_INVALID"
           ],
           "403": [
             "FORBIDDEN",
@@ -1537,8 +1609,7 @@
             "ACCESS_TOKEN_EXPIRED",
             "SESSION_EXPIRED",
             "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
+            "REFRESH_INVALID"
           ],
           "403": [
             "FORBIDDEN",
@@ -1689,8 +1760,7 @@
             "ACCESS_TOKEN_EXPIRED",
             "SESSION_EXPIRED",
             "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
+            "REFRESH_INVALID"
           ],
           "403": [
             "FORBIDDEN",
@@ -1822,8 +1892,7 @@
             "ACCESS_TOKEN_EXPIRED",
             "SESSION_EXPIRED",
             "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
+            "REFRESH_INVALID"
           ],
           "403": [
             "FORBIDDEN",
@@ -1950,8 +2019,7 @@
             "ACCESS_TOKEN_EXPIRED",
             "SESSION_EXPIRED",
             "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
+            "REFRESH_INVALID"
           ],
           "403": [
             "FORBIDDEN",
@@ -2188,8 +2256,7 @@
             "ACCESS_TOKEN_EXPIRED",
             "SESSION_EXPIRED",
             "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
+            "REFRESH_INVALID"
           ],
           "403": [
             "FORBIDDEN",
@@ -2297,8 +2364,7 @@
             "ACCESS_TOKEN_EXPIRED",
             "SESSION_EXPIRED",
             "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
+            "REFRESH_INVALID"
           ],
           "403": [
             "FORBIDDEN",
@@ -2412,8 +2478,7 @@
             "ACCESS_TOKEN_EXPIRED",
             "SESSION_EXPIRED",
             "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
+            "REFRESH_INVALID"
           ],
           "403": [
             "FORBIDDEN",
@@ -2515,8 +2580,7 @@
             "ACCESS_TOKEN_EXPIRED",
             "SESSION_EXPIRED",
             "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
+            "REFRESH_INVALID"
           ],
           "403": [
             "FORBIDDEN",
@@ -2823,7 +2887,7 @@
         }
       },
       "Auth401": {
-        "description": "Proposed HTTP 401: AUTH_PROOF_INVALID, UNAUTHORIZED, ACCESS_TOKEN_EXPIRED, SESSION_EXPIRED, SESSION_REVOKED, REFRESH_INVALID, REFRESH_REUSED. Sin detalles de cuenta.",
+        "description": "Proposed HTTP 401: AUTH_PROOF_INVALID, UNAUTHORIZED, ACCESS_TOKEN_EXPIRED, SESSION_EXPIRED, SESSION_REVOKED, REFRESH_INVALID. Sin detalles de cuenta.",
         "headers": {
           "X-Correlation-ID": {
             "$ref": "#/components/headers/CorrelationId"
@@ -2856,8 +2920,7 @@
                             "ACCESS_TOKEN_EXPIRED",
                             "SESSION_EXPIRED",
                             "SESSION_REVOKED",
-                            "REFRESH_INVALID",
-                            "REFRESH_REUSED"
+                            "REFRESH_INVALID"
                           ]
                         },
                         "message": {
@@ -4555,7 +4618,6 @@
                       "SESSION_EXPIRED",
                       "SESSION_REVOKED",
                       "REFRESH_INVALID",
-                      "REFRESH_REUSED",
                       "FORBIDDEN",
                       "CSRF_INVALID",
                       "ORIGIN_DENIED",

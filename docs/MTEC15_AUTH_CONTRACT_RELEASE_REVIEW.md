@@ -1,16 +1,18 @@
 # MTEC-15 — Revisión candidata de autenticación y conformidades B07
 
-**Fecha:** 2026-11-02 (America/Costa_Rica). **Destinatarios:** mantenedores de
+**Fecha:** 2026-11-04 (America/Costa_Rica). **Destinatarios:** mantenedores de
 ms-users, Angular, ms-catalog, ms-notifications, APIM y revisión de seguridad.
-**Candidata:** `0.3.0-draft`. **QA contractual:** PASS WITH NOTES.
+**Candidata:** `0.3.0-draft`. **QA contractual local:** 37/37 PASS; Redocly válido con 9 warnings conocidos.
 **Aprobación de interfaces/integración:** BLOCKED por decisiones, protocolos y B07.
 
 ## Alcance y metodología
 
 Consolidación de decisiones, actualización de identidad/Users OpenAPI, fixtures,
-QA contractual y preparación de entrega. Base: `origin/main@c5dc74ffbe66d1d800972ad11402d8ac9becc3d9`,
-actualizada mediante fetch, rama `feat/mtec15-auth-contract-consolidation`, worktree
-`~/Developer/MarketTec/worktrees/market-tec-mtec15-contract-consolidation` inicialmente limpio.
+QA contractual y preparación de entrega. La candidata inicial partió de
+`origin/main@c5dc74f` y se publicó como PR #25 en `186d999`. Esta revisión
+integra localmente `origin/main@88835a5` en el checkout aislado del HEAD remoto,
+con resolución semántica de ADR-004 y DECISION_LOG. Los cuatro commits no
+publicados del otro worktree permanecen fuera de esta reconciliación.
 Lectura dirigida de ADR-004, DECISION_LOG, contratos/tests, consumidores Angular,
 informes locales siguientes y tickets en modo de solo lectura. Sin autenticación
 de aplicación, Java/Angular, repositorio independiente, Azure/APIM ni despliegues.
@@ -47,7 +49,7 @@ No se duplican propuestas completas ni se atribuyen conformidades a equipos.
 | Identidad | B02 passkey por userId/código de un uso, opcionales para básico; sin merge ni transferencia de historial. Sin endpoints WebAuthn/recuperación ni protocolo de alta aislada inventados |
 | Actividad | B03 usa ejecución real respaldada por servidor, cómputo único y procesamiento ≤60 s sin reactivación; request actual no basta y permanece bloqueado |
 | Navegador | Access/CSRF solo memoria, refresh opaco cookie HttpOnly/Secure/host-only, sincronizador/CORS explícito y serialización entre pestañas sin gracia general. Protocolo, SameSite/Path/hosts pendientes |
-| Refresh/logout/aviso | Bloqueo de emisión tras revocación, carreras/duplicados/pérdida explícitos. Detalle Draft de revocar familia ante reuso y reautenticar tras pérdida; pruebas pendientes. Aviso candidato 300 s antes del deadline de sesión, nunca del JWT |
+| Refresh/logout/aviso | Política C aprobada: consumo único, rechazo público `401 REFRESH_INVALID`, replay de pareja histórica coincidente solo interno y sin revocación automática del ganador. Auditoría estructurada e incidente autorizado pendientes. Si se pierde la respuesta, recuperar CSRF con cookie nueva; sin ella, reautenticar. `mode=rotate` y `scope=current` implementados en ms-users; `mode=continue` y `scope=all` pendientes. Aviso candidato 300 s antes del deadline de sesión, nunca del JWT |
 | Regresión | Mismas 21 operaciones: health implementada, 20 propuestas. Perfil/DTOs existentes, eventos, Catalog y Notifications conservados; baseline de hashes pasa |
 
 **Verificado estáticamente:** Angular todavía deriva `id` de Google `sub`
@@ -55,8 +57,8 @@ No se duplican propuestas completas ni se atribuyen conformidades a equipos.
 y no consume este flujo de sesión/refresh. Requiere migración coordinada. Los
 OpenAPI Catalog/Notifications aceptan bearer interno en diseño; sus descripciones
 no prueban verificación efectiva. Las fundaciones locales carecen de autenticador.
-No se inspeccionó ni modificó el repositorio independiente de ms-users en esta revisión.
-No consta compatibilidad dinámica ni conformidad de ningún consumidor.
+La evidencia de ms-users se limita a la revisión de código y CI registrada en la decisión MTEC-40; no se modificó el repositorio independiente ni se reejecutó Java/SQL aquí.
+El error público de refresh lo consumen directamente el navegador Angular y la admisión/enrutamiento APIM; ms-users lo emite. ms-catalog y ms-notifications consumen JWT/principal, no este endpoint directamente según los contratos revisados. No consta compatibilidad dinámica ni conformidad de ningún consumidor.
 
 ## Entrega por grado de preparación
 
@@ -103,14 +105,14 @@ esta revisión; aprobar política RP no equivale a conformidad de consumidor.
 
 - [ ] **ms-users:** consumir una versión canónica de `market_tec`, aprobar
   requests/responses/errores y alta/continuidad; verificar perfil, deadlines,
-  orden emisión/refresh/logout, replay/concurrencia, JWKS y pruebas negativas.
+  orden emisión/refresh/logout, replay interno frente a `401 REFRESH_INVALID`, auditoría y revocación autorizada, JWKS y pruebas negativas.
   Acordar autoridad/corte del repositorio independiente sin duplicar contratos.
 - [ ] **Angular:** revisar Google/enlace/CSRF, memoria/cookies/withCredentials por
-  destino, serialización entre pestañas, 401/403/503 sin bucles, respuestas tardías,
+  destino, serialización entre pestañas, `401 REFRESH_INVALID` sin cerrar la ganadora por carrera, 403/503 sin bucles, respuestas tardías,
   aviso de sesión, recarga/pérdida/logout y migración de Google sub a userId.
 - [ ] **APIM:** aprobar tabla exacta método/ruta pública/protegida, perfil y claves
   públicas, CORS/preflight, redacción/saneamiento/cookies, sin ciclo de arranque;
-  demostrar relojes, caché/propagación/retirada y contención sin bypass al integrar.
+  demostrar que no reintenta POST refresh, relojes, caché/propagación/retirada y contención sin bypass al integrar.
 - [ ] **ms-catalog / ms-notifications:** conformidad individual; validar JWT
   defensivamente, userId opaco y ownership/participación/destinatario; rechazar
   firma/alg/iss/aud/tiempos erróneos, sin confianza en headers cliente ni lookup
@@ -119,9 +121,22 @@ esta revisión; aprobar política RP no equivale a conformidad de consumidor.
   parámetros mínimos y excepciones/riesgos con responsable e hito; no sustituir
   pruebas por declaraciones. Acordar versión/corte y aprobación final MTEC-15.
 
+## Revalidación local de política C — 2026-11-04
+
+**Verificado:** 37/37 pruebas contractuales PASS, incluidos 27 vectores JWT;
+tres OpenAPI válidos en Redocly 2.71.2 con 9 warnings, igual al baseline
+anterior (6 de licencia/health y 3 componentes auxiliares). JSON y schemas
+validados, `git diff --check` sin errores. Los tests comprueban respuesta
+pública exclusiva `401 REFRESH_INVALID` para refresh, clasificación interna
+separada, ausencia de reemisión/gracia/revocación automática, estados Draft,
+perfil JWT y regresión de otros contratos. La prueba no ejecuta el backend ni
+demuestra auditoría, APIM, concurrencia distribuida o comportamiento Angular.
+Esta evidencia corresponde al árbol reconciliado localmente con
+`origin/main@88835a5`; falta repetirla en CI tras publicar el PR.
+
 ## Evidencia reproducible de QA y límites
 
-**Verificado:** suite local **37/37 PASS**, incluidos 27 vectores JWT sintéticos,
+**Baseline anterior verificado:** suite local **37/37 PASS**, incluidos 27 vectores JWT sintéticos,
 formas/referencias/ejemplos Schema 2020-12, bordes 60/30/8 antes/en/después,
 refresh/logout/errores, política sin merge por email y baseline de compatibilidad.
 Oráculo aislado en `test_jwt_profile.py`: OpenSSL verifica firmas; se rechazan
@@ -129,7 +144,7 @@ algoritmo, firma/clave ajena, issuer/aud incorrectos, kid ausente/desconocido,
 claims/tipos, vida >240 s y exp en igualdad/después. No se importa desde servicios.
 Privadas efímeras descartadas; fixtures solo públicas/tokens para `.invalid`.
 
-**Verificado:** Redocly 2.71.2 valida los tres OpenAPI sin errores, **9 warnings**:
+**Baseline anterior verificado:** Redocly 2.71.2 valida los tres OpenAPI sin errores, **9 warnings**:
 6 previos de license/health, 2 previos de claims/principal auxiliares y 1 nuevo
 de header JOSE auxiliar usado por extensión/tests, no como cuerpo HTTP.
 `git diff --check` y whitespace de archivos nuevos: sin errores.
@@ -165,10 +180,12 @@ WebAuthn/recuperación, alta aislada/perfil inicial, actividad y CSRF/refresh/av
 issuer/aud y procedimientos de claves deben cerrarse con sus responsables. No
 se reabre la política ya aprobada RS256/RSA-2048, 240 s, 60/30/8 ni básico B02.
 
-Riesgos: bearer reutilizable durante residual permitido; reloj/caché o carreras
+Riesgos: si un atacante gana la primera rotación, puede conservar la generación activa hasta expiración o revocación efectiva; bearer reutilizable durante residual permitido; reloj/caché o carreras
 sin demostrar; exclusión conservadora ante pérdida de evidencia; cambios
 incompatibles en consumidores; no existe prueba de revocación crítica por TTL.
 No habilitar superficies dependientes de decisiones pendientes.
+
+La discrepancia específica entre el Draft y la política C queda corregida en los archivos contractuales de esta revisión local; la integración local con `main` está resuelta; faltan publicación en el PR #25 y conformidades B07. El estado Draft no implica aprobación formal. Las pruebas de navegador y Azure/APIM, auditoría durable, revocación autorizada, concurrencia entre instancias y medición del residual siguen pendientes.
 
 Para MTEC-15 Done: registrar revisiones/conformidades conjuntas de consumidores
 y SEG/APIM, resolver o diferir explícitamente pendientes sin dejar ambiguas las
@@ -179,10 +196,6 @@ QA contractual; no puede usarse su ausencia para afirmar controles desplegados.
 
 Según UPDATE_PROTOCOL, `context/` se limita a ADR-004/DECISION_LOG porque cambian
 decisiones y referencias contractuales; arquitectura/integración/deuda describen
-implementación que no cambió. Los informes anteriores siguen históricos. Estado histórico al preparar esta evidencia de prepublicación: cambios locales
-sin staging, commit, push ni PR. La publicación y el CI posteriores se verifican
-en el PR correspondiente; no se deducen de este QA local. Main OneDrive y
-B01/B02–B04/B05–B06 preservados mediante contraste de HEAD, estados y huellas
-antes/después.
+implementación que no cambió. Los informes anteriores siguen históricos. Esta revisión modifica contrato, pruebas, ADR-004, DECISION_LOG y esta auditoría sobre el HEAD remoto del PR #25. La integración con `origin/main` está resuelta localmente; la publicación sigue pendiente.
 
 **Contrato todavía Draft. B07 preparado, sin conformidades ni aprobación final.**
