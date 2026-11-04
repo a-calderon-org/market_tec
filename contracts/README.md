@@ -81,3 +81,11 @@ en [identidad](identity/IDENTITY_CONTRACT.md). Los vectores criptográficos usan
 solo públicas y tokens sintéticos para hosts `.invalid`; no contienen privadas.
 El oráculo de pruebas no se utiliza por los servicios y no demuestra revocación,
 reloj real, propagación, atomicidad ni CSRF/CORS de navegador/APIM.
+
+La política de registro Google nuevo exige confirmación por enlace institucional
+antes del alta, incluso con `email_verified=true`. La ruta canónica propuesta
+usa el propósito `register` de `/v1/auth/attempts` y continúa por
+`/v1/auth/google`, `/v1/auth/email/requests` y `/v1/auth/email/confirm`.
+`/v1/auth/google/registrations` figura como alias de compatibilidad propuesto;
+su comportamiento actual en ms-users es incompatible. La suite contractual
+valida formas y semántica documental, no ejecuta el backend.

@@ -156,8 +156,8 @@ implementación.
 1. Angular obtiene un Google ID Token mediante GIS.
 2. Angular envía esa credencial a la futura API de autenticación mediante APIM; el login no requiere previamente un JWT interno.
 3. `ms-users` verifica criptográficamente firma, algoritmo, issuer, audience, expiración y claims obligatorios, además de la vinculación al intento y elegibilidad aprobadas.
-4. `ms-users` identifica o registra al usuario interno según la política de alta, sin vincular cuentas automáticamente por correo.
-5. `ms-users` emite la credencial de MarketTec y establece la sesión propia de 3.4.
+4. `ms-users` identifica la cuenta existente por vínculo Google exacto o, para registro nuevo, exige antes un enlace de un solo uso confirmado en el buzón institucional según la [decisión posterior de MTEC-15](DECISION_LOG.md#registro-google-nuevo--2026-11-04), sin vincular cuentas automáticamente por correo.
+5. Solo después de satisfacer la política aplicable, `ms-users` emite la credencial de MarketTec y establece la sesión propia de 3.4.
 6. APIM y los servicios validan el JWT interno; los casos de uso consumen exclusivamente la identidad interna validada.
 
 El Google ID Token es una credencial transitoria, nunca el identificador permanente de publicaciones, chats o perfiles. Google `sub` solo identifica el vínculo externo dentro de `ms-users`.
@@ -176,7 +176,10 @@ parámetro `hd` del botón no demuestra pertenencia. Google advierte que un corr
 de terceros sin `hd` puede no estar bajo su autoridad actual aunque
 `email_verified` sea verdadero: en ese caso se exige verificación institucional
 adicional de posesión del buzón antes del acceso básico, conforme a la política
-aprobada. Su protocolo sigue pendiente en P16/P18. No se impondría Google
+aprobada. Para **todo registro Google nuevo**, la decisión posterior de MTEC-15
+exige el enlace institucional aun si Google es autoritativo y
+`email_verified=true`; el protocolo sigue pendiente en P16/P18. Esto no
+impone registro de nuevo a cuentas existentes. No se impondría Google
 Workspace al camino de correo sin Google. Ninguno de esos claims demuestra por
 sí solo matrícula o empleo activo.
 

@@ -7,9 +7,35 @@ ampliado el 2026-10-31 con ADR-004. Revisión técnica y aceptación delimitada 
 la conciliación posterior incorpora los límites de sesión 60 min/30 min/8 h
 ratificados ese día. La consolidación del 2026-11-02 incorpora las aprobaciones delimitadas
 B01–B06 de MTEC-40; la política C de replay se aprobó el 2026-11-04.
+La política obligatoria de enlace institucional para registros Google nuevos se
+formalizó en MTEC-15 el 2026-11-04.
 Parámetros, demostraciones y conformidades siguen pendientes.
 
 No se encontraron ADR históricos verificables previos a Fase II. Las decisiones inferidas del código (Angular standalone, APIM, Express) no se atribuyen como decisiones formales.
+
+## Registro Google nuevo — 2026-11-04
+
+**Estado: Approved como política de alta; interfaz MTEC-15/B07 Proposed.** El
+responsable del proyecto exige que toda cuenta nueva confirme la posesión del
+buzón institucional mediante enlace de un solo uso **antes** de crear usuario,
+activar vínculo Google o emitir sesión. Se admiten exactamente
+`estudiantec.cr`, `itcr.ac.cr` y `tec.ac.cr`. Firma/claims Google y
+`email_verified=true` son necesarios según el flujo, pero no sustituyen el
+enlace. La prueba se liga al intento y al mismo correo de la identidad Google
+verificada; no se acepta un destinatario distinto elegido por el cliente.
+La confirmación exige POST explícito, navegador autorizado, vencimiento y
+consumo único. No se fusionan cuentas por correo ni se transfiere historial por
+posesión de un buzón reasignado.
+
+**Alcance y pendientes:** la política rige altas nuevas, no obliga a registrar
+de nuevo a todos los usuarios existentes. La continuidad de cuentas históricas
+sin evidencia del enlace, migración de `/v1/auth/google/registrations`,
+parámetros de TTL/abuso, entrega y compatibilidad Angular/APIM requieren
+protocolo, pruebas y conformidades B07. El contrato objetivo está en
+[Users OpenAPI](../../contracts/openapi/users.json) y en el
+[contrato de identidad](../../contracts/identity/IDENTITY_CONTRACT.md). El
+backend `ms-users/main@3f776f6` todavía crea cuenta y sesión sin este enlace;
+la decisión no acredita implementación ni autoriza despliegue.
 
 ## Decisión de refresh replay — 2026-11-04
 
@@ -54,7 +80,8 @@ La elegibilidad básica aceptada exige posesión verificada de correo de
 **estudiantec.cr, itcr.ac.cr o tec.ac.cr**, con comparación exacta, sin
 matrícula/empleo activo externos, privilegios ni clasificación visible por
 dominio. Google exige validación criptográfica y prueba adicional institucional
-cuando no sea autoritativo sobre el buzón. No se fusionan cuentas por correo;
+cuando no sea autoritativo sobre el buzón; para registros Google nuevos, la
+decisión posterior anterior exige el enlace en todos los casos. No se fusionan cuentas por correo;
 vincular exige prueba reciente suficiente de ambos métodos. B02 aprueba passkeys ligadas al userId y códigos de recuperación de un uso para
 continuidad, opcionales para básico; no aprueba sus protocolos ni recuperación
 excepcional, fusión o transferencia de historial.

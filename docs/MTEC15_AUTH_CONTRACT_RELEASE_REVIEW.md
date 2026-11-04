@@ -2,10 +2,103 @@
 
 **Fecha:** 2026-11-04 (America/Costa_Rica). **Destinatarios:** mantenedores de
 ms-users, Angular, ms-catalog, ms-notifications, APIM y revisión de seguridad.
-**Candidata:** `0.3.0-draft`. **QA contractual local:** 37/37 PASS; Redocly válido con 9 warnings conocidos.
+**Candidata:** `0.3.0-draft`. **QA contractual local actual:** 42/42 PASS; Redocly válido con 9 warnings conocidos.
 **Aprobación de interfaces/integración:** BLOCKED por decisiones, protocolos y B07.
 
-## Corte de interoperabilidad sobre PR #25 — 2026-11-04
+## Registro Google obligatorio — corte actual de MTEC-15
+
+**Alcance y método.** Se compararon `market_tec` PR #25
+`f9c752188f583913fa0152319b572a3907ec8cd8` y
+`ms-users/main@3f776f6f609101a0d1db71afe4378b2c81fe11f7` con Jira
+MTEC-15/36/40, ADR-004, DECISION_LOG, OpenAPI, identidad, pruebas HTTP/unitarias
+y SQL del servicio. Se modificaron solo contrato, fixtures, pruebas y documentos
+de decisión/revisión; no Java, Angular, APIM ni contratos Catalog/Notifications.
+**Verificado:** el backend actual crea usuario, vínculo Google y sesión en
+`GoogleRegistrationService.complete()` sin enlace; `InstitutionalEmailProof`
+solo aporta primitivas, no la continuación de registro. El login existente
+resuelve `(issuer,sub)` exacto y estado activo, pero no acredita continuidad
+institucional de cuentas históricas. La prueba SQL de registro usa
+`registration@example.invalid`, confirmando que el flujo actual no aplica la
+allowlist; prueba unicidad/rollback del alta inmediata, no confirmación de
+buzón. Cuenta/vínculo y emisión de sesión ocurren en transacciones separadas:
+un fallo posterior puede dejar cuenta sin sesión. Las pruebas Java/SQL existentes
+no validan el nuevo flujo objetivo y no se ejecutaron en este corte.
+
+**Decisión de política aprobada por el responsable:** cada registro Google
+nuevo debe confirmar el buzón institucional mediante enlace de un solo uso
+antes de cuenta, vínculo activo o credenciales. `email_verified=true` no omite
+esa prueba. Se admiten exactamente `estudiantec.cr`, `itcr.ac.cr`, `tec.ac.cr`;
+sin subdominios, dominios parecidos, roles por dominio ni fusión por correo.
+**Interfaz y mecanismos:** Proposed dentro de `0.3.0-draft`; aprobación B07,
+implementación y pruebas operativas pendientes.
+Users OpenAPI pasa de 21 a 22 operaciones por el alias de compatibilidad;
+los `operationId` de attempts y email/requests/confirm se generalizan para
+ambos propósitos, por lo que los clientes generados requieren revisión.
+
+| Operación | Semántica objetivo y compatibilidad |
+|---|---|
+| `POST /v1/auth/attempts` | `{method,purpose}`; `register` solo Google. Servidor persiste ID aleatorio, nonce, propósito, navegador, CSRF, plazo y consumo único. El propósito del body no reemplaza el persistido. 200 sin sesión; 400/403/429 según control. Angular y backend actual deben adaptar request explícito. |
+| `POST /v1/auth/google` | Ruta canónica propuesta: login de vínculo exacto puede dar 200; `register` validado da siempre 202 `MailboxVerificationRequired`, incluso con `email_verified=true`. Verifica firma, emisor, audiencia, nonce, tiempos, sub y correo. No crea cuenta ni sesión. 401 prueba inválida, 409 intento consumido/conflicto, 410 vencido. |
+| `POST /v1/auth/google/registrations` | Ruta existente en backend; OpenAPI la registra como alias de compatibilidad **Proposed/deprecated** con solo 202. El 200 inmediato actual es incompatible: deshabilitar hasta poder dar 202 seguro o migrar clientes a la ruta canónica, con ventana/versionado y pruebas APIM/Angular. No retirarla silenciosamente. |
+| `POST /v1/auth/email/requests` | `{attemptId,email}` conserva forma anterior; en register, el correo del body no es autoritativo: se fija el del Google token verificado. Otro correo y dominio no elegible reciben acuse uniforme 202 sin envío. Fallo de entrega no crea usuario/sesión; error operativo genérico 503 sin enumeración. |
+| `POST /v1/auth/email/confirm` | `{attemptId,token}` en POST explícito, cookie/CSRF del navegador iniciador. Verifica secreto, intento, propósito, destinatario, Google issuer/sub, plazo y uso único. Solo después crea `userId`, cuenta/vínculo y sesión transaccionalmente. 200 autorizado, 401 secreto ajeno/alterado, 409 consumido/continuidad/conflicto, 410 vencido. GET/HEAD/previsualización nunca consumen. |
+
+**Idempotencia y respuesta perdida.** El consumo del Google token y del enlace
+no permite repetir una emisión. Las restricciones de unicidad de `(issuer,sub)`
+y la transacción deben impedir doble cuenta en carreras. Si se pierde un 202,
+se inicia otro intento según la política de caducidad; si se pierde el 200 tras
+confirmar, no se reemiten JWT/refresh ni se crea otra sesión por retry. Se inicia
+un nuevo intento y se resuelve el vínculo existente según la política de
+continuidad aprobada. El borrador mantiene la regla entre dispositivos: abrir
+el enlace en otro navegador reinicia allí el flujo, sin transferencia de sesión.
+
+**Separación de login y migración.** Un `login` de Google desconocido no se
+transforma en alta. Una cuenta anterior con vínculo Google sin evidencia del
+enlace no queda automáticamente validada por este cambio. Tampoco se bloquea
+en masa: la continuidad, recuperación y eventual revalidación requieren una
+decisión B02/B07 y plan de migración. El buzón reasignado no transfiere
+historial ni acredita titularidad pasada.
+
+**Riesgos y decisiones abiertas.** Robo/reutilización de enlace, intentos
+concurrentes, pérdida de respuesta, fallo de correo, enumeración por contenido
+o latencia y cuentas duplicadas requieren pruebas HTTP/SQL y límites de abuso.
+TTL de intento/enlace, cooldown, cuotas, entrega, retención de evidencia sin
+secretos y atomicidad entre persistencia y emisión siguen Proposed. Angular
+debe adaptar propósito, estados 202, confirmación POST y errores; APIM debe
+autorizar rutas/métodos exactos, CORS/CSRF/cookies sin retries automáticos.
+Catalog/Notifications no consumen estas rutas; conservan JWT/principal y
+autorización propia. Política C de refresh replay permanece intacta.
+
+**Alternativas para la ruta existente.** Recomendación técnica: mantenerla
+temporalmente como alias 202 seguro solo tras implementar el mismo estado
+pendiente; hasta entonces, deshabilitar su exposición. Retirarla directamente
+rompería clientes actuales; mantener el 200 permitiría altas sin prueba. La
+decisión de fecha/corte y compatibilidad corresponde a revisión B07. Para
+cuentas históricas, proponer inventario de evidencia y transición gradual con
+recuperación aprobada; no se define aquí un protocolo nuevo.
+
+**Handoff MTEC-36/ms-users.** Persistir intento `register` y evidencia Google
+verificada pendiente; aplicar dominios exactos; ligar destinatario y enlace al
+intento/navegador/issuer/sub; integrar generación, entrega y confirmación POST
+con verificador sin secreto y consumo único; crear cuenta/vínculo transaccional
+solo tras confirmar; resolver identidad previamente vinculada y cuentas
+históricas según decisión futura; emitir una sola sesión y manejar retries sin
+reemitir credenciales. Probar firma/claims, 202 sin cuenta/JWT/refresh, dominios
+negativos, correo distinto, enlaces alterados/vencidos/consumidos, escáner GET,
+fallo de entrega, concurrencia SQL, rollback, respuesta perdida, continuidad y
+compatibilidad HTTP de ambas rutas. Comparar el backend con el contrato
+aprobado antes de habilitar flags o integrarlo con Angular/APIM.
+
+**Validación local de este corte.** Suite completa 42/42 PASS frente a baseline
+37/37; perfil JWT dirigido 2/2 PASS. Tres OpenAPI Redocly: cero errores, nueve
+warnings conocidos frente a nueve anteriores. JSON parseable, fixtures y
+esquemas Draft 2020-12 validados por la suite; enlaces Markdown locales
+existentes, `git diff --check` limpio y búsqueda de patrones de claves/tokens
+en líneas añadidas sin hallazgos. Los tests nuevos validan esquemas, ejemplos,
+metadatos y semántica documental, no comportamiento Java. No hay prueba operativa de
+correo, navegador, SQL, Azure/APIM ni conformidades humanas B07.
+
+## Corte histórico de interoperabilidad sobre PR #25 — 2026-11-04
 
 **Alcance y método:** lectura estática de `market_tec` PR #25
 `0275d3dc2e7e72626c2415748278e1eaa5f00f37`, `ms-users/main@3f776f6`,

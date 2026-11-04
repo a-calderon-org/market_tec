@@ -22,8 +22,9 @@ marcada `implemented` en este contrato. El servicio ya expone adaptadores parcia
 de Google, sesión, refresh `mode=rotate` y logout `scope=current`; ninguna de esas
 operaciones acredita todavía la interfaz completa candidata y conservan
 `x-implementation-status: proposed`. También expone
-`POST /v1/auth/google/registrations`, ausente de este OpenAPI: su interfaz requiere
-conciliación antes de aprobación B07. El estado global es
+`POST /v1/auth/google/registrations`, cuya alta inmediata es incompatible con la
+ruta de compatibilidad propuesta en OpenAPI: exige migración o deshabilitación
+antes de aprobación B07. El estado global es
 `draft-pending-team-approval`. **No determinado:** configuración efectiva Azure/APIM.
 
 ### Núcleo aceptado y detalles propuestos
@@ -31,7 +32,7 @@ conciliación antes de aprobación B07. El estado global es
 | Tema | Accepted según ADR-004 | Proposed / pendiente |
 |---|---|---|
 | Métodos | Google y enlace institucional simultáneamente desde v1 | Protocolos, TTL, tasas, pruebas y errores de las operaciones siguientes |
-| Elegibilidad | Control verificado de correo de dominio exacto `estudiantec.cr`, `itcr.ac.cr` o `tec.ac.cr`; acceso básico sin prueba de matrícula/empleo | Canonicalización técnica, alta idempotente y continuidad de cuentas históricas |
+| Elegibilidad | Control verificado de correo de dominio exacto `estudiantec.cr`, `itcr.ac.cr` o `tec.ac.cr`; todo registro Google nuevo exige enlace al buzón antes de alta o sesión, aun con `email_verified=true`; acceso básico sin prueba de matrícula/empleo | Canonicalización técnica, alta idempotente y continuidad de cuentas históricas |
 | Identidad | `userId` interno opaco, estable, generado por ms-users; no fusión por email | Mapping contractual, namespace de EmailIdentity y prueba reciente de ambos métodos |
 | Sesión | 60 min renovables, 30 min inactividad, 8 h absolutas; primer límite, servidor, aviso y reautenticación; sondeos no son actividad | B03 aprueba política de actividad; B06 transporte/serialización. Protocolos, aviso candidato y cumplimiento distribuido pendientes |
 | Confianza | ms-users autentica/emite/publica claves; APIM admite; cada backend revalida y autoriza su dominio | RS256/RSA-2048 y JWKS aprobados; parámetros/propagación, protección de origen y reglas efectivas APIM pendientes |
@@ -53,9 +54,10 @@ resolver establemente el mismo `userId`, incluso bajo concurrencia.
   formas oficiales de issuer solo después de validarlas evita mappings duplicados.
 - Correo usa una identidad propia, nunca un `sub` Google inventado. La dirección
   verificada no es el ID interno. B02 aprueba passkeys por userId y códigos de recuperación de un uso, opcionales para básico; namespace y protocolos siguen pendientes.
-- Proposed: alta transaccional idempotente tras verificar identidad y elegibilidad.
-  Si la política de alta no está aprobada, no habilitarla; `REGISTRATION_REQUIRED`
-  expresa registro necesario tras prueba válida. Un conflicto no crea otra cuenta,
+- La política de alta Google nueva exige enlace institucional de un solo uso antes
+  de crear cuenta, activar vínculo Google o emitir sesión. La interfaz propuesta
+  hace el alta transaccional e idempotente solo tras esa prueba; `REGISTRATION_REQUIRED`
+  expresa registro necesario tras una prueba de login válida. Un conflicto no crea otra cuenta,
   fusiona usuarios ni reasigna una identidad.
 - Coincidir en email con una cuenta de otro método requiere vinculación explícita.
   No se promete deduplicación de personas a partir de direcciones.
@@ -143,8 +145,9 @@ GIS no añade por sí solo este protocolo; no asumir `g_csrf_token` de otro modo
 
 | Método/ruta de servicio | Request → éxito | Seguridad y efecto |
 |---|---|---|
-| POST `/v1/auth/attempts` | `{method}` → `AttemptResponse` | Sin sesión; contexto navegador, propósito login y cliente GIS fijados por servidor |
-| POST `/v1/auth/google` | `{credential,attemptId}` → `AuthResponse` 200 o `MailboxVerificationRequired` 202 | Cookie intento + CSRF; firma/claims/nonce; consumo único antes de sesión |
+| POST `/v1/auth/attempts` | `{method,purpose}` → `AttemptResponse` | Sin sesión; login o register explícito y persistido, register solo Google; navegador, CSRF, nonce, plazo y consumo único |
+| POST `/v1/auth/google` | `{credential,attemptId}` → `AuthResponse` 200 solo login existente o `MailboxVerificationRequired` 202 para register | Cookie intento + CSRF; firma/claims/nonce; register siempre pendiente de enlace |
+| POST `/v1/auth/google/registrations` | Alias de compatibilidad propuesto → 202 register | Backend actual crea cuenta y sesión sin enlace; deshabilitar o migrar antes de exponer, con revisión de clientes/APIM |
 | POST `/v1/auth/email/requests` | `{attemptId,email}` → `EmailAccepted` 202 | Cookie intento + CSRF; emisión/reenvío sin enumeración |
 | POST `/v1/auth/email/confirm` | `{attemptId,token}` → `AuthResponse` 200 | Confirmación explícita, consumo atómico, continuidad; no GET de autenticación |
 | POST `/v1/auth/proofs/attempts` | `{method,purpose,authMethodId?}` → `AttemptResponse` | JWT + cookie + CSRF, propósito reauthenticate o link |
@@ -157,13 +160,14 @@ GIS no añade por sí solo este protocolo; no asumir `g_csrf_token` de otro modo
 Para Google se propone verificar firma con biblioteca mantenida y claves de destino
 fijo, algoritmo permitido, emisor oficial, aud del cliente de ese intento, azp si
 presente, tipos/coherencia iat/exp/nbf, nonce y elegibilidad. RS256, aud única y
-canonicalización son pendientes P18/P21. `email_verified=true` sin autoridad de
-Google sobre buzón de terceros no basta: responder 202, retener evidencia Google
-verificada y requerir prueba institucional del mismo intento; no crear sesión,
-cuenta ni EmailIdentity implícita antes de completarla. El destinatario de esa
+canonicalización son pendientes P18/P21. En **registro nuevo**, `email_verified=true`
+nunca sustituye el enlace institucional: responder 202 de forma uniforme, retener
+evidencia Google verificada y requerir prueba del mismo intento; no crear sesión,
+cuenta, vínculo activo ni EmailIdentity implícita antes de completarla. El destinatario de esa
 prueba adicional queda fijado al email de la evidencia Google validada y al mismo
 issuer/sub, intento y propósito. No se puede acreditar esa identidad usando otro
-buzón: solicitar otro email conserva 202, sin envío ni cambio del destinatario;
+buzón: el `email` del body se conserva por compatibilidad pero no es autoritativo;
+solicitar otro email conserva 202, sin envío ni cambio del destinatario;
 confirmar solo acepta el secreto emitido para esa evidencia. No se confía en hd del botón.
 [Google documenta la distinción de autoridad del buzón](https://developers.google.com/identity/gsi/web/guides/verify-google-id-token).
 
@@ -193,6 +197,39 @@ adicional aprobado. Token alterado/ajeno → 401 genérico; intento vencido → 
 consumido → 409, sin revelar cuenta. Carrera: máximo un consumo y una sesión/grant.
 Entrega fallida no crea usuario/sesión. Respuesta perdida tras consumo obliga nuevo
 intento. Email histórico sin continuidad aprobada → B02, no recuperación automática.
+
+### Registro Google nuevo frente a login existente
+
+**Política de registro aprobada; interfaz Proposed.** El servidor persiste el
+intento `register` con identificador aleatorio, nonce, vínculo al navegador,
+sincronizador CSRF, vencimiento y consumo único. El cliente no puede cambiar su
+propósito, destinatario ni identidad. `POST /v1/auth/google` valida el token
+Google y deja una evidencia pendiente; responde 202 aun si `email_verified=true`.
+El dominio del correo se compara exactamente con `estudiantec.cr`, `itcr.ac.cr`
+o `tec.ac.cr`; los parecidos y subdominios no son elegibles. El acuse 202 no
+revela elegibilidad. `POST /v1/auth/email/requests` solo puede enviar el enlace
+al correo fijado por la identidad Google; error de entrega no crea cuenta ni
+sesión. `POST /v1/auth/email/confirm` verifica secreto, destinatario, propósito,
+intento, navegador, plazo y evidencia Google; solo entonces crea `userId`, usuario
+y vínculo de forma transaccional, registra prueba sin secretos y emite sesión.
+La repetición o concurrencia no puede crear otra cuenta ni emitir credenciales
+de nuevo. Una respuesta perdida exige nuevo intento; no hay reemisión insegura.
+El acceso entre dispositivos conserva la regla del borrador: reiniciar allí el
+flujo, sin canjear el enlace por una sesión en otro navegador.
+
+El **login existente** usa propósito `login` y resuelve el vínculo exacto
+`(issuer,sub)` y el estado de la cuenta. Una identidad desconocida no inicia
+registro implícito. Las cuentas históricas con vínculo Google pero sin evidencia
+del enlace no se aprueban automáticamente ni se bloquean masivamente con este
+contrato. Su continuidad y recuperación requieren decisión B02/B07 y plan de
+migración; la posesión de un buzón reasignado no transfiere historial.
+
+`/v1/auth/google/registrations` existe en ms-users, pero su 200 inmediato es
+incompatible. La ruta canónica propuesta es `/v1/auth/google` con propósito
+`register` persistido. La ruta existente puede mantenerse temporalmente solo
+como alias 202 seguro o deshabilitarse hasta migrar clientes y APIM; ninguna
+opción se declara implementada ni aprobada para despliegue. Requiere plan de
+versionado, comunicación y pruebas de compatibilidad B07.
 
 Al vincular, verificar atomicidad y unicidad de identidad: otro userId produce
 conflicto genérico sin fusión. Ambas pruebas deben estar vigentes y ligadas al mismo

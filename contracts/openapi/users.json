@@ -57,8 +57,8 @@
     "/v1/auth/google": {
       "post": {
         "operationId": "exchangeGoogleCredential",
-        "summary": "Validar Google y establecer sesión interna",
-        "description": "Proposed — Reemplaza borrador 0.1 de forma incompatible. Valida firma Google, iss/aud/azp/iat/exp, nonce e intento de este navegador; consume atómicamente una vez. Mapping issuer/sub solo interno. 200 únicamente tras control institucional y política de alta/continuidad. 202 requiere prueba adicional del buzón cuando Google no es autoritativo: conservar evidencia verificada en servidor y seguir email/requests + email/confirm del mismo intento, sin emitir sesión ni crear EmailIdentity implícita. No reutilizar nonce para otro intercambio. Repetición 409; intento expirado 410; cuenta/mapping en conflicto 409 genérico sin fusión. Respuesta perdida después de consumo exige intento nuevo.",
+        "summary": "Verificar Google para login existente o registro pendiente",
+        "description": "Proposed — El propósito login/register proviene exclusivamente del intento persistido y ligado al navegador/CSRF. Verificar firma, issuer, audience, azp cuando aplica, nonce, tiempos, sub, email y email_verified del ID Token. Aplicar exactamente los dominios estudiantec.cr, itcr.ac.cr y tec.ac.cr al alta; no confiar en hd ni en sufijos/subdominios. Login: resolver solo vínculo Google issuer/sub exacto, cuenta activa y continuidad aplicable; una identidad desconocida no se convierte silenciosamente en registro. Registro: retener evidencia Google de forma protegida y responder 202 sin usuario, vínculo activo, sesión, JWT ni refresh, incluso con email_verified=true. La elegibilidad no se revela en el 202: un correo no elegible no recibe enlace ni alta. Seguir /v1/auth/email/requests y /v1/auth/email/confirm del mismo intento; un token Google consumido no puede iniciar otra continuación. Reintento 409, expirado 410; respuesta perdida requiere intento nuevo, sin reemitir credenciales. Registro objetivo aún no implementado en ms-users.",
         "x-implementation-status": "proposed",
         "x-approval-status": "proposed",
         "x-route-class": "attempt-proof",
@@ -85,7 +85,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Sesión común establecida; renovar cookie, invalidar contexto previo.",
+            "description": "Login de cuenta existente con vínculo Google exacto y sesión autorizada; nunca alta nueva.",
             "headers": {
               "X-Correlation-ID": {
                 "$ref": "#/components/headers/CorrelationId"
@@ -135,7 +135,7 @@
             }
           },
           "202": {
-            "description": "Prueba Google retenida sin sesión; falta buzón.",
+            "description": "Registro pendiente tras verificación Google; acuse uniforme sin prueba de elegibilidad, cuenta ni credenciales.",
             "headers": {
               "X-Correlation-ID": {
                 "$ref": "#/components/headers/CorrelationId"
@@ -148,6 +148,15 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MailboxVerificationRequired"
+                },
+                "examples": {
+                  "registrationPending": {
+                    "value": {
+                      "status": "mailbox-verification-required",
+                      "attemptId": "attempt-placeholder",
+                      "expiresAt": 1790000300
+                    }
+                  }
                 }
               }
             }
@@ -232,7 +241,24 @@
             }
           }
         },
-        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending"
+        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending",
+        "x-registration-flow": {
+          "purpose": "register",
+          "googleAssertion": "single-use",
+          "mailboxProof": "mandatory-even-if-google-email-verified",
+          "accountBeforeConfirmation": false,
+          "sessionBeforeConfirmation": false,
+          "eligibleDomains": [
+            "estudiantec.cr",
+            "itcr.ac.cr",
+            "tec.ac.cr"
+          ],
+          "canonicalContinuation": [
+            "/v1/auth/email/requests",
+            "/v1/auth/email/confirm"
+          ],
+          "currentBackend": "incompatible-immediate-account-and-session"
+        }
       }
     },
     "/v1/usuarios/{userId}": {
@@ -501,9 +527,9 @@
     },
     "/v1/auth/attempts": {
       "post": {
-        "operationId": "createLoginAttempt",
-        "summary": "Iniciar intento de login Google o correo",
-        "description": "Proposed — Sin sesión previa. Origin exacto, JSON y X-MTEC-Client obligatorios contra login CSRF. Crea contexto aleatorio ligado a navegador/método/propósito/cliente GIS configurado. Google devuelve nonce server; correo no. No acepta userId, clientId ni redirectUri arbitrarios. Cada creación genera intento nuevo; limitar abuso. Sesión existente no se sustituye sin decisión explícita. TTL Google 300s/correo 600s solo candidatos, sin extender intento por reenvío.",
+        "operationId": "createAuthenticationAttempt",
+        "summary": "Iniciar intento de login o registro Google, o login por correo",
+        "description": "Proposed — Origin exacto, JSON y X-MTEC-Client obligatorios. method y purpose explícitos; el servidor crea identificador aleatorio, nonce Google, vínculo al navegador, CSRF, vencimiento y consumo único. El propósito persistido es autoritativo: register solo para Google en esta interfaz; login para Google o correo. No acepta userId, clientId, destinatario ni redirectUri arbitrarios. Cada creación genera un intento nuevo, sin sesión ni cuenta; limitar abuso. TTL Google 300 s/correo 600 s son candidatos, no plazos aprobados.",
         "x-implementation-status": "proposed",
         "x-approval-status": "proposed",
         "x-route-class": "pre-session",
@@ -613,21 +639,23 @@
               "examples": {
                 "synthetic": {
                   "value": {
-                    "method": "google"
+                    "method": "google",
+                    "purpose": "login"
                   }
                 }
               }
             }
           }
         },
-        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending"
+        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending",
+        "x-registration-flow": "register-purpose-persisted-by-server-google-only"
       }
     },
     "/v1/auth/email/requests": {
       "post": {
-        "operationId": "requestInstitutionalLogin",
+        "operationId": "requestInstitutionalEmailLink",
         "summary": "Solicitar enlace institucional",
-        "description": "Proposed — Acuse uniforme para todo correo sintácticamente válido, existente/nuevo/no elegible; dominio exacto solo en servidor, no envío si no elegible. Misma forma y tiempos comparables. Tasa por destinatario se oculta en 202; 429 solo por origen/global independiente de cuenta. Envío asíncrono no garantiza entrega. Mismo intento en cooldown no reenvía; reenvío permitido invalida enlace anterior sin extender expiresAt del intento. Secreto CSPRNG y verificador hash; 256 bits/600s candidatos, TTL=min(plazo enlace,expiresAt intento). Si el intento complementa Google, destinatario y propósito quedan fijados al email del token Google ya validado y a su issuer/sub retenidos. No aceptar otro buzón para acreditar esa identidad. Email distinto mantiene el mismo 202 sin enviar ni cambiar destinatario; confirmar exige esa misma evidencia y no crea EmailIdentity.",
+        "description": "Proposed — 202 uniforme para solicitudes sintácticamente válidas, sin revelar cuenta, dominio o entrega. Para intento register Google, el destinatario es exclusivamente el email de la evidencia Google validada, ligado a issuer/sub, propósito e intento. El email del body se conserva por compatibilidad, pero nunca cambia el destinatario autoritativo; si difiere, no se envía enlace y se mantiene el mismo 202. Dominios exactos estudiantec.cr, itcr.ac.cr, tec.ac.cr; no enviar a otros, parecidos ni subdominios. El envío fallido no crea cuenta/sesión; 503 solo para fallo operativo genérico sin enumeración. Reenvío permitido invalida enlace anterior sin prolongar intento. Secreto de un solo uso y solo verificador persistido; TTL y controles de abuso aún pendientes. Para login por email rigen las reglas de continuidad existentes.",
         "x-implementation-status": "proposed",
         "x-approval-status": "proposed",
         "x-route-class": "attempt-proof",
@@ -746,14 +774,15 @@
             }
           }
         },
-        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending"
+        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending",
+        "x-registration-flow": "recipient-fixed-to-verified-google-email; body-email-non-authoritative; uniform-202"
       }
     },
     "/v1/auth/email/confirm": {
       "post": {
-        "operationId": "confirmInstitutionalLogin",
-        "summary": "Confirmar enlace y establecer sesión interna",
-        "description": "Proposed — Solo confirmación explícita POST desde navegador iniciador con cookie/CSRF del intento, no IP/user-agent como vínculo. Validar secreto, propósito, email fijado, intento y plazo con reloj servidor; consumo atómico y una sola sesión/prueba. GET/previsualización/HEAD nunca consumen ni autentican: el enlace abre página Angular, no GET de API. Otro dispositivo reinicia allí autenticación; no transfiere sesión con enlace. Repetición 409, expiración 410, prueba alterada/ajena 401 genérico. B02 aprueba passkeys/códigos de un uso por userId, opcionales para básico; protocolos aún bloqueados: 409 CONTINUITY_REQUIRED, no acceso automático. No crea ni vincula cuentas por correo coincidente. Respuesta perdida exige intento nuevo. Al complementar Google, solo consume el enlace emitido al email fijado por la evidencia Google verificada de ese intento; emite la sesión de ese mapping y no una identidad de correo adicional.",
+        "operationId": "confirmInstitutionalEmailLink",
+        "summary": "Confirmar enlace y completar login o registro pendiente",
+        "description": "Proposed — Solo POST explícito desde navegador iniciador con cookie de intento y CSRF; GET/HEAD/previsualización abren únicamente la página Angular y no consumen el secreto. Otro dispositivo reinicia allí la autenticación conforme al borrador vigente, sin transferir sesión. Validar en transacción secreto, propósito register/login, intento, destinatario, issuer/sub Google retenidos, dominio exacto, vencimiento y consumo único. Para register, solo entonces resolver conflicto/continuidad, crear userId interno opaco, usuario y vínculo Google de manera transaccional e idempotente, registrar evidencia sin secretos y emitir una sola sesión permitida. No crear EmailIdentity implícita ni fusionar por correo ni transferir historial de buzón reasignado. Reintento consumido 409 sin segundo usuario ni credenciales; vencido 410; alterado/ajeno 401 genérico. Una respuesta perdida no reemite JWT/refresh: iniciar nuevo intento y resolver estado según continuidad aprobada. Login por correo mantiene su propio propósito y no ejecuta alta Google.",
         "x-implementation-status": "proposed",
         "x-approval-status": "proposed",
         "x-route-class": "attempt-proof",
@@ -780,7 +809,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Sesión establecida; credenciales en cuerpo/cookie.",
+            "description": "Sesión tras prueba de buzón y alta/continuidad autorizada; para register nunca antes de esta confirmación POST.",
             "headers": {
               "X-Correlation-ID": {
                 "$ref": "#/components/headers/CorrelationId"
@@ -909,7 +938,8 @@
             }
           }
         },
-        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending"
+        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending",
+        "x-registration-flow": "atomic-single-use-confirmation-then-transactional-account-link-and-session"
       }
     },
     "/v1/auth/session": {
@@ -2630,6 +2660,166 @@
         },
         "x-integration-readiness": "blocked-pending-approved-evidence-protocol"
       }
+    },
+    "/v1/auth/google/registrations": {
+      "post": {
+        "operationId": "legacyGoogleRegistrationCompatibility",
+        "summary": "Compatibilidad de ruta Google de registro existente",
+        "description": "Proposed compatibility alias — Ruta ya expuesta por ms-users con comportamiento incompatible: hoy crea cuenta y sesión sin confirmación del buzón. La ruta objetivo, si se conserva durante migración, solo acepta intentos register persistidos y devuelve el mismo 202 pendiente que /v1/auth/google, sin alta ni credenciales. Debe deshabilitarse hasta implementar esa semántica o migrarse con plan de clientes/APIM; no se admite mantener el 200 de alta inmediata. No se elimina ni renombra silenciosamente.",
+        "x-implementation-status": "proposed",
+        "x-approval-status": "proposed",
+        "x-route-class": "attempt-proof",
+        "x-public-apim-path": "/auth/google/registrations",
+        "security": [
+          {
+            "apimSubscriptionKey": [],
+            "attemptCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CorrelationId"
+          },
+          {
+            "$ref": "#/components/parameters/Origin"
+          },
+          {
+            "$ref": "#/components/parameters/WebClient"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Registro pendiente tras verificación Google; acuse uniforme sin prueba de elegibilidad, cuenta ni credenciales.",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailboxVerificationRequired"
+                },
+                "examples": {
+                  "registrationPending": {
+                    "value": {
+                      "status": "mailbox-verification-required",
+                      "attemptId": "attempt-placeholder",
+                      "expiresAt": 1790000300
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Auth400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Auth401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Auth403"
+          },
+          "409": {
+            "$ref": "#/components/responses/Auth409"
+          },
+          "410": {
+            "$ref": "#/components/responses/Auth410"
+          },
+          "429": {
+            "$ref": "#/components/responses/Auth429"
+          },
+          "503": {
+            "$ref": "#/components/responses/Auth503"
+          }
+        },
+        "x-error-codes": {
+          "400": [
+            "INVALID_REQUEST"
+          ],
+          "401": [
+            "AUTH_PROOF_INVALID",
+            "UNAUTHORIZED",
+            "ACCESS_TOKEN_EXPIRED",
+            "SESSION_EXPIRED",
+            "SESSION_REVOKED",
+            "REFRESH_INVALID"
+          ],
+          "403": [
+            "FORBIDDEN",
+            "CSRF_INVALID",
+            "ORIGIN_DENIED",
+            "ELIGIBILITY_DENIED",
+            "REAUTHENTICATION_REQUIRED"
+          ],
+          "409": [
+            "ATTEMPT_CONSUMED",
+            "IDENTITY_CONFLICT",
+            "CONTINUITY_REQUIRED",
+            "REGISTRATION_REQUIRED",
+            "ACTIVITY_NOT_ACCEPTED"
+          ],
+          "410": [
+            "ATTEMPT_EXPIRED"
+          ],
+          "429": [
+            "RATE_LIMITED"
+          ],
+          "503": [
+            "AUTH_TEMPORARILY_UNAVAILABLE"
+          ]
+        },
+        "x-idempotency": "GET sin efectos; POST de prueba/refresh consume atómicamente y no reproduce credenciales. Reintentos específicos en IDENTITY_CONTRACT §3/4.",
+        "x-confidentiality": "TLS; redactar body, Authorization, cookies, CSRF, enlaces y pruebas; no-store salvo metadata pública.",
+        "x-angular-integration": "MTEC-10: fetch HttpClient JSON, withCredentials en contexto cookie, leer X-Correlation-ID; no Google bearer como sesión.",
+        "x-apim-responsibility": "Admisión por método/ruta exactos, origen y tamaño/tasa, correlación, CORS, saneamiento de identidad; preservar cookies/CSRF. No sustituye validación y autorización ms-users.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoogleAuthRequest"
+              },
+              "examples": {
+                "synthetic": {
+                  "value": {
+                    "credential": "google-id-token-placeholder",
+                    "attemptId": "attempt-placeholder"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending",
+        "x-registration-flow": {
+          "purpose": "register",
+          "googleAssertion": "single-use",
+          "mailboxProof": "mandatory-even-if-google-email-verified",
+          "accountBeforeConfirmation": false,
+          "sessionBeforeConfirmation": false,
+          "eligibleDomains": [
+            "estudiantec.cr",
+            "itcr.ac.cr",
+            "tec.ac.cr"
+          ],
+          "canonicalContinuation": [
+            "/v1/auth/email/requests",
+            "/v1/auth/email/confirm"
+          ],
+          "currentBackend": "incompatible-immediate-account-and-session",
+          "canonicalRoute": "/v1/auth/google"
+        },
+        "deprecated": true,
+        "x-legacy-backend-status": "exists-but-incompatible-immediate-registration; disable-or-migrate-before-exposure"
+      }
     }
   },
   "components": {
@@ -3819,13 +4009,43 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "method"
+          "method",
+          "purpose"
         ],
         "properties": {
           "method": {
             "$ref": "#/components/schemas/AuthMethod"
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "login",
+              "register"
+            ],
+            "description": "Propósito del nuevo intento; register solo con method=google. El valor persistido por el servidor controla las continuaciones."
           }
-        }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "purpose": {
+                  "const": "register"
+                }
+              },
+              "required": [
+                "purpose"
+              ]
+            },
+            "then": {
+              "properties": {
+                "method": {
+                  "const": "google"
+                }
+              }
+            }
+          }
+        ]
       },
       "AttemptResponse": {
         "type": "object",
@@ -3851,6 +4071,7 @@
             "type": "string",
             "enum": [
               "login",
+              "register",
               "reauthenticate",
               "link"
             ]
@@ -3901,6 +4122,7 @@
                   "type": "string",
                   "enum": [
                     "login",
+                    "register",
                     "reauthenticate",
                     "link"
                   ]
@@ -3937,6 +4159,7 @@
                   "type": "string",
                   "enum": [
                     "login",
+                    "register",
                     "reauthenticate",
                     "link"
                   ]
@@ -3951,6 +4174,25 @@
                   "maxLength": 256
                 },
                 "nonce": false
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "purpose": {
+                  "const": "register"
+                }
+              },
+              "required": [
+                "purpose"
+              ]
+            },
+            "then": {
+              "properties": {
+                "method": {
+                  "const": "google"
+                }
               }
             }
           }
@@ -3973,7 +4215,7 @@
           "email": {
             "type": "string",
             "minLength": 1,
-            "description": "Normalizar solo dominio; no deducir alias, puntos ni case de parte local.",
+            "description": "Para login por correo, dirección solicitada. Para register Google, debe coincidir con la dirección Google verificada; el servidor utiliza solo el destinatario persistido y responde de forma uniforme si difiere.",
             "format": "email",
             "maxLength": 254
           }
@@ -4689,7 +4931,9 @@
     "breakingChanges": [
       "JWT nominal máximo 240 s sustituye candidato 900 s; cero leeway positivo de exp y RSA-2048 requieren adaptación de emisor/validadores.",
       "IdentityMetadata.contract_version cambia const de 0.2.0-draft a 0.3.0-draft.",
-      "Persisten incompatibilidades heredadas 0.1→0.2: intento/cookie/CSRF Google, campos session/csrfToken y perfil solo propietario."
+      "Persisten incompatibilidades heredadas 0.1→0.2: intento/cookie/CSRF Google, campos session/csrfToken y perfil solo propietario.",
+      "Registro Google nuevo exige intento register y prueba institucional por enlace antes de alta/sesión; /v1/auth/google/registrations actual requiere migración o deshabilitación explícita.",
+      "operationIds de attempts y email/requests/confirm se generalizan para login y registro; regenerar clientes Angular tras revisión B07."
     ],
     "metadataMode": "custom-not-oidc-discovery",
     "blockers": [
@@ -4700,7 +4944,8 @@
       "B04-fresh-authentication-evidence",
       "B05-exact-environment-profile-cache-rotation-and-propagation",
       "B06-browser-topology-csrf-refresh-protocols",
-      "B07-consumer-signoffs"
+      "B07-consumer-signoffs",
+      "B07-google-registration-route-migration-and-existing-account-continuity"
     ]
   },
   "x-session-policy": {
@@ -4811,5 +5056,20 @@
     "historicalAccess": "requires-pre-established-verified-independent-continuity",
     "exceptionalRecovery": "pending-no-automatic-restitution",
     "webauthnEndpoints": "not-specified"
+  },
+  "x-registration-policy": {
+    "status": "approved-new-registration-policy; contract-interface-proposed; backend-incompatible",
+    "newGoogleRegistrationRequiresInstitutionalLink": true,
+    "googleEmailVerifiedAloneSufficient": false,
+    "eligibleDomainsExact": [
+      "estudiantec.cr",
+      "itcr.ac.cr",
+      "tec.ac.cr"
+    ],
+    "canonicalGoogleRoute": "/v1/auth/google",
+    "legacyRoute": "/v1/auth/google/registrations",
+    "legacyDisposition": "disable-or-migrate-to-202-pending-before-exposure; client-compatibility-review-required",
+    "existingAccountContinuity": "pending-review-no-automatic-approval-or-mass-lockout",
+    "refreshReplayPolicy": "C-no-grace-no-reissue-no-automatic-winner-revocation"
   }
 }

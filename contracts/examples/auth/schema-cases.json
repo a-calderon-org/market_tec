@@ -695,5 +695,100 @@
       "jti": "token-placeholder",
       "kid": "fixture-key"
     }
+  },
+  {
+    "name": "google-register-attempt-request",
+    "schema": "LoginAttemptRequest",
+    "valid": true,
+    "value": {
+      "method": "google",
+      "purpose": "register"
+    }
+  },
+  {
+    "name": "email-register-attempt-forbidden",
+    "schema": "LoginAttemptRequest",
+    "valid": false,
+    "value": {
+      "method": "institutional-email",
+      "purpose": "register"
+    }
+  },
+  {
+    "name": "attempt-purpose-required",
+    "schema": "LoginAttemptRequest",
+    "valid": false,
+    "value": {
+      "method": "google"
+    }
+  },
+  {
+    "name": "google-register-attempt-response",
+    "schema": "AttemptResponse",
+    "valid": true,
+    "value": {
+      "attemptId": "register-attempt",
+      "method": "google",
+      "purpose": "register",
+      "expiresAt": 1790000300,
+      "csrfToken": "csrf-placeholder",
+      "nonce": "nonce-placeholder"
+    }
+  },
+  {
+    "name": "google-register-missing-nonce",
+    "schema": "AttemptResponse",
+    "valid": false,
+    "value": {
+      "attemptId": "register-attempt",
+      "method": "google",
+      "purpose": "register",
+      "expiresAt": 1790000300,
+      "csrfToken": "csrf-placeholder"
+    }
+  },
+  {
+    "name": "registration-pending-no-credentials",
+    "schema": "MailboxVerificationRequired",
+    "valid": true,
+    "value": {
+      "status": "mailbox-verification-required",
+      "attemptId": "register-attempt",
+      "expiresAt": 1790000300
+    }
+  },
+  {
+    "name": "registration-pending-jwt-forbidden",
+    "schema": "MailboxVerificationRequired",
+    "valid": false,
+    "value": {
+      "status": "mailbox-verification-required",
+      "attemptId": "register-attempt",
+      "expiresAt": 1790000300,
+      "token": "jwt-placeholder"
+    }
+  },
+  {
+    "name": "registration-pending-refresh-forbidden",
+    "schema": "MailboxVerificationRequired",
+    "valid": false,
+    "value": {
+      "status": "mailbox-verification-required",
+      "attemptId": "register-attempt",
+      "expiresAt": 1790000300,
+      "refreshToken": "refresh-placeholder"
+    }
+  },
+  {
+    "name": "email-register-attempt-response-forbidden",
+    "schema": "AttemptResponse",
+    "valid": false,
+    "value": {
+      "attemptId": "email-register-attempt",
+      "method": "institutional-email",
+      "purpose": "register",
+      "expiresAt": 1790000300,
+      "csrfToken": "csrf-placeholder"
+    }
   }
 ]

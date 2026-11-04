@@ -83,6 +83,7 @@ class AuthContractsTest(unittest.TestCase):
     def test_required_operations_exist_and_remain_proposed(self):
         required = {
             ("/v1/auth/attempts", "post"), ("/v1/auth/google", "post"),
+            ("/v1/auth/google/registrations", "post"),
             ("/v1/auth/email/requests", "post"), ("/v1/auth/email/confirm", "post"),
             ("/v1/auth/session", "get"), ("/v1/auth/refresh", "post"),
             ("/v1/auth/logout", "post"), ("/v1/auth/session/activity", "post"),
@@ -272,6 +273,89 @@ class AuthContractsTest(unittest.TestCase):
         schema = self.api["components"]["schemas"]["EmailAccepted"]
         self.assertEqual({"status", "message"}, set(schema["properties"]))
         self.assertIn("const", schema["properties"]["message"])
+
+    def test_google_registration_is_pending_even_with_verified_google_email(self):
+        policy = self.api["x-registration-policy"]
+        self.assertTrue(policy["newGoogleRegistrationRequiresInstitutionalLink"])
+        self.assertFalse(policy["googleEmailVerifiedAloneSufficient"])
+        self.assertEqual({"estudiantec.cr", "itcr.ac.cr", "tec.ac.cr"},
+                         set(policy["eligibleDomainsExact"]))
+        self.assertEqual(3, len(policy["eligibleDomainsExact"]))
+        attempt = self.api["components"]["schemas"]["LoginAttemptRequest"]
+        self.assertEqual({"method", "purpose"}, set(attempt["required"]))
+        self.assertTrue(validator(self.api, "LoginAttemptRequest").is_valid(
+            {"method": "google", "purpose": "register"}))
+        self.assertFalse(validator(self.api, "LoginAttemptRequest").is_valid(
+            {"method": "institutional-email", "purpose": "register"}))
+        op = self.api["paths"]["/v1/auth/google"]["post"]
+        self.assertEqual("mandatory-even-if-google-email-verified", op["x-registration-flow"]["mailboxProof"])
+        self.assertFalse(op["x-registration-flow"]["accountBeforeConfirmation"])
+        self.assertFalse(op["x-registration-flow"]["sessionBeforeConfirmation"])
+        self.assertIn("202", op["responses"])
+        self.assertIn("200", op["responses"])
+        self.assertIn("nunca alta nueva", op["responses"]["200"]["description"])
+        pending = op["responses"]["202"]["content"]["application/json"]["examples"]["registrationPending"]["value"]
+        validator(self.api, "MailboxVerificationRequired").validate(pending)
+        self.assertFalse({"token", "refreshToken", "user", "session", "csrfToken"} & set(pending))
+
+    def test_registration_recipient_is_fixed_and_domain_match_is_exact(self):
+        policy = self.api["x-registration-policy"]
+        allowed = set(policy["eligibleDomainsExact"])
+        for address, expected in (
+            ("a@estudiantec.cr", True), ("a@itcr.ac.cr", True), ("a@tec.ac.cr", True),
+            ("a@otro.cr", False), ("a@fakeestudiantec.cr", False),
+            ("a@sub.tec.ac.cr", False), ("a@tec.ac.cr.example", False),
+        ):
+            with self.subTest(address=address):
+                self.assertEqual(expected, address.rsplit("@", 1)[-1] in allowed)
+        request = self.api["paths"]["/v1/auth/email/requests"]["post"]
+        self.assertIn("body-email-non-authoritative", request["x-registration-flow"])
+        self.assertIn("mismo 202", request["description"])
+        self.assertIn("no crea cuenta/sesión", request["description"])
+        self.assertEqual("accepted", self.api["components"]["schemas"]["EmailAccepted"]["properties"]["status"]["const"])
+        self.assertNotIn("ELIGIBILITY_DENIED", request["x-error-codes"]["403"])
+
+    def test_registration_confirmation_is_post_only_single_use_and_no_reissue(self):
+        confirm = self.api["paths"]["/v1/auth/email/confirm"]["post"]
+        self.assertEqual({"post"}, set(self.api["paths"]["/v1/auth/email/confirm"]))
+        for fact in ("GET/HEAD", "navegador iniciador", "propósito register/login",
+                     "issuer/sub Google", "transaccional e idempotente", "401 genérico",
+                     "409", "410", "no reemite JWT/refresh"):
+            with self.subTest(fact=fact):
+                self.assertIn(fact, confirm["description"])
+        self.assertIn("ATTEMPT_CONSUMED", confirm["x-error-codes"]["409"])
+        self.assertIn("ATTEMPT_EXPIRED", confirm["x-error-codes"]["410"])
+        self.assertIn("AUTH_PROOF_INVALID", confirm["x-error-codes"]["401"])
+
+    def test_legacy_registration_and_historical_login_require_explicit_migration(self):
+        legacy = self.api["paths"]["/v1/auth/google/registrations"]["post"]
+        self.assertTrue(legacy["deprecated"])
+        self.assertNotIn("200", legacy["responses"])
+        self.assertIn("202", legacy["responses"])
+        self.assertIn("incompatible-immediate-registration", legacy["x-legacy-backend-status"])
+        self.assertEqual("/v1/auth/google", legacy["x-registration-flow"]["canonicalRoute"])
+        self.assertIn("pending-review", self.api["x-registration-policy"]["existingAccountContinuity"])
+        self.assertFalse(self.api["x-identity-policy"]["automaticMergeByEmail"])
+        self.assertFalse(self.api["x-identity-policy"]["automaticHistoryTransfer"])
+        login = self.api["paths"]["/v1/auth/google"]["post"]
+        self.assertIn("identidad desconocida", login["description"])
+        self.assertEqual("C-no-grace-no-reissue-no-automatic-winner-revocation",
+                         self.api["x-registration-policy"]["refreshReplayPolicy"])
+
+    def test_registration_failure_paths_do_not_authorize_an_early_account(self):
+        google = self.api["paths"]["/v1/auth/google"]["post"]
+        request = self.api["paths"]["/v1/auth/email/requests"]["post"]
+        confirm = self.api["paths"]["/v1/auth/email/confirm"]["post"]
+        self.assertIn("ATTEMPT_CONSUMED", google["x-error-codes"]["409"])
+        self.assertIn("ATTEMPT_EXPIRED", google["x-error-codes"]["410"])
+        self.assertIn("token Google consumido", google["description"])
+        self.assertIn("envío fallido", request["description"])
+        self.assertIn("503", request["description"])
+        self.assertIn("No crear EmailIdentity", confirm["description"])
+        self.assertIn("ni transferir historial", confirm["description"])
+        self.assertIn("Reintento consumido 409", confirm["description"])
+        self.assertNotIn("Set-Cookie", google["responses"]["202"]["headers"])
+        self.assertNotIn("Set-Cookie", request["responses"]["202"]["headers"])
 
     def test_google_and_email_use_same_internal_user_shape(self):
         logins = [case["value"] for case in self.cases if case["name"] in {"google-login", "email-login-same-internal-user"}]
