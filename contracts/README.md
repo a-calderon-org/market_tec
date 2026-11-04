@@ -22,8 +22,9 @@ no demuestran que una ruta o integración esté implementada.
 
 Cada operación OpenAPI declara `x-implementation-status`:
 
-- `implemented`: existe en el código actual.
-- `proposed`: contrato de diseño; no existe todavía en el servicio.
+- `implemented`: la operación completa está acreditada conforme a este contrato.
+- `proposed`: la operación completa sigue pendiente de conformidad; puede haber
+  adaptadores parciales en el servicio.
 
 El nivel superior declara `x-contract-status: draft-pending-team-approval`. La
 creación de estos archivos no aprueba ADR-003 ni las decisiones pendientes sobre
