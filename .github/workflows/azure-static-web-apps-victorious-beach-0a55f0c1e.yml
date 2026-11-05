@@ -6,13 +6,27 @@ on:
       - main
 
   pull_request:
-    types: [opened, synchronize, reopened, closed]
+    types: [opened, synchronize, reopened]
     branches:
       - main
 
+  workflow_dispatch:
+    inputs:
+      approved_sha:
+        description: Full SHA of the approved main commit
+        required: true
+        type: string
+      apim_compatible:
+        description: APIM compatibility has been verified for this commit
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
 jobs:
   validate_build_job:
-    if: github.event_name == 'pull_request' && github.event.action != 'closed'
     runs-on: ubuntu-latest
     name: Validate Angular Build
 
@@ -48,6 +62,10 @@ jobs:
         working-directory: ./app/frontend
         run: npm ci
 
+      - name: Test Angular application
+        working-directory: ./app/frontend
+        run: npm test -- --watch=false
+
       - name: Build Angular application
         working-directory: ./app/frontend
         run: npm run build
@@ -61,16 +79,22 @@ jobs:
             exit 1
           fi
 
-  build_and_deploy_job:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  deploy_job:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      inputs.apim_compatible == true &&
+      inputs.approved_sha == github.sha &&
+      vars.MTEC41_SWA_DEPLOY_ENABLED == 'true'
+    needs: validate_build_job
     runs-on: ubuntu-latest
-    name: Build and Deploy Job
+    name: Deploy approved main commit
+    environment: swa-production
 
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: true
-          lfs: false
+          ref: ${{ github.sha }}
 
       - uses: actions/setup-node@v4
         with:
@@ -122,27 +146,11 @@ jobs:
           fi
 
       - name: Deploy prebuilt artifact
-        id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_VICTORIOUS_BEACH_0A55F0C1E }}
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
-
           app_location: "./app/frontend/dist/market-tec-frontend/browser"
           api_location: ""
           output_location: ""
           skip_app_build: true
-
-  close_pull_request_job:
-    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
-    runs-on: ubuntu-latest
-    name: Close Pull Request Job
-
-    steps:
-      - name: Close Pull Request
-        id: closepullrequest
-        uses: Azure/static-web-apps-deploy@v1
-        with:
-          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_VICTORIOUS_BEACH_0A55F0C1E }}
-          action: "close"
