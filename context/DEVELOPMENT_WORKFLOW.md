@@ -20,9 +20,11 @@
 
 No hay scripts `lint`, cobertura ni E2E configurados. `npm ci` está documentado, pero no se ejecutó porque las dependencias ya estaban presentes y la tarea prohíbe instalaciones. Los Node instalados detectados fueron 22.22.0, 24.14.0 y 24.21.0; este último se invocó por ruta absoluta sin alterar configuración persistente.
 
+**Verificación MTEC-41 (2026-11-04):** `npm ci` y 205 pruebas Angular completaron con Node 24.21.0 en un worktree aislado. `npm run build` terminó con éxito fuera del sandbox local; dentro de él abortó con código 134. El artefacto de producción pasó la comprobación de ausencia de referencias a la subscription key. El CI remoto del PR debe confirmar el mismo resultado antes del merge.
+
 ## Configuración local
 
-Crear el entorno a partir del esquema documentado en [dependencias frontend](frontend/DEPENDENCIES.md), sin versionar valores. El job de despliegue genera las tres propiedades desde secrets; la validación de PR usa valores ficticios. Nunca copiar valores a documentación o commits.
+Crear el entorno a partir del esquema documentado en [dependencias frontend](frontend/DEPENDENCIES.md), sin versionar valores. El job de despliegue genera `apiBaseUrl` y `googleClientId` desde secrets; la validación de PR usa valores ficticios. El workflow no lee la subscription key de APIM y verifica que el artefacto no contenga sus identificadores. Nunca copiar valores a documentación o commits.
 
 ## Convenciones observadas
 

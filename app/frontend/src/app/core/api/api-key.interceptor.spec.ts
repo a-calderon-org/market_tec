@@ -32,13 +32,11 @@ describe('apiKeyInterceptor', () => {
   let googleAuth: GoogleAuthService;
   const router = { navigate: vi.fn().mockResolvedValue(true) };
   const originalApiBaseUrl = environment.apiBaseUrl;
-  const originalSubscriptionKey = environment.subscriptionKey;
 
   beforeEach(() => {
     sessionStorage.clear();
     router.navigate.mockClear();
     environment.apiBaseUrl = API_BASE_URL;
-    environment.subscriptionKey = 'test-subscription-key';
 
     TestBed.configureTestingModule({
       providers: [
@@ -58,7 +56,6 @@ describe('apiKeyInterceptor', () => {
     authToken.clearToken();
     httpTesting.verify();
     environment.apiBaseUrl = originalApiBaseUrl;
-    environment.subscriptionKey = originalSubscriptionKey;
   });
 
   function expectNoCredentials(url: string): void {
@@ -70,19 +67,19 @@ describe('apiKeyInterceptor', () => {
     request.flush({});
   }
 
-  it('adds the APIM key and Google bearer token to the exact API base path', () => {
+  it('adds only the bearer token to the exact API base path', () => {
     const token = createToken();
     authToken.setToken(token);
 
     http.get(API_BASE_URL).subscribe();
 
     const request = httpTesting.expectOne(API_BASE_URL);
-    expect(request.request.headers.get('Ocp-Apim-Subscription-Key')).toBe('test-subscription-key');
+    expect(request.request.headers.has('Ocp-Apim-Subscription-Key')).toBe(false);
     expect(request.request.headers.get('Authorization')).toBe(`Bearer ${token}`);
     request.flush({});
   });
 
-  it('adds credentials to a nested path below the authorized API base', () => {
+  it('adds the bearer token to a nested path below the authorized API base', () => {
     const token = createToken();
     authToken.setToken(token);
     const url = `${API_BASE_URL}/publicaciones/123`;
@@ -90,7 +87,7 @@ describe('apiKeyInterceptor', () => {
     http.get(url).subscribe();
 
     const request = httpTesting.expectOne(url);
-    expect(request.request.headers.get('Ocp-Apim-Subscription-Key')).toBe('test-subscription-key');
+    expect(request.request.headers.has('Ocp-Apim-Subscription-Key')).toBe(false);
     expect(request.request.headers.get('Authorization')).toBe(`Bearer ${token}`);
     request.flush({});
   });
@@ -131,7 +128,7 @@ describe('apiKeyInterceptor', () => {
     http.get('/api/v1/publicaciones').subscribe();
 
     const request = httpTesting.expectOne('/api/v1/publicaciones');
-    expect(request.request.headers.get('Ocp-Apim-Subscription-Key')).toBe('test-subscription-key');
+    expect(request.request.headers.has('Ocp-Apim-Subscription-Key')).toBe(false);
     expect(request.request.headers.get('Authorization')).toBe(`Bearer ${token}`);
     request.flush({});
   });
@@ -142,7 +139,7 @@ describe('apiKeyInterceptor', () => {
 
     const request = httpTesting.expectOne(url);
     expect(request.request.headers.has('Authorization')).toBe(false);
-    expect(request.request.headers.get('Ocp-Apim-Subscription-Key')).toBe('test-subscription-key');
+    expect(request.request.headers.has('Ocp-Apim-Subscription-Key')).toBe(false);
     request.flush({});
   });
 
@@ -153,7 +150,7 @@ describe('apiKeyInterceptor', () => {
 
     const request = httpTesting.expectOne(url);
     expect(request.request.headers.has('Authorization')).toBe(false);
-    expect(request.request.headers.get('Ocp-Apim-Subscription-Key')).toBe('test-subscription-key');
+    expect(request.request.headers.has('Ocp-Apim-Subscription-Key')).toBe(false);
     request.flush({});
   });
 

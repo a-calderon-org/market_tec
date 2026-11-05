@@ -25,7 +25,9 @@ El contrato disponible no documenta parámetros server-side de búsqueda, catego
 
 ## Cabeceras
 
-Para destinos cuyo `URL.origin` coincide exactamente con `apiBaseUrl` y cuyo pathname es la ruta base o un descendiente delimitado por `/`, el interceptor añade `Ocp-Apim-Subscription-Key` si está configurada y `Authorization: Bearer <token>` si existe un token vigente. Una base vacía, nula, con protocolo no HTTP(S) o malformada falla cerrada y no adjunta credenciales; las solicitudes ajenas continúan sin esas cabeceras. Un 401 autenticado invalida únicamente el token enviado y redirige a login, por lo que respuestas tardías no cierran una sesión posterior. CORS debe permitir el origen y ambas cabeceras, pero las políticas APIM no están disponibles.
+Para destinos cuyo `URL.origin` coincide exactamente con `apiBaseUrl` y cuyo pathname es la ruta base o un descendiente delimitado por `/`, el interceptor añade `Authorization: Bearer <token>` si existe un token vigente. No envía `Ocp-Apim-Subscription-Key`. Una base vacía, nula, con protocolo no HTTP(S) o malformada falla cerrada y no adjunta credenciales; las solicitudes ajenas continúan sin bearer. Un 401 autenticado invalida únicamente el token enviado y redirige a login, por lo que respuestas tardías no cierran una sesión posterior.
+
+**Verificado en Azure el 2026-11-04:** `markettec-api-v1` conserva `subscriptionRequired=true`; su política de API restringe CORS a localhost y al hostname de producción, valida bearer mediante Google OpenID y limita a 120 llamadas por 60 segundos. Las pruebas a `/publicaciones` y `/chats` respondieron 404 incluso con la subscription key de la API; por tanto, no demuestran el comportamiento de JWT ni compatibilidad funcional. El cambio de cliente no debe desplegarse hasta adaptar y verificar APIM. La política observada valida Google ID tokens, no un JWT interno.
 
 ## Compatibilidad
 
