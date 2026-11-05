@@ -288,6 +288,8 @@ class AuthContractsTest(unittest.TestCase):
                              op["responses"]["200"]["content"]["application/json"]["schema"]["$ref"])
             self.assertEqual("not-required-for-google", op["x-registration-flow"]["mailboxProof"])
         self.assertFalse(self.api["paths"]["/v1/auth/google/registrations"]["post"]["deprecated"])
+        self.assertNotIn("202", self.api["paths"]["/v1/auth/proofs/google"]["post"]["responses"])
+        self.assertNotIn("MailboxVerificationRequired", self.api["components"]["schemas"])
         self.assertFalse(self.api["x-identity-policy"]["automaticMergeByEmail"])
 
     def test_email_magic_link_remains_independent_and_unavailable(self):

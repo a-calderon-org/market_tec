@@ -1527,7 +1527,7 @@
       "post": {
         "operationId": "verifyGoogleMethodProof",
         "summary": "Verificar prueba Google protegida",
-        "description": "Proposed — Mismos checks Google y correlación que login, pero propósito protegido, sid y usuario actuales. Reauth debe coincidir con método ya vinculado; link fija identidad nueva exacta para ProofGrant. No transforma token reciente/nonce en autenticación interactiva reciente: B04 pendiente. Si falta autoridad de buzón, 202 y prueba email del MISMO intento antes del grant. Una sola prueba final; nunca inicia sesión nueva ni amplía absoluto.",
+        "description": "Proposed — Mismos checks Google y correlación que login, pero propósito protegido, sid y usuario actuales. Reauth debe coincidir con método ya vinculado; link fija identidad nueva exacta para ProofGrant. No transforma token reciente/nonce en autenticación interactiva reciente: B04 pendiente. Una sola prueba final; nunca inicia sesión nueva ni amplía absoluto.",
         "x-implementation-status": "proposed",
         "x-approval-status": "proposed",
         "x-route-class": "authenticated-session",
@@ -1568,24 +1568,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProofGrant"
-                }
-              }
-            }
-          },
-          "202": {
-            "description": "Falta prueba de buzón para identidad Google.",
-            "headers": {
-              "X-Correlation-ID": {
-                "$ref": "#/components/headers/CorrelationId"
-              },
-              "Cache-Control": {
-                "$ref": "#/components/headers/NoStore"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MailboxVerificationRequired"
                 }
               }
             }
@@ -1677,7 +1659,7 @@
       "post": {
         "operationId": "requestEmailMethodProof",
         "summary": "Solicitar enlace para prueba protegida",
-        "description": "Proposed — Acuse uniforme para todo correo sintácticamente válido, existente/nuevo/no elegible; dominio exacto solo en servidor, no envío si no elegible. Misma forma y tiempos comparables. Tasa por destinatario se oculta en 202; 429 solo por origen/global independiente de cuenta. Envío asíncrono no garantiza entrega. Mismo intento en cooldown no reenvía; reenvío permitido invalida enlace anterior sin extender expiresAt del intento. Secreto CSPRNG y verificador hash; 256 bits/600s candidatos, TTL=min(plazo enlace,expiresAt intento). Propósito protegido: email debe coincidir con método/intento fijado; un conflicto no revela otro usuario. Nunca usa contexto login para vincular. Si el intento complementa Google, destinatario y propósito quedan fijados al email del token Google ya validado y a su issuer/sub retenidos. No aceptar otro buzón para acreditar esa identidad. Email distinto mantiene el mismo 202 sin enviar ni cambiar destinatario; confirmar exige esa misma evidencia y no crea EmailIdentity.",
+        "description": "Proposed — Acuse uniforme para todo correo sintácticamente válido, existente/nuevo/no elegible; dominio exacto solo en servidor, no envío si no elegible. Misma forma y tiempos comparables. Tasa por destinatario se oculta en 202; 429 solo por origen/global independiente de cuenta. Envío asíncrono no garantiza entrega. Mismo intento en cooldown no reenvía; reenvío permitido invalida enlace anterior sin extender expiresAt del intento. Secreto CSPRNG y verificador hash; 256 bits/600s candidatos, TTL=min(plazo enlace,expiresAt intento). Propósito protegido: email debe coincidir con método/intento fijado; un conflicto no revela otro usuario. Nunca usa contexto login para vincular.",
         "x-implementation-status": "proposed",
         "x-approval-status": "proposed",
         "x-route-class": "authenticated-session",
@@ -1804,7 +1786,7 @@
       "post": {
         "operationId": "verifyEmailMethodProof",
         "summary": "Confirmar prueba de correo protegida",
-        "description": "Proposed — Solo confirmación explícita POST desde navegador iniciador con cookie/CSRF del intento, no IP/user-agent como vínculo. Validar secreto, propósito, email fijado, intento y plazo con reloj servidor; consumo atómico y una sola sesión/prueba. GET/previsualización/HEAD nunca consumen ni autentican: el enlace abre página Angular, no GET de API. Otro dispositivo reinicia allí autenticación; no transfiere sesión con enlace. Repetición 409, expiración 410, prueba alterada/ajena 401 genérico. B02 aprueba passkeys/códigos de un uso por userId, opcionales para básico; protocolos aún bloqueados: 409 CONTINUITY_REQUIRED, no acceso automático. No crea ni vincula cuentas por correo coincidente. Respuesta perdida exige intento nuevo. Aquí retorna ProofGrant del propósito original y no AuthResponse. Si complementa Google, method=google; no añade EmailIdentity. B02/B04 pueden impedir emitir la prueba.",
+        "description": "Proposed — Solo confirmación explícita POST desde navegador iniciador con cookie/CSRF del intento, no IP/user-agent como vínculo. Validar secreto, propósito, email fijado, intento y plazo con reloj servidor; consumo atómico y una sola sesión/prueba. GET/previsualización/HEAD nunca consumen ni autentican: el enlace abre página Angular, no GET de API. Otro dispositivo reinicia allí autenticación; no transfiere sesión con enlace. Repetición 409, expiración 410, prueba alterada/ajena 401 genérico. B02 aprueba passkeys/códigos de un uso por userId, opcionales para básico; protocolos aún bloqueados: 409 CONTINUITY_REQUIRED, no acceso automático. No crea ni vincula cuentas por correo coincidente. Respuesta perdida exige intento nuevo. Aquí retorna ProofGrant del propósito original y no AuthResponse. B02/B04 pueden impedir emitir la prueba.",
         "x-implementation-status": "proposed",
         "x-approval-status": "proposed",
         "x-route-class": "authenticated-session",
@@ -4089,7 +4071,7 @@
           "email": {
             "type": "string",
             "minLength": 1,
-            "description": "Para login por correo, dirección solicitada. Para register Google, debe coincidir con la dirección Google verificada; el servidor utiliza solo el destinatario persistido y responde de forma uniforme si difiere.",
+            "description": "Dirección solicitada para autenticación independiente por correo; no se usa en registro Google.",
             "format": "email",
             "maxLength": 254
           }
@@ -4131,29 +4113,6 @@
           },
           "message": {
             "const": "Si la solicitud es elegible, recibirás un enlace de acceso."
-          }
-        }
-      },
-      "MailboxVerificationRequired": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "status",
-          "attemptId",
-          "expiresAt"
-        ],
-        "properties": {
-          "status": {
-            "const": "mailbox-verification-required"
-          },
-          "attemptId": {
-            "type": "string",
-            "minLength": 1,
-            "description": "Referencia opaca; no es credencial ni se interpreta su formato.",
-            "maxLength": 128
-          },
-          "expiresAt": {
-            "$ref": "#/components/schemas/EpochSeconds"
           }
         }
       },

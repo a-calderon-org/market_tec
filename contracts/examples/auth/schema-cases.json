@@ -518,26 +518,6 @@
     }
   },
   {
-    "name": "mailbox-verification-bound-attempt",
-    "schema": "MailboxVerificationRequired",
-    "valid": true,
-    "value": {
-      "status": "mailbox-verification-required",
-      "attemptId": "attempt-placeholder",
-      "expiresAt": 1790000300
-    }
-  },
-  {
-    "name": "mailbox-verification-bound-attempt-invalid",
-    "schema": "MailboxVerificationRequired",
-    "valid": false,
-    "value": {
-      "status": "authenticated",
-      "attemptId": "attempt-placeholder",
-      "expiresAt": 1790000300
-    }
-  },
-  {
     "name": "email-accepted-uniform",
     "schema": "EmailAccepted",
     "valid": true,
