@@ -7,13 +7,25 @@ ampliado el 2026-10-31 con ADR-004. Revisión técnica y aceptación delimitada 
 la conciliación posterior incorpora los límites de sesión 60 min/30 min/8 h
 ratificados ese día. La consolidación del 2026-11-02 incorpora las aprobaciones delimitadas
 B01–B06 de MTEC-40; la política C de replay se aprobó el 2026-11-04.
-La política obligatoria de enlace institucional para registros Google nuevos se
-formalizó en MTEC-15 el 2026-11-04.
+La decisión posterior de registro Google inmediato con ID Token válido y correo
+verificado sustituye la exigencia histórica de enlace en MTEC-15 el 2026-11-04.
 Parámetros, demostraciones y conformidades siguen pendientes.
 
 No se encontraron ADR históricos verificables previos a Fase II. Las decisiones inferidas del código (Angular standalone, APIM, Express) no se atribuyen como decisiones formales.
 
-## Registro Google nuevo — 2026-11-04
+## Registro Google institucional vigente — 2026-11-04
+
+**Estado: aprobado formalmente por el responsable del proyecto.** Registro nuevo:
+ID Token Google validado, `email_verified=true`, dominio institucional exacto y
+vínculo por `(issuer, sub)`; crear cuenta y sesión y responder `200 AuthResponse`
+sin Magic Link. Conservar login existente y alias
+`/v1/auth/google/registrations`. No vincular por coincidencia de correo. Magic
+Link corresponde solo a autenticación independiente por correo, todavía no
+implementada; ambas rutas de email responden temporalmente
+`503 AUTH_TEMPORARILY_UNAVAILABLE`. Implementación de referencia: `ms-users` PR
+#21 @ `c690d438`.
+
+## Registro Google nuevo — decisión histórica sustituida (2026-11-04)
 
 **Estado: Approved como política de alta; interfaz MTEC-15/B07 Proposed.** El
 responsable del proyecto exige que toda cuenta nueva confirme la posesión del

@@ -2,10 +2,15 @@
 
 **Fecha:** 2026-11-04 (America/Costa_Rica). **Destinatarios:** mantenedores de
 ms-users, Angular, ms-catalog, ms-notifications, APIM y revisión de seguridad.
-**Candidata:** `0.3.0-draft`. **QA contractual local actual:** 42/42 PASS; Redocly válido con 9 warnings conocidos.
+**Candidata:** `0.3.0-draft`. **QA contractual del corte histórico:** 42/42 PASS; Redocly válido con 9 warnings conocidos.
 **Aprobación de interfaces/integración:** BLOCKED por decisiones, protocolos y B07.
 
-## Registro Google obligatorio — corte actual de MTEC-15
+> **Referencia histórica, sustituida el 2026-11-04.** La política vigente y el
+> contrato de este PR establecen registro Google `200 AuthResponse` sin Magic
+> Link; el flujo independiente por correo permanece en `503`. La evidencia y
+> recomendaciones siguientes describen el corte anterior.
+
+## Registro Google obligatorio — corte histórico de MTEC-15
 
 **Alcance y método.** Se compararon `market_tec` PR #25
 `f9c752188f583913fa0152319b572a3907ec8cd8` y

@@ -266,7 +266,7 @@ class AuthContractsTest(unittest.TestCase):
     def test_mail_proof_is_only_consumed_by_post_not_preview_get(self):
         for route in ("/v1/auth/email/confirm", "/v1/auth/proofs/email/confirm"):
             self.assertEqual({"post"}, set(self.api["paths"][route]))
-        for route in ("/v1/auth/email/requests", "/v1/auth/proofs/email/requests"):
+        for route in ("/v1/auth/proofs/email/requests",):
             codes = self.api["paths"][route]["post"]["x-error-codes"]
             self.assertNotIn("ELIGIBILITY_DENIED", codes["403"])
             self.assertEqual(["ATTEMPT_CONSUMED"], codes["409"])
@@ -277,7 +277,8 @@ class AuthContractsTest(unittest.TestCase):
     def test_google_registration_returns_auth_response_without_mailbox_step(self):
         policy = self.api["x-registration-policy"]
         self.assertFalse(policy["newGoogleRegistrationRequiresInstitutionalLink"])
-        self.assertTrue(policy["googleEmailVerifiedAloneSufficient"])
+        self.assertFalse(policy["googleEmailVerifiedAloneSufficient"])
+        self.assertTrue(policy["verifiedGoogleIdTokenAndEligibleEmailSufficient"])
         self.assertEqual({"estudiantec.cr", "itcr.ac.cr", "tec.ac.cr"}, set(policy["eligibleDomainsExact"]))
         for route in ("/v1/auth/google", "/v1/auth/google/registrations"):
             op = self.api["paths"][route]["post"]

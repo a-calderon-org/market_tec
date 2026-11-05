@@ -647,7 +647,7 @@
         "operationId": "requestInstitutionalEmailLink",
         "summary": "Solicitar enlace institucional",
         "description": "Autenticación independiente por Magic Link institucional, todavía no implementada. Temporalmente responde 503 AUTH_TEMPORARILY_UNAVAILABLE; no forma parte del registro Google.",
-        "x-implementation-status": "temporarily-unavailable",
+        "x-implementation-status": "proposed",
         "x-approval-status": "proposed",
         "x-route-class": "attempt-proof",
         "x-public-apim-path": "/auth/email/requests",
@@ -704,7 +704,8 @@
           }
         },
         "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending",
-        "x-registration-flow": "independent-email-authentication-only; not-google-continuation"
+        "x-registration-flow": "independent-email-authentication-only; not-google-continuation",
+        "x-current-behavior": "503 AUTH_TEMPORARILY_UNAVAILABLE"
       }
     },
     "/v1/auth/email/confirm": {
@@ -712,7 +713,7 @@
         "operationId": "confirmInstitutionalEmailLink",
         "summary": "Confirmar enlace y completar login o registro pendiente",
         "description": "Autenticación independiente por Magic Link institucional, todavía no implementada. Temporalmente responde 503 AUTH_TEMPORARILY_UNAVAILABLE; no forma parte del registro Google.",
-        "x-implementation-status": "temporarily-unavailable",
+        "x-implementation-status": "proposed",
         "x-approval-status": "proposed",
         "x-route-class": "attempt-proof",
         "x-public-apim-path": "/auth/email/confirm",
@@ -769,7 +770,8 @@
           }
         },
         "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending",
-        "x-registration-flow": "independent-email-authentication-only; not-google-continuation"
+        "x-registration-flow": "independent-email-authentication-only; not-google-continuation",
+        "x-current-behavior": "503 AUTH_TEMPORARILY_UNAVAILABLE"
       }
     },
     "/v1/auth/session": {
@@ -4828,8 +4830,7 @@
       "JWT nominal máximo 240 s sustituye candidato 900 s; cero leeway positivo de exp y RSA-2048 requieren adaptación de emisor/validadores.",
       "IdentityMetadata.contract_version cambia const de 0.2.0-draft a 0.3.0-draft.",
       "Persisten incompatibilidades heredadas 0.1→0.2: intento/cookie/CSRF Google, campos session/csrfToken y perfil solo propietario.",
-      "Registro Google nuevo exige intento register y prueba institucional por enlace antes de alta/sesión; /v1/auth/google/registrations actual requiere migración o deshabilitación explícita.",
-      "operationIds de attempts y email/requests/confirm se generalizan para login y registro; regenerar clientes Angular tras revisión B07."
+      "Registro Google devuelve 200 AuthResponse sin paso de correo; conservar /v1/auth/google/registrations como alias compatible. Magic Link por correo sigue temporalmente en 503."
     ],
     "metadataMode": "custom-not-oidc-discovery",
     "blockers": [
@@ -4960,7 +4961,7 @@
   "x-registration-policy": {
     "status": "approved-google-immediate-registration; email-magic-link-not-implemented",
     "newGoogleRegistrationRequiresInstitutionalLink": false,
-    "googleEmailVerifiedAloneSufficient": true,
+    "googleEmailVerifiedAloneSufficient": false,
     "eligibleDomainsExact": [
       "estudiantec.cr",
       "itcr.ac.cr",
@@ -4970,6 +4971,7 @@
     "legacyRoute": "/v1/auth/google/registrations",
     "legacyDisposition": "retain-implemented-200-compatible-alias",
     "existingAccountContinuity": "preserve-compatible-google-login",
-    "refreshReplayPolicy": "C-no-grace-no-reissue-no-automatic-winner-revocation"
+    "refreshReplayPolicy": "C-no-grace-no-reissue-no-automatic-winner-revocation",
+    "verifiedGoogleIdTokenAndEligibleEmailSufficient": true
   }
 }

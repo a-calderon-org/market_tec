@@ -156,7 +156,7 @@ implementación.
 1. Angular obtiene un Google ID Token mediante GIS.
 2. Angular envía esa credencial a la futura API de autenticación mediante APIM; el login no requiere previamente un JWT interno.
 3. `ms-users` verifica criptográficamente firma, algoritmo, issuer, audience, expiración y claims obligatorios, además de la vinculación al intento y elegibilidad aprobadas.
-4. `ms-users` identifica la cuenta existente por vínculo Google exacto o, para registro nuevo, exige antes un enlace de un solo uso confirmado en el buzón institucional según la [decisión posterior de MTEC-15](DECISION_LOG.md#registro-google-nuevo--2026-11-04), sin vincular cuentas automáticamente por correo.
+4. `ms-users` identifica la cuenta existente por vínculo Google exacto o registra la nueva con ID Token válido, correo verificado y dominio institucional exacto; emite sesión inmediata según la [decisión vigente de MTEC-15](DECISION_LOG.md#registro-google-institucional-vigente--2026-11-04), sin vincular cuentas automáticamente por correo.
 5. Solo después de satisfacer la política aplicable, `ms-users` emite la credencial de MarketTec y establece la sesión propia de 3.4.
 6. APIM y los servicios validan el JWT interno; los casos de uso consumen exclusivamente la identidad interna validada.
 
@@ -172,14 +172,11 @@ La admisión Google también aplicaría la allowlist institucional descrita abaj
 Se exigiría `email_verified` booleano verdadero y, cuando se use como evidencia
 Google Workspace, `hd` firmado y perteneciente a la allowlist Workspace
 aprobada, con su relación al dominio del correo definida por funcional; el
-parámetro `hd` del botón no demuestra pertenencia. Google advierte que un correo
-de terceros sin `hd` puede no estar bajo su autoridad actual aunque
-`email_verified` sea verdadero: en ese caso se exige verificación institucional
-adicional de posesión del buzón antes del acceso básico, conforme a la política
-aprobada. Para **todo registro Google nuevo**, la decisión posterior de MTEC-15
-exige el enlace institucional aun si Google es autoritativo y
-`email_verified=true`; el protocolo sigue pendiente en P16/P18. Esto no
-impone registro de nuevo a cuentas existentes. No se impondría Google
+parámetro `hd` del botón no demuestra pertenencia. Para registro Google nuevo,
+la decisión vigente de MTEC-15 acepta ID Token válido con `email_verified=true`
+y dominio institucional exacto, sin enlace adicional. Magic Link corresponde
+exclusivamente al método independiente de correo y permanece sin implementar. Esto no impone registro de
+nuevo a cuentas existentes. No se impondría Google
 Workspace al camino de correo sin Google. Ninguno de esos claims demuestra por
 sí solo matrícula o empleo activo.
 

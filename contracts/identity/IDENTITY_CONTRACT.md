@@ -29,7 +29,7 @@ operaciones acredita todavía la interfaz completa candidata y conservan
 
 | Tema | Accepted según ADR-004 | Proposed / pendiente |
 |---|---|---|
-| Métodos | Google y enlace institucional simultáneamente desde v1 | Protocolos, TTL, tasas, pruebas y errores de las operaciones siguientes |
+| Métodos | Google implementado; Magic Link institucional independiente pendiente | Protocolos, TTL, tasas, pruebas y errores de las operaciones siguientes |
 | Elegibilidad | Control verificado de correo de dominio exacto `estudiantec.cr`, `itcr.ac.cr` o `tec.ac.cr`; registro Google verificado devuelve 200 AuthResponse sin enlace; acceso básico sin prueba de matrícula/empleo | Canonicalización técnica, alta idempotente y continuidad de cuentas históricas |
 | Identidad | `userId` interno opaco, estable, generado por ms-users; no fusión por email | Mapping contractual, namespace de EmailIdentity y prueba reciente de ambos métodos |
 | Sesión | 60 min renovables, 30 min inactividad, 8 h absolutas; primer límite, servidor, aviso y reautenticación; sondeos no son actividad | B03 aprueba política de actividad; B06 transporte/serialización. Protocolos, aviso candidato y cumplimiento distribuido pendientes |
@@ -52,11 +52,10 @@ resolver establemente el mismo `userId`, incluso bajo concurrencia.
   formas oficiales de issuer solo después de validarlas evita mappings duplicados.
 - Correo usa una identidad propia, nunca un `sub` Google inventado. La dirección
   verificada no es el ID interno. B02 aprueba passkeys por userId y códigos de recuperación de un uso, opcionales para básico; namespace y protocolos siguen pendientes.
-- La política de alta Google nueva exige enlace institucional de un solo uso antes
-  de crear cuenta, activar vínculo Google o emitir sesión. La interfaz propuesta
-  hace el alta transaccional e idempotente solo tras esa prueba; `REGISTRATION_REQUIRED`
-  expresa registro necesario tras una prueba de login válida. Un conflicto no crea otra cuenta,
-  fusiona usuarios ni reasigna una identidad.
+- El registro Google nuevo exige ID Token válido, correo verificado y dominio
+  institucional exacto. Crea cuenta y vínculo `(issuer, sub)` y devuelve
+  `200 AuthResponse` sin confirmación por correo. `REGISTRATION_REQUIRED`
+  expresa registro necesario tras un login válido de identidad desconocida.
 - Coincidir en email con una cuenta de otro método requiere vinculación explícita.
   No se promete deduplicación de personas a partir de direcciones.
 - Un buzón reasignado prueba posesión actual, no titularidad histórica. Mientras los protocolos B02
