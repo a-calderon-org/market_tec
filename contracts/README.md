@@ -13,15 +13,18 @@ no demuestran que una ruta o integración esté implementada.
 - `openapi/*.json`: OpenAPI 3.1 de diseño por microservicio.
 - `events/*.schema.json`: JSON Schema Draft 2020-12 para eventos asíncronos.
 - `examples/events/`: ejemplos válidos e inválidos usados por las pruebas.
-- `tests/test_contracts.py`: ocho pruebas de compatibilidad y semántica sin
-  dependencias externas.
+- `tests/test_contracts.py`: compatibilidad y semántica de contratos generales.
+- `tests/test_auth_contracts.py`: formas, fixtures y reglas temporales del Draft Users.
+- `tests/test_jwt_profile.py`: oráculo contractual aislado para vectores JWT sintéticos
+  RS256/RSA-2048; requiere `openssl` en PATH. No certifica autenticadores reales.
 - `tests/test_formal_validation.py`: validación formal de JSON Schema Draft
   2020-12 mediante `jsonschema`.
 
 Cada operación OpenAPI declara `x-implementation-status`:
 
-- `implemented`: existe en el código actual.
-- `proposed`: contrato de diseño; no existe todavía en el servicio.
+- `implemented`: la operación completa está acreditada conforme a este contrato.
+- `proposed`: la operación completa sigue pendiente de conformidad; puede haber
+  adaptadores parciales en el servicio.
 
 El nivel superior declara `x-contract-status: draft-pending-team-approval`. La
 creación de estos archivos no aprueba ADR-003 ni las decisiones pendientes sobre
@@ -60,8 +63,7 @@ python -m unittest discover -s contracts/tests -p 'test_*.py' -v
 ```
 
 Redocly valida sintaxis, estructura, referencias, parámetros, respuestas,
-componentes y seguridad declarada de los tres OpenAPI 3.1. La suite ejecuta las
-ocho pruebas existentes y cuatro adicionales: metaschema Draft 2020-12,
+componentes y seguridad declarada de los tres OpenAPI 3.1. La suite ejecuta regresiones de auth y contratos generales: metaschema Draft 2020-12,
 resolución de referencias, ejemplo positivo y ejemplos negativos. La desigualdad
 entre `senderUserId` y `recipientUserId` es una regla entre campos no expresada por
 JSON Schema; permanece cubierta por la prueba semántica existente.
@@ -69,3 +71,20 @@ JSON Schema; permanece cubierta por la prueba semántica existente.
 Las advertencias `info-license` y `operation-4xx-response` sobre los endpoints de
 salud son de estilo y no invalidan los contratos. Los errores estructurales sí
 producen un código de salida distinto de cero.
+
+## Candidata de autenticación
+
+Users/identidad `0.3.0-draft` consolida decisiones aprobadas B01–B06 sin aprobar
+interfaces ni conformidades B07. Cambios, compatibilidad y límites de QA en
+[release review](../docs/MTEC15_AUTH_CONTRACT_RELEASE_REVIEW.md); reglas canónicas
+en [identidad](identity/IDENTITY_CONTRACT.md). Los vectores criptográficos usan
+solo públicas y tokens sintéticos para hosts `.invalid`; no contienen privadas.
+El oráculo de pruebas no se utiliza por los servicios y no demuestra revocación,
+reloj real, propagación, atomicidad ni CSRF/CORS de navegador/APIM.
+
+El registro Google institucional con ID Token y correo verificados devuelve
+`200 AuthResponse` sin Magic Link. `/v1/auth/google/registrations` conserva la
+compatibilidad del backend. Magic Link por correo es autenticación independiente
+pendiente; `/v1/auth/email/requests` y `/v1/auth/email/confirm` responden
+actualmente `503 AUTH_TEMPORARILY_UNAVAILABLE`. La suite contractual valida el
+borrador de interfaz, no sustituye pruebas del backend.
