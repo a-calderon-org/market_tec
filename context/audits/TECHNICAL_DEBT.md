@@ -13,7 +13,7 @@ No se confirmó un hallazgo que justifique P0 con evidencia local.
 | FE-001 / INT-002 | Riesgo externo + defecto documental | El cliente confía en claims no verificados y la guía promete validación previa inexistente | obtener políticas APIM, decidir flujo de sesión, corregir guía y añadir pruebas negativas | Medio-Alto | APIM/origen/Google |
 | FE-002 / INT-003 | Defecto local + riesgo externo | `USR-001` desacoplado de la cuenta; el impacto de acceso depende del servidor | definir identidad contractual y demostrar autorización multiusuario | Medio | API/ownership |
 | Verificación de build | Entorno/release | 205 tests y build pasan fuera del sandbox; el build dentro del sandbox aborta con exit 134 y hay dos advertencias de estilo | verificar CI limpio y revisar presupuestos de estilo | Bajo-Medio | entorno CI |
-| FE-003 / MTEC-41 | Riesgo externo; cliente corregido localmente | subscription key previamente pública; APIM aún exige suscripción y el alcance/uso de la clave expuesta requiere verificación | adaptar admisión segura en APIM, probar flujos y planificar rotación según consumidores antes de desplegar cliente | Medio-Alto | APIM/operador |
+| FE-003 / MTEC-41 | Riesgo externo; cliente corregido localmente | la clave primaria de `Markettec-Subs` (scope API) sigue en el JS productivo; APIM exige suscripción y otros consumidores/uso por clave siguen sin determinar | adaptar admisión segura en APIM, probar flujos y planificar rotación según consumidores antes de desplegar cliente | Medio-Alto | APIM/operador |
 
 ## P2 — Correcciones funcionales y de contrato
 

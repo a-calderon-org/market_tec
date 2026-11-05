@@ -15,7 +15,7 @@ export const environment = {
 
 El workflow genera esas dos propiedades. `environment.example.ts` contiene el mismo esquema sin valores de despliegue.
 
-El frontend no incorpora ni envía la subscription key de APIM. El build de CI rechaza artefactos con referencias a esa credencial. APIM aún requiere suscripción en la API observada; el despliegue del cliente modificado requiere adaptar y probar la admisión en APIM.
+El código fuente corregido no incorpora ni envía la subscription key de APIM. El build de CI rechaza artefactos con referencias a esa credencial. **Verificado en producción el 2026-11-04:** el JavaScript aún servido contiene la clave primaria de la suscripción APIM `Markettec-Subs`, limitada a `markettec-api-v1`; la secundaria no apareció en el archivo analizado. APIM aún requiere suscripción; desplegar el cliente modificado exige adaptar y probar la admisión antes de retirar la clave anterior.
 
 ## Build y calidad
 
