@@ -695,5 +695,98 @@
       "jti": "token-placeholder",
       "kid": "fixture-key"
     }
+  },
+  {
+    "name": "google-register-attempt-request",
+    "schema": "LoginAttemptRequest",
+    "valid": true,
+    "value": {
+      "method": "google",
+      "purpose": "register"
+    }
+  },
+  {
+    "name": "email-register-attempt-forbidden",
+    "schema": "LoginAttemptRequest",
+    "valid": false,
+    "value": {
+      "method": "institutional-email",
+      "purpose": "register"
+    }
+  },
+  {
+    "name": "attempt-purpose-required",
+    "schema": "LoginAttemptRequest",
+    "valid": false,
+    "value": {
+      "method": "google"
+    }
+  },
+  {
+    "name": "google-register-attempt-response",
+    "schema": "AttemptResponse",
+    "valid": true,
+    "value": {
+      "attemptId": "register-attempt",
+      "method": "google",
+      "purpose": "register",
+      "expiresAt": 1790000300,
+      "csrfToken": "csrf-placeholder",
+      "nonce": "nonce-placeholder"
+    }
+  },
+  {
+    "name": "google-register-missing-nonce",
+    "schema": "AttemptResponse",
+    "valid": false,
+    "value": {
+      "attemptId": "register-attempt",
+      "method": "google",
+      "purpose": "register",
+      "expiresAt": 1790000300,
+      "csrfToken": "csrf-placeholder"
+    }
+  },
+  {
+    "name": "email-register-attempt-response-forbidden",
+    "schema": "AttemptResponse",
+    "valid": false,
+    "value": {
+      "attemptId": "email-register-attempt",
+      "method": "institutional-email",
+      "purpose": "register",
+      "expiresAt": 1790000300,
+      "csrfToken": "csrf-placeholder"
+    }
+  },
+  {
+    "name": "google-registration-immediate",
+    "schema": "AuthResponse",
+    "valid": true,
+    "value": {
+      "token": "internal-jwt-placeholder",
+      "tokenType": "Bearer",
+      "expiresAt": 1790000240,
+      "user": {
+        "userId": "usr_abc123",
+        "email": "usuario@estudiantec.cr",
+        "nombre": "Ana López",
+        "fotoPerfil": "https://example.invalid/avatar.png"
+      },
+      "session": {
+        "sessionId": "session-placeholder",
+        "status": "active",
+        "serverTime": 1790000000,
+        "authenticatedAt": 1790000000,
+        "renewedAt": 1790000000,
+        "lastActivityAt": 1790000000,
+        "windowExpiresAt": 1790003600,
+        "inactivityExpiresAt": 1790001800,
+        "absoluteExpiresAt": 1790028800,
+        "expiresAt": 1790001800,
+        "warningAt": 1790001500
+      },
+      "csrfToken": "csrf-placeholder"
+    }
   }
 ]

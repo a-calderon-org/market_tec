@@ -156,8 +156,8 @@ implementación.
 1. Angular obtiene un Google ID Token mediante GIS.
 2. Angular envía esa credencial a la futura API de autenticación mediante APIM; el login no requiere previamente un JWT interno.
 3. `ms-users` verifica criptográficamente firma, algoritmo, issuer, audience, expiración y claims obligatorios, además de la vinculación al intento y elegibilidad aprobadas.
-4. `ms-users` identifica o registra al usuario interno según la política de alta, sin vincular cuentas automáticamente por correo.
-5. `ms-users` emite la credencial de MarketTec y establece la sesión propia de 3.4.
+4. `ms-users` identifica la cuenta existente por vínculo Google exacto o, para registro nuevo, exige antes un enlace de un solo uso confirmado en el buzón institucional según la [decisión posterior de MTEC-15](DECISION_LOG.md#registro-google-nuevo--2026-11-04), sin vincular cuentas automáticamente por correo.
+5. Solo después de satisfacer la política aplicable, `ms-users` emite la credencial de MarketTec y establece la sesión propia de 3.4.
 6. APIM y los servicios validan el JWT interno; los casos de uso consumen exclusivamente la identidad interna validada.
 
 El Google ID Token es una credencial transitoria, nunca el identificador permanente de publicaciones, chats o perfiles. Google `sub` solo identifica el vínculo externo dentro de `ms-users`.
@@ -176,7 +176,10 @@ parámetro `hd` del botón no demuestra pertenencia. Google advierte que un corr
 de terceros sin `hd` puede no estar bajo su autoridad actual aunque
 `email_verified` sea verdadero: en ese caso se exige verificación institucional
 adicional de posesión del buzón antes del acceso básico, conforme a la política
-aprobada. Su protocolo sigue pendiente en P16/P18. No se impondría Google
+aprobada. Para **todo registro Google nuevo**, la decisión posterior de MTEC-15
+exige el enlace institucional aun si Google es autoritativo y
+`email_verified=true`; el protocolo sigue pendiente en P16/P18. Esto no
+impone registro de nuevo a cuentas existentes. No se impondría Google
 Workspace al camino de correo sin Google. Ninguno de esos claims demuestra por
 sí solo matrícula o empleo activo.
 
@@ -369,7 +372,9 @@ P10/P11/P15/P23 conservan condiciones técnicas de §3.4.1. Los mecanismos
 siguientes combinan política aprobada y detalles Proposed, sin acreditar
 implementación ni aprobación de las interfaces MTEC-15.
 
-La credencial de renovación sería rotatoria y revocable, vinculada a la sesión y al usuario interno, con almacenamiento seguro de verificadores. Cada uso válido invalidaría la anterior atómicamente y emitiría un reemplazo; la reutilización detectada exigiría revocar la familia de sesión afectada y reautenticar, con manejo de concurrencia/reintentos por aprobar. Logout, baja de cuenta y eventos de seguridad deben tener semántica explícita de revocación de sesiones. La [RFC 9700, sección 4.14](https://www.rfc-editor.org/rfc/rfc9700.html#section-4.14) orienta la rotación/detección de replay; usarla como referencia no declara un servidor OAuth implementado.
+**Política C de refresh replay: Approved para MarketTec v1 el 2026-11-04 por el responsable del proyecto**, según [MTEC-40](https://allanaron06122005.atlassian.net/browse/MTEC-40) y el [documento de decisión](../../docs/MTEC40_REFRESH_REPLAY_DECISION_PROPOSAL.md). Toda generación consumida se rechaza sin gracia ni reemisión; la pareja histórica refresh + CSRF coincidente se clasifica internamente como replay y debe producir auditoría sin secretos. La respuesta pública al refresh inválido o consumido es `401 REFRESH_INVALID`. Un replay aislado no revoca automáticamente a la generación ganadora. La revocación corresponde a logout autorizado, recuperación conforme a protocolo aprobado o compromiso confirmado con evidencia independiente y autorización registrada. IP, User-Agent, Origin o repetición aislada no atribuyen por sí solos compromiso. Ninguna rotación reactiva sesiones vencidas ni amplía indebidamente los límites 60/30/8.
+
+La aprobación de política no acredita auditoría estructurada, revocación por incidente operativa, pruebas entre instancias, comportamiento Angular, políticas APIM ni el presupuesto de exposición JWT ≤300 s. La alternativa C evita revocaciones incorrectas, pero acepta menor contención automática que B: un atacante que gane la primera rotación puede conservar la nueva generación hasta expiración o revocación efectiva; el replay no identifica al actor legítimo. Una respuesta perdida después del commit puede requerir reautenticación, y revocar refresh no invalida JWT ya emitidos. El CSRF no es una segunda prueba criptográfica independiente cuando `/v1/auth/session` puede recuperarlo con cookie válida y controles HTTP. La respuesta de revocación al reuse descrita en [RFC 9700 §4.14.2](https://www.rfc-editor.org/rfc/rfc9700.html#section-4.14.2) para tokens OAuth rotatorios es más estricta; C no se declara conforme con esa pauta. La candidata del [PR #25](https://github.com/a-calderon-org/market_tec/pull/25) alinea contrato e identidad con esta política; MTEC-15/B07 y las conformidades siguen pendientes.
 
 B06/D4 aprueba refresh opaco rotatorio en cookie `HttpOnly`, `Secure`, host-only (sin Domain); `SameSite`/Path requieren validación de topología. Nombre, ámbito, duración y elección Lax/Strict o necesidad justificada de None están pendientes; None requeriría Secure. B06/D4–D5 aprueban access JWT y sincronizador CSRF solo en memoria, protección CSRF y CORS con orígenes explícitos coherentes con cookies; sus protocolos concretos siguen Draft. SameSite no sustituye CSRF; HttpOnly no elimina XSS. Atributos y límites se revisarán conforme a [OWASP Session Management](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html), sin introducir secretos en Angular ni en documentación.
 
@@ -390,12 +395,17 @@ y la reautenticación sensible siguen pendientes. Los 5 min de frescura de
 vínculo de 3.1 siguen siendo una propuesta separada. Al confirmar login se
 propone rotar el contexto previo para impedir fijación.
 
-B06/D6 aprueba rotación serializada incluso entre pestañas, sin gracia general.
-El detalle Draft es consumo/sustitución atómicos: invalidar el anterior y revocar la familia ante reutilización de
-una credencial consumida. Una respuesta perdida obliga a reautenticar, sin
-reemitir tokens al poseedor del refresh anterior. La alternativa de reintento
-idempotente/gracia acotada requiere protocolo y prueba adicionales; no se acepta
-una ventana reutilizable implícita. El vencimiento de la ventana de sesión, del
+B06/D6 aprueba serialización incluso entre pestañas, sin gracia general.
+La política C aprueba consumo y sustitución atómicos: una generación consumida
+se rechaza sin reemisión; la pareja histórica refresh + CSRF coincidente se
+clasifica internamente y debe auditarse sin secretos. Una generación desconocida
+o CSRF distinto no confirma replay. La respuesta pública es
+`401 REFRESH_INVALID`. Un replay aislado no revoca automáticamente la
+generación ganadora. La auditoría estructurada, el protocolo de revocación
+autorizada y las pruebas de concurrencia siguen pendientes. Ante respuesta
+perdida después del commit, recuperar estado solo si llegó la cookie nueva;
+con la generación anterior se exige reautenticación. No se acepta gracia ni
+reintento con reemisión. El vencimiento de la ventana de sesión, del
 máximo absoluto o del timeout de inactividad impide renovar y exige invalidación
 de sesión en servidor; no invalida automáticamente el access JWT ya emitido.
 P10/P15 deben diseñar cómo hacer efectivos los límites de sesión en todos los
@@ -627,7 +637,7 @@ Activos: mappings y cuentas, claves de firma, credenciales de usuario, recursos 
 | T15. Sustitución/abuso de JWKS | Se siguen URLs del token, metadata manipulada o refrescos ilimitados | SSRF, aceptación de clave hostil o denegación de servicio | Destinos fijados, TLS, tipos/uso/algoritmo de clave, límites y caché acotada | Picos de refresco, fallos de metadata y cambios auditados | Verificadores, APIM e infraestructura | `jku`/`x5u` hostiles ignorados; `kid` aleatorio masivo limitado; JWKS sin claves privadas | Pendiente local/Azure |
 | T16. Login CSRF o extracción por XSS | Intento de login no vinculado o script accede al bearer | Sesión de cuenta incorrecta o robo de token | Vinculación de intento, CSRF según modo GIS, controles de origen y prevención XSS; almacenamiento P23 | Intentos de desafío inválido, señales CSP y pruebas con señuelos | Frontend, ms-users, APIM y seguridad | Login desde origen no permitido y desafío ajeno rechazados; revisar que el callback no presuponga cookie/body GIS; evaluación XSS separada | Pendiente; sessionStorage actual accesible a JavaScript |
 | T17. Abuso o consumo indebido de enlace institucional | Enumeración, fuerza bruta, token filtrado, escáner GET o confirmaciones concurrentes | Acceso indebido, denegación o abuso de correo | Respuesta uniforme, límites, verificador seguro, vínculo al intento y consumo atómico tras confirmación | Métricas de emisión/rechazo/consumo sin secretos | ms-users, frontend, APIM y entrega de correo | Cuenta existente/inexistente indistinguibles; dominio similar rechazado; GET no consume; token alterado/expirado/repetido/ajeno rechazado; carrera produce un consumo | Pendiente local; correo no implementado |
-| T18. Robo/replay de renovación o vinculación indebida | Cookie robada, CSRF, carreras de refresh o fusión por correo | Secuestro de sesión/cuenta | Rotación/revocación, detección de reutilización, CSRF y prueba reciente de ambos métodos para vincular | Alertas de reutilización/conflictos y auditoría mínima | ms-users, frontend, APIM y seguridad | Rotación concurrente/reintento, familia revocada, sesión expirada; vínculo sin prueba de un método rechazado; mismo userId tras vínculo legítimo | Pendiente local; sesiones y vinculación no implementadas |
+| T18. Robo/replay de renovación o vinculación indebida | Cookie robada, CSRF, carreras de refresh o fusión por correo | Secuestro de sesión/cuenta | Rotación/revocación, detección de reutilización, CSRF y prueba reciente de ambos métodos para vincular | Alertas de reutilización/conflictos y auditoría mínima | ms-users, frontend, APIM y seguridad | Rotación concurrente/reintento, familia revocada, sesión expirada; vínculo sin prueba de un método rechazado; mismo userId tras vínculo legítimo | Scaffold local sin sesiones; ms-users independiente implementa rotate/rechazo, sin auditoría estructurada ni prueba entre instancias; vínculo pendiente |
 
 ## 7. Consecuencias y riesgos residuales
 
@@ -759,7 +769,7 @@ responsables de los documentos:
 ## 10. Registro de aceptación delimitada y revisión humana pendiente
 
 La tabla siguiente conserva el registro histórico del 2026-11-01. Las aprobaciones
-posteriores del 2026-11-02 y sus condiciones prevalecen según §3.4.1; en particular
+posteriores del 2026-11-02 y la política C del 2026-11-04 prevalecen; en particular
 ya no son vigentes como pendientes el algoritmo/RSA-2048, TTL nominal máximo
 240 s, residual ordinario requerido y políticas B02/B03/B06 allí delimitadas.
 Los detalles operativos y las conformidades permanecen abiertos.

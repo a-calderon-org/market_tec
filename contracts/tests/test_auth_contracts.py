@@ -258,12 +258,10 @@ class AuthContractsTest(unittest.TestCase):
         with self.assertRaises(AssertionError):
             validate_auth(expired_access)
 
-    def test_expired_revoked_and_reused_session_errors_are_declared(self):
-        for route in ("/v1/auth/session", "/v1/auth/refresh"):
-            method = "get" if route.endswith("session") else "post"
-            codes = self.api["paths"][route][method]["x-error-codes"]["401"]
-            self.assertTrue({"SESSION_EXPIRED", "SESSION_REVOKED"}.issubset(codes))
-        self.assertIn("REFRESH_REUSED", self.api["paths"]["/v1/auth/refresh"]["post"]["x-error-codes"]["401"])
+    def test_session_errors_and_public_refresh_error_are_declared(self):
+        session_codes = self.api["paths"]["/v1/auth/session"]["get"]["x-error-codes"]["401"]
+        self.assertTrue({"SESSION_EXPIRED", "SESSION_REVOKED"}.issubset(session_codes))
+        self.assertEqual(["REFRESH_INVALID"], self.api["paths"]["/v1/auth/refresh"]["post"]["x-error-codes"]["401"])
 
     def test_mail_proof_is_only_consumed_by_post_not_preview_get(self):
         for route in ("/v1/auth/email/confirm", "/v1/auth/proofs/email/confirm"):
@@ -276,98 +274,27 @@ class AuthContractsTest(unittest.TestCase):
         self.assertEqual({"status", "message"}, set(schema["properties"]))
         self.assertIn("const", schema["properties"]["message"])
 
-    def test_google_basic_login_and_browser_protocol(self):
-        attempts = self.api["paths"]["/v1/auth/attempts"]["post"]
-        google = self.api["paths"]["/v1/auth/google"]["post"]
-        self.assertEqual([], attempts["security"])
-        self.assertEqual([{"attemptCookie": []}], google["security"])
-        self.assertEqual(300, attempts["x-browser-protocol"]["googleMaximumLifetimeSeconds"])
-        self.assertEqual("pending-verified-topology", attempts["x-browser-protocol"]["sameSite"])
-        self.assertTrue(google["x-browser-protocol"]["cookieAndCsrfRequired"])
-        self.assertTrue(google["x-browser-protocol"]["atomicSingleUse"])
-        self.assertNotIn("202", google["responses"])
-        self.assertEqual(["AUTH_PROOF_INVALID"], google["x-error-codes"]["401"])
-        self.assertEqual(["ATTEMPT_CONSUMED", "IDENTITY_CONFLICT"], google["x-error-codes"]["409"])
-        self.assertEqual(["ATTEMPT_EXPIRED"], google["x-error-codes"]["410"])
-        self.assertIn("vínculo previo exacto", google["description"])
-        self.assertIn("No crea cuentas", google["description"])
-        self.assertIn("no capacidad implementada", google["description"])
-        self.assertIn({"$ref": "#/components/parameters/CsrfToken"}, google["parameters"])
-        self.assertIn("/v1/auth/email/confirm", self.api["paths"])
+    def test_google_registration_returns_auth_response_without_mailbox_step(self):
+        policy = self.api["x-registration-policy"]
+        self.assertFalse(policy["newGoogleRegistrationRequiresInstitutionalLink"])
+        self.assertTrue(policy["googleEmailVerifiedAloneSufficient"])
+        self.assertEqual({"estudiantec.cr", "itcr.ac.cr", "tec.ac.cr"}, set(policy["eligibleDomainsExact"]))
+        for route in ("/v1/auth/google", "/v1/auth/google/registrations"):
+            op = self.api["paths"][route]["post"]
+            self.assertIn("200", op["responses"])
+            self.assertNotIn("202", op["responses"])
+            self.assertEqual("#/components/schemas/AuthResponse",
+                             op["responses"]["200"]["content"]["application/json"]["schema"]["$ref"])
+            self.assertEqual("not-required-for-google", op["x-registration-flow"]["mailboxProof"])
+        self.assertFalse(self.api["paths"]["/v1/auth/google/registrations"]["post"]["deprecated"])
+        self.assertFalse(self.api["x-identity-policy"]["automaticMergeByEmail"])
 
-    def test_google_login_policy_vectors(self):
-        op = self.api["paths"]["/v1/auth/google"]["post"]
-        vectors = load(FIXTURES / "google-login-cases.json")
-        self.assertEqual(10, len(vectors))
-        for case in vectors:
-            with self.subTest(case=case["name"]):
-                if case["consumed"]:
-                    result = "409-ATTEMPT_CONSUMED"
-                elif not case["fresh"]:
-                    result = "410-ATTEMPT_EXPIRED"
-                elif case["conflict"]:
-                    result = "409-IDENTITY_CONFLICT"
-                elif not all(case[k] for k in ("validToken", "nonceMatches", "sameBrowser", "linked", "linkActive", "active")):
-                    result = "401-AUTH_PROOF_INVALID"
-                else:
-                    result = "200-basic-only"
-                self.assertEqual(case["expected"], result)
-                if result.startswith("200"):
-                    self.assertIn("200", op["responses"])
-                    self.assertFalse(self.api["x-identity-policy"]["automaticMergeByEmail"])
-                    self.assertFalse(self.api["x-identity-policy"]["automaticHistoryTransfer"])
-                else:
-                    status, code = result.split("-", 1)
-                    self.assertIn(code, op["x-error-codes"][status])
-
-    def test_google_registration_is_explicit_and_separate(self):
-        response = self.api["components"]["schemas"]["AttemptResponse"]
-        self.assertTrue(validator(self.api, "LoginAttemptRequest").is_valid({"method": "google"}))
-        self.assertTrue(validator(self.api, "LoginAttemptRequest").is_valid({"method": "google", "purpose": "register"}))
-        self.assertFalse(validator(self.api, "LoginAttemptRequest").is_valid({"method": "email", "purpose": "register"}))
-        self.assertIn("register", response["properties"]["purpose"]["enum"])
-        login = self.api["paths"]["/v1/auth/google"]["post"]
-        registration = self.api["paths"]["/v1/auth/google/registrations"]["post"]
-        self.assertEqual("login", login["x-registration-separation"]["acceptedAttemptPurpose"])
-        self.assertFalse(login["x-registration-separation"]["createsAccount"])
-        policy = registration["x-registration-policy"]
-        self.assertEqual("register", policy["acceptedAttemptPurpose"])
-        self.assertNotIn("x-registration-separation", registration)
-        self.assertEqual("generic-rejection-no-mutation", policy["existingLinkAnyStatus"])
-        self.assertEqual("ACTIVE", policy["googleLink"])
-        for field in ("mergeByEmail", "historyTransfer", "automaticTecPrivileges"):
-            self.assertFalse(policy[field])
-        self.assertEqual("proposed", registration["x-implementation-status"])
-        self.assertEqual([{"attemptCookie": []}], registration["security"])
-        self.assertEqual("#/components/schemas/GoogleRegistrationRequest", registration["requestBody"]["content"]["application/json"]["schema"]["$ref"])
-        self.assertEqual("#/components/schemas/AuthResponse", registration["responses"]["200"]["content"]["application/json"]["schema"]["$ref"])
-        self.assertEqual(["AUTH_PROOF_INVALID"], registration["x-error-codes"]["401"])
-        self.assertNotIn("REGISTRATION_REQUIRED", registration["x-error-codes"]["401"])
-        for value in ({"credential": "synthetic", "attemptId": "one"},):
-            validator(self.api, "GoogleRegistrationRequest").validate(value)
-            for forbidden in ("userId", "email", "roles", "privileges"):
-                self.assertFalse(validator(self.api, "GoogleRegistrationRequest").is_valid({**value, forbidden: "test"}))
-
-    def test_attempt_response_google_login_and_registration_purposes(self):
-        check = validator(self.api, "AttemptResponse")
-        google = {
-            "attemptId": "attempt-1", "method": "google", "purpose": "login",
-            "expiresAt": 1790000300, "csrfToken": "csrf-1", "nonce": "nonce-1",
-        }
-        for purpose in ("login", "register", "reauthenticate", "link"):
-            with self.subTest(method="google", purpose=purpose):
-                self.assertTrue(check.is_valid({**google, "purpose": purpose}))
-                self.assertFalse(check.is_valid({
-                    key: value for key, value in {**google, "purpose": purpose}.items()
-                    if key != "nonce"
-                }))
-        for purpose in ("unknown", "", None):
-            with self.subTest(method="google", rejected_purpose=purpose):
-                self.assertFalse(check.is_valid({**google, "purpose": purpose}))
-        email = {key: value for key, value in google.items() if key != "nonce"}
-        email["method"] = "institutional-email"
-        self.assertTrue(check.is_valid(email))
-        self.assertFalse(check.is_valid({**email, "purpose": "register"}))
+    def test_email_magic_link_remains_independent_and_unavailable(self):
+        for route in ("/v1/auth/email/requests", "/v1/auth/email/confirm"):
+            op = self.api["paths"][route]["post"]
+            self.assertEqual({"503"}, set(op["responses"]))
+            self.assertEqual(["AUTH_TEMPORARILY_UNAVAILABLE"], op["x-error-codes"]["503"])
+            self.assertIn("independent-email-authentication-only", op["x-registration-flow"])
 
     def test_google_and_email_use_same_internal_user_shape(self):
         logins = [case["value"] for case in self.cases if case["name"] in {"google-login", "email-login-same-internal-user"}]
@@ -423,14 +350,32 @@ class AuthContractsTest(unittest.TestCase):
 
     def test_refresh_concurrency_policy_is_explicit_and_not_idempotent_reissuance(self):
         rotation = self.api["paths"]["/v1/auth/refresh"]["post"]["x-refresh-rotation"]
-        self.assertEqual("draft-detail-under-approved-policy", rotation["status"])
+        self.assertEqual("approved-policy-draft-protocol-and-tests-pending", rotation["status"])
         self.assertTrue(rotation["serializedAcrossTabs"])
         self.assertEqual("pending", rotation["protocolAndConcurrencyTests"])
         self.assertTrue(rotation["atomicConsumeAndReplace"])
         self.assertFalse(rotation["graceWindow"])
         self.assertFalse(rotation["reissueOnRetry"])
-        self.assertEqual("revoke-family-including-winner", rotation["consumedGenerationReuse"])
-        self.assertEqual("reauthenticate", rotation["lostResponse"])
+        self.assertEqual("reject-and-audit-without-automatic-winner-revocation", rotation["consumedGenerationReuse"])
+        self.assertFalse(rotation["winnerRevokedOnIsolatedReplay"])
+        self.assertEqual("confirmed-only-when-refresh-and-csrf-match", rotation["historicalPairClassification"])
+        self.assertEqual("invalid-proof-not-confirmed-replay", rotation["unknownGenerationOrWrongCsrf"])
+        self.assertEqual("401 REFRESH_INVALID", rotation["publicError"])
+        self.assertEqual("REFRESH_INVALID", rotation["publicErrorExample"]["error"]["code"])
+        self.assertEqual([], rotation["publicErrorExample"]["error"]["details"])
+        public_error = self.api["paths"]["/v1/auth/refresh"]["post"]["responses"]["401"]
+        self.assertNotIn("Set-Cookie", public_error["headers"])
+        self.assertNotIn("token", json.dumps(public_error["content"]["application/json"]["examples"]))
+        self.assertEqual({"REFRESH_INVALID"}, {public_error["content"]["application/json"]
+                         ["schema"]["allOf"][1]["properties"]["error"]["properties"]["code"]["const"]})
+        self.assertEqual("structured-without-secrets-required-not-yet-implemented", rotation["audit"])
+        self.assertEqual("independent-evidence-and-recorded-authorization", rotation["compromiseRevocation"])
+        self.assertEqual("recover-session-if-new-cookie-arrived-otherwise-reauthenticate", rotation["lostResponse"])
+        self.assertEqual({"rotate": "implemented-in-ms-users", "continue": "pending"}, rotation["modeImplementation"])
+        self.assertEqual({"current": "implemented-in-ms-users", "all": "pending"},
+                         self.api["paths"]["/v1/auth/logout"]["post"]["x-scope-implementation"])
+        self.assertNotIn("REFRESH_REUSED", json.dumps(self.api))
+        self.assertEqual("draft-pending-team-approval", self.api["x-contract-status"])
 
 
     def test_short_access_lifetime_and_profile_policy_are_explicit(self):

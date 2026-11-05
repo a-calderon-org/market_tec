@@ -22,8 +22,9 @@ no demuestran que una ruta o integración esté implementada.
 
 Cada operación OpenAPI declara `x-implementation-status`:
 
-- `implemented`: existe en el código actual.
-- `proposed`: contrato de diseño; no existe todavía en el servicio.
+- `implemented`: la operación completa está acreditada conforme a este contrato.
+- `proposed`: la operación completa sigue pendiente de conformidad; puede haber
+  adaptadores parciales en el servicio.
 
 El nivel superior declara `x-contract-status: draft-pending-team-approval`. La
 creación de estos archivos no aprueba ADR-003 ni las decisiones pendientes sobre
@@ -73,10 +74,17 @@ producen un código de salida distinto de cero.
 
 ## Candidata de autenticación
 
-Users/identidad `0.3.0-draft` consolida decisiones aprobadas B01–B06 y propone registro Google explícito sin aprobar
+Users/identidad `0.3.0-draft` consolida decisiones aprobadas B01–B06 sin aprobar
 interfaces ni conformidades B07. Cambios, compatibilidad y límites de QA en
 [release review](../docs/MTEC15_AUTH_CONTRACT_RELEASE_REVIEW.md); reglas canónicas
 en [identidad](identity/IDENTITY_CONTRACT.md). Los vectores criptográficos usan
 solo públicas y tokens sintéticos para hosts `.invalid`; no contienen privadas.
 El oráculo de pruebas no se utiliza por los servicios y no demuestra revocación,
 reloj real, propagación, atomicidad ni CSRF/CORS de navegador/APIM.
+
+El registro Google institucional con ID Token y correo verificados devuelve
+`200 AuthResponse` sin Magic Link. `/v1/auth/google/registrations` conserva la
+compatibilidad del backend. Magic Link por correo es autenticación independiente
+pendiente; `/v1/auth/email/requests` y `/v1/auth/email/confirm` responden
+actualmente `503 AUTH_TEMPORARILY_UNAVAILABLE`. La suite contractual valida el
+borrador de interfaz, no sustituye pruebas del backend.

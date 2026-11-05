@@ -17,9 +17,12 @@ especifica métodos, rutas, headers, cuerpos, esquemas, respuestas y errores. El
 [informe de revisión](../../docs/MTEC15_AUTH_CONTRACT_REVIEW.md) contiene evidencia,
 comparación histórica. La [revisión candidata B07](../../docs/MTEC15_AUTH_CONTRACT_RELEASE_REVIEW.md) recoge compatibilidad, QA y bloqueos vigentes, sin constituir otro contrato.
 
-**Verificado:** solo `GET /health` está implementado en la fundación ms-users de
-esta base. Google, perfiles y todas las nuevas operaciones de este contrato siguen
-`x-implementation-status: proposed`; el estado global es
+**Verificado en `ms-users/main@3f776f6`:** `GET /health` es la única operación
+marcada `implemented` en este contrato. El servicio ya expone adaptadores parciales
+de Google, sesión, refresh `mode=rotate` y logout `scope=current`; ninguna de esas
+operaciones acredita todavía la interfaz completa candidata y conservan
+`x-implementation-status: proposed`. También expone
+`POST /v1/auth/google/registrations`, cuyo registro inmediato 200 AuthResponse es la compatibilidad vigente. El estado global es
 `draft-pending-team-approval`. **No determinado:** configuración efectiva Azure/APIM.
 
 ### Núcleo aceptado y detalles propuestos
@@ -27,7 +30,7 @@ esta base. Google, perfiles y todas las nuevas operaciones de este contrato sigu
 | Tema | Accepted según ADR-004 | Proposed / pendiente |
 |---|---|---|
 | Métodos | Google y enlace institucional simultáneamente desde v1 | Protocolos, TTL, tasas, pruebas y errores de las operaciones siguientes |
-| Elegibilidad | Control verificado de correo de dominio exacto `estudiantec.cr`, `itcr.ac.cr` o `tec.ac.cr`; acceso básico sin prueba de matrícula/empleo | Canonicalización técnica, alta idempotente y continuidad de cuentas históricas |
+| Elegibilidad | Control verificado de correo de dominio exacto `estudiantec.cr`, `itcr.ac.cr` o `tec.ac.cr`; registro Google verificado devuelve 200 AuthResponse sin enlace; acceso básico sin prueba de matrícula/empleo | Canonicalización técnica, alta idempotente y continuidad de cuentas históricas |
 | Identidad | `userId` interno opaco, estable, generado por ms-users; no fusión por email | Mapping contractual, namespace de EmailIdentity y prueba reciente de ambos métodos |
 | Sesión | 60 min renovables, 30 min inactividad, 8 h absolutas; primer límite, servidor, aviso y reautenticación; sondeos no son actividad | B03 aprueba política de actividad; B06 transporte/serialización. Protocolos, aviso candidato y cumplimiento distribuido pendientes |
 | Confianza | ms-users autentica/emite/publica claves; APIM admite; cada backend revalida y autoriza su dominio | RS256/RSA-2048 y JWKS aprobados; parámetros/propagación, protección de origen y reglas efectivas APIM pendientes |
@@ -49,9 +52,10 @@ resolver establemente el mismo `userId`, incluso bajo concurrencia.
   formas oficiales de issuer solo después de validarlas evita mappings duplicados.
 - Correo usa una identidad propia, nunca un `sub` Google inventado. La dirección
   verificada no es el ID interno. B02 aprueba passkeys por userId y códigos de recuperación de un uso, opcionales para básico; namespace y protocolos siguen pendientes.
-- Proposed: alta transaccional idempotente tras verificar identidad y elegibilidad.
-  Si la política de alta no está aprobada, no habilitarla; `REGISTRATION_REQUIRED`
-  expresa registro necesario tras prueba válida. Un conflicto no crea otra cuenta,
+- La política de alta Google nueva exige enlace institucional de un solo uso antes
+  de crear cuenta, activar vínculo Google o emitir sesión. La interfaz propuesta
+  hace el alta transaccional e idempotente solo tras esa prueba; `REGISTRATION_REQUIRED`
+  expresa registro necesario tras una prueba de login válida. Un conflicto no crea otra cuenta,
   fusiona usuarios ni reasigna una identidad.
 - Coincidir en email con una cuenta de otro método requiere vinculación explícita.
   No se promete deduplicación de personas a partir de direcciones.
@@ -137,68 +141,28 @@ GIS no añade por sí solo este protocolo; no asumir `g_csrf_token` de otro modo
 
 ### Inventario de operaciones de login y pruebas
 
-| Método/ruta de servicio | Request → éxito | Seguridad y efecto |
+| Método/ruta de servicio | Resultado | Estado |
 |---|---|---|
-| POST `/v1/auth/attempts` | `{method,purpose?}` → `AttemptResponse` | Sin sesión; omisión=login; register solo Google, intención fija, contexto navegador y cliente GIS fijados por servidor |
-| POST `/v1/auth/google` | `{credential,attemptId}` → `AuthResponse` 200 Draft | Solo intento login; cuenta existente con vínculo Google exacto ACTIVE y cuenta activa; nunca crea cuenta ni activa PENDING |
-| POST `/v1/auth/google/registrations` | `{credential,attemptId}` → `AuthResponse` 200 Draft | Solo intento register Google; identidad exacta sin vínculo previo de ningún estado; alta atómica de cuenta básica, userId nuevo y vínculo ACTIVE; rechazo genérico de identidad vinculada |
-| POST `/v1/auth/email/requests` | `{attemptId,email}` → `EmailAccepted` 202 | Cookie intento + CSRF; emisión/reenvío sin enumeración |
-| POST `/v1/auth/email/confirm` | `{attemptId,token}` → `AuthResponse` 200 | Confirmación explícita, consumo atómico, continuidad; no GET de autenticación |
-| POST `/v1/auth/proofs/attempts` | `{method,purpose,authMethodId?}` → `AttemptResponse` | JWT + cookie + CSRF, propósito reauthenticate o link |
-| POST `/v1/auth/proofs/google` | `{credential,attemptId}` → `ProofGrant` 200 o espera de buzón 202 | Prueba exacta del método sobre sid/usuario actuales; no nueva sesión |
-| POST `/v1/auth/proofs/email/requests` | `{attemptId,email}` → `EmailAccepted` 202 | Mismo acuse genérico, método/email fijados por intento protegido |
-| POST `/v1/auth/proofs/email/confirm` | `{attemptId,token}` → `ProofGrant` 200 | Consumo único sobre propósito protegido, sin ampliar sesión |
-| GET `/v1/me/auth-methods` | Sin body → `MethodsResponse` 200 | JWT interno; referencias propias sin sub Google ni correo |
-| POST `/v1/me/auth-methods` | `{reauthenticationProofId,newMethodProofId}` → `MethodsResponse` 200 | JWT + cookie + CSRF; ambas pruebas recientes, diferentes y consumidas en transacción |
+| POST `/v1/auth/attempts` | Intento con propósito `login` o `register` para Google | Protocolo contractual sujeto a B07 |
+| POST `/v1/auth/google` | Login existente o registro Google: `200 AuthResponse` | Ruta contractual; verificar adaptador HTTP exacto |
+| POST `/v1/auth/google/registrations` | Registro Google: `200 AuthResponse` | Alias compatible implementado en ms-users |
+| POST `/v1/auth/email/requests` | `503 AUTH_TEMPORARILY_UNAVAILABLE` | Magic Link independiente, pendiente |
+| POST `/v1/auth/email/confirm` | `503 AUTH_TEMPORARILY_UNAVAILABLE` | Magic Link independiente, pendiente |
+| POST `/v1/auth/proofs/attempts` y `/v1/auth/proofs/google` | Prueba de método para vinculación/reauth | Proposed; no confundir con registro |
+| POST `/v1/auth/proofs/email/requests` y `/v1/auth/proofs/email/confirm` | Prueba por correo | Proposed; sin implementación acreditada |
 
-La decisión formal de MTEC-40 del 2026-11-03 permite login Google básico
-únicamente a una cuenta existente con vínculo previo exacto `(GOOGLE, issuer,
-subject) → userId`, activo y autorizado. ms-users verifica token Google, nonce,
-intento y navegador; comprueba cuenta/vínculo en servidor antes de emitir. No exige
-prueba adicional del buzón para este caso. No crea cuenta ni fusiona por email,
-concede afiliación/privilegios TEC, historial sin continuidad acreditada,
-recuperación, vinculación ni operaciones sensibles B04. Identidad ausente,
-bloqueada o no autorizada obtiene rechazo genérico sin sesión/enumeración.
-El correo institucional continúa previsto para v1 con contratos pendientes.
+Para Google, validar firma, issuer, audience, nonce, tiempo, `sub`, correo y
+`email_verified=true`; aplicar dominios exactos `estudiantec.cr`, `itcr.ac.cr` y
+`tec.ac.cr`. La identidad se resuelve por `(issuer, sub)` y una coincidencia de
+correo no vincula usuarios automáticamente. Registro nuevo crea cuenta, vínculo y
+sesión transaccionalmente y devuelve `200 AuthResponse`; el login de vínculo
+existente conserva compatibilidad. El cliente no debe esperar un paso de correo.
 
-**Registro Google Proposed:** G2B-D existe solo como backend interno según el alcance reportado; este repositorio no demuestra el endpoint HTTP. El intento `register` no se reutiliza en login, ni uno `login` en registro. ms-users verifica Google y nonce, navegador, CSRF y Origin antes de crear un `userId` opaco nuevo, cuenta básica y vínculo ACTIVE en una transacción. Cualquier vínculo exacto previo, incluso PENDING, se rechaza de modo genérico sin activarlo. Coincidencia de email no fusiona cuentas ni transfiere historial; tampoco confiere privilegios TEC. El resultado de éxito usa la misma sesión interna, JWT RS256/RSA-2048 con `sub=userId`, access ≤240 s, refresh opaco rotatorio en cookie HttpOnly/Secure/host-only y CSRF solo en memoria. Se aplican 60/30/8, revocación/logout y Origin como en §4. Hosts, Path y SameSite requieren validación de topología; los nombres de cookie anteriores son candidatos.
-
-**Verificado en G1 sin HTTP:** `GoogleLoginService` crea nonce y secreto de navegador,
-guarda hash del secreto, vence el intento en 300 s y consume una vez bajo transacción.
-G1 comprueba vínculo exacto y cuenta activa; `ExternalIdentity` aún carece de
-estado de bloqueo/activación del vínculo, por lo que falta ese control de política.
-**Propuesto para HTTP:** el secreto viaja solo en cookie de intento HttpOnly, Secure,
-host-only y sin Domain, con duración máxima de 300 s; token sincronizador CSRF
-entregado con `Cache-Control: no-store` y retenido solo en memoria; ambas operaciones
-validan Origin exacto y CORS configurado. El primer POST requiere Origin, JSON,
-header web permitido y límites de tasa; el segundo también cookie y CSRF.
-Replay, expiración o navegador distinto no crean sesión. Tras respuesta perdida se
-inicia intento nuevo. No registrar secretos ni incluirlos en URL o almacenamiento
-persistente. La APIM subscription key no puede ser secreto embebido en Angular.
-
-**No determinado:** hosts/orígenes productivos y SameSite, pendientes de topología
-verificada y aprobación. G1 devuelve JWT, sessionId, userId y deadline, pero no
-`AuthResponse` completo, cookie refresh, CSRF de sesión ni rutas HTTP. El adaptador
-de respuesta y transporte B06/B07 son dependencias antes de habilitar 200 HTTP.
-El contrato sigue Draft; no afirma aprobación B07 ni habilitación HTTP.
-
-Correo propone secreto CSPRNG 256 bits, verificador hash y plazo de hasta 600 s,
-acotado además al intento. Registrar en servidor propósito, destinatario verificado,
-intento, vencimiento y estado; no elegir aquí almacenamiento. Acuse idéntico para
-toda dirección sintácticamente válida, incluso no elegible o inexistente; solo se
-envía cuando corresponde. Tiempos comparables y límites combinados por origen,
-global, destinatario e intento. Tasa por destinatario se oculta tras 202; 429/Retry-After
-solo por origen/global independiente de cuenta. Cooldown no reenvía; reenvío
-autorizado invalida enlace anterior, no prolonga intento. Tasas/cooldown exactos pendientes.
-
-GET/HEAD/preview del enlace no consumen ni autentican. Solo POST explícito con
-cookie/CSRF del intento original valida/consume. Otro navegador/dispositivo reinicia
-el flujo allí; no trasladar sesión con enlace. Es compatibilidad limitada deliberada
-en propuesta, pendiente aceptación UX/seguridad; cross-device requeriría protocolo
-adicional aprobado. Token alterado/ajeno → 401 genérico; intento vencido → 410;
-consumido → 409, sin revelar cuenta. Carrera: máximo un consumo y una sesión/grant.
-Entrega fallida no crea usuario/sesión. Respuesta perdida tras consumo obliga nuevo
-intento. Email histórico sin continuidad aprobada → B02, no recuperación automática.
+Magic Link por correo es un método independiente todavía no implementado. Sus
+rutas públicas de solicitud y confirmación responden temporalmente 503. Los
+protocolos de continuidad de cuentas históricas, pruebas protegidas y vinculación
+siguen sujetos a revisión B02/B07; no se presentan como comportamiento Google
+implementado.
 
 Al vincular, verificar atomicidad y unicidad de identidad: otro userId produce
 conflicto genérico sin fusión. Ambas pruebas deben estar vigentes y ligadas al mismo
@@ -262,16 +226,31 @@ Allowlist, evidencia, productor/correlación, reloj y deduplicación atómica re
 contrato y pruebas. `ActivityRequest` actual solo lleva interactionId/kind y no
 demuestra ese respaldo: sigue bloqueado, sin inventar un protocolo de productores.
 
-B06/D6 aprueba serialización incluso entre pestañas, sin gracia general. Detalle **Draft**, pendiente de protocolo y pruebas:
-verificar/consumir la generación actual y emitir siguiente atómicamente. Dos usos
-concurrentes: uno gana; reconocer la generación consumida en el segundo revoca la
-familia, incluido el reemplazo del ganador, y responde `401 REFRESH_REUSED`. Es coste
-de disponibilidad explícito. Preservar verificadores consumidos lo suficiente para
-detectar reuso, con retención pendiente. No asumir que dos pestañas sean atacante.
-Frontend serializa renovación entre solicitudes/pestañas; respuesta perdida exige
-reautenticación, sin retry ciego. Gracia o idempotencia con reemisión necesita otro
-protocolo/revisión, no una ventana reutilizable implícita. Referencia de rotación:
-[RFC 9700 §4.14](https://www.rfc-editor.org/rfc/rfc9700.html#section-4.14), sin declarar OAuth implementado.
+B06/D6 aprueba serialización incluso entre pestañas, sin gracia general. La
+[política C aprobada](../../docs/MTEC40_REFRESH_REPLAY_DECISION_PROPOSAL.md)
+exige consumo único y reemplazo atómico: una carrera produce como máximo una
+ganadora. Una pareja histórica refresh + CSRF coincidente de sesión aún vigente se
+clasifica internamente como replay y exige auditoría estructurada sin secretos;
+generación inexistente o CSRF distinto son prueba inválida, no replay confirmado.
+Toda generación consumida se rechaza sin reemitir credenciales. La respuesta
+pública de refresh inválido, consumido o sesión cerrada es `401 REFRESH_INVALID`,
+con envelope genérico y sin JWT, CSRF ni cookie nueva. Un replay aislado no revoca
+automáticamente la generación ganadora ni cambia deadlines. Revocar por compromiso
+requiere evidencia independiente y autorización registrada; el evento estructurado
+y el procedimiento de incidente siguen pendientes de implementación y pruebas.
+
+Frontend serializa renovación entre solicitudes/pestañas y evita retries automáticos.
+Si la respuesta se pierde después del commit y llegó la cookie nueva, puede
+recuperar CSRF/estado mediante GET `/v1/auth/session`; si conserva la cookie
+consumida, debe reautenticar. Una sesión vencida o revocada nunca se reactiva y
+refresh no extiende por sí solo los límites 60/30/8. `mode=rotate` y logout
+`scope=current` están implementados en ms-users; `mode=continue` y
+`scope=all` siguen pendientes. La interfaz completa continúa **Draft** hasta
+MTEC-15/B07. El riesgo aceptado es que un atacante que gane la primera rotación
+puede conservar la generación activa hasta vencimiento o revocación efectiva.
+[RFC 9700 §4.14](https://www.rfc-editor.org/rfc/rfc9700.html#section-4.14)
+informa el análisis de rotación; no se declara OAuth implementado ni conformidad
+con su pauta de revocación automática.
 
 Logout current es idempotente: 204 para familia ya cerrada y para cookie ausente
 (sin efecto servidor); origen/JSON/header web siguen requeridos y, con cookie,
@@ -304,7 +283,7 @@ PUT solo cambia nombreUsuario/nombre/apellidos; no correo, roles, verificado ni 
 Fechas string e ID string previos permanecen; createdAt sigue opcional pendiente ADR-003.
 
 Errores Proposed: 400 solicitud inválida; 401 credencial/prueba/sesión inválida,
-vencida, revocada o refresh reusado; 403 principal sin permiso, origen/CSRF o
+vencida, revocada o refresh inválido/consumido; 403 principal sin permiso, origen/CSRF o
 reautenticación insuficiente; 404 recurso propio inexistente; 409 conflicto/consumo/
 continuidad/registro/actividad no aceptada; 410 intento expirado; 429 tasa global/origen
 con Retry-After; 503 verificación/emisión no disponible sin degradar seguridad.
@@ -325,7 +304,7 @@ propio; publicaciones propias aún necesitan contrato de catálogo revisado desp
 El interceptor necesitará distinguir rutas de login/metadata/cookie y de negocio,
 no adjuntar Google bearer, coordinar un refresh a la vez y evitar bucles de 401.
 ACCESS_TOKEN_EXPIRED permite intentar refresh solo con sesión vigente; SESSION_EXPIRED,
-SESSION_REVOKED y REFRESH_REUSED terminan sesión y requieren login. 403 es denegación,
+SESSION_REVOKED y REFRESH_INVALID requieren reautenticación cuando no existe una cookie nueva vigente. Un 401 por carrera en otra pestaña no debe cerrar la sesión ganadora; Angular debe verificar el estado compartido antes de descartarla. 403 es denegación,
 no disparador de refresh. Errores tardíos no invalidan sesión nueva. Cookie ausente/
 bloqueada requiere reautenticación y diagnóstico UX, no almacenamiento alternativo
 inseguro. Todo es evaluación futura: Angular no se modifica aquí.

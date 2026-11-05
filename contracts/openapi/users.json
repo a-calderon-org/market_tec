@@ -4,7 +4,7 @@
   "info": {
     "title": "MarketTec Users API",
     "version": "0.3.0-draft",
-    "description": "Draft — candidata de consolidación MTEC-15/B07. Perfil delimitado B01–B06 aprobado por RP; interfaces, parámetros y conformidades pendientes. Solo GET /health implementado en esta fundación. Ver IDENTITY_CONTRACT y MTEC15_AUTH_CONTRACT_RELEASE_REVIEW. Registro Google explícito propuesto; no es endpoint implementado."
+    "description": "Draft — candidata de consolidación MTEC-15/B07. Perfil delimitado B01–B06 aprobado por RP; interfaces, parámetros y conformidades pendientes. Solo GET /health implementado en esta fundación. Ver IDENTITY_CONTRACT y MTEC15_AUTH_CONTRACT_RELEASE_REVIEW."
   },
   "x-contract-status": "draft-pending-team-approval",
   "servers": [
@@ -57,14 +57,15 @@
     "/v1/auth/google": {
       "post": {
         "operationId": "exchangeGoogleCredential",
-        "summary": "Validar Google y establecer sesión interna",
-        "description": "Proposed — Login básico únicamente para cuenta existente con vínculo previo exacto (GOOGLE, issuer Google validado y canónico, subject) hacia userId interno, cuenta y vínculo activos y autorizados. ms-users verifica firma y claims Google, audience configurada, nonce, intento vigente/no consumido, cookie del mismo navegador, sincronizador CSRF y Origin exacto; consume el intento una vez de forma atómica y crea sesión/JWT solo tras resolver el vínculo. No exige prueba adicional del buzón para este acceso básico previamente vinculado. No crea cuentas, fusiona por email, concede privilegios o afiliación TEC, entrega historial sin continuidad, recupera o vincula identidades ni habilita operaciones sensibles B04. Identidad inexistente, bloqueada o no autorizada: 401 genérico sin sesión ni enumeración; conflicto de mapping 409 genérico. Token inválido 401, expiración 410, replay 409, indisponibilidad 503. Navegador distinto se rechaza; respuesta perdida requiere intento nuevo. AuthResponse completo, cookie refresh y CSRF de sesión dependen de adaptador HTTP y parámetros B06/B07: 200 es Draft, no capacidad implementada. Los intentos purpose=register se rechazan aquí; vínculos históricos PENDING nunca se activan ni se convierten en login.",
+        "summary": "Verificar Google para login existente o registro pendiente",
+        "description": "Google ID Token: validar firma, issuer, audience, nonce, vigencia, sub, email_verified=true y dominio institucional exacto (estudiantec.cr, itcr.ac.cr, tec.ac.cr). Resolver login existente por (issuer, sub) sin vincular por correo. Para propósito register, crear usuario y vínculo de forma transaccional y emitir AuthResponse 200 inmediatamente; no solicitar Magic Link ni confirmación por email. Una cuenta con correo de otra identidad produce conflicto sin fusión automática. La política de login existente conserva su compatibilidad. El protocolo completo de intento y sesión sigue sujeto a revisión B07.",
         "x-implementation-status": "proposed",
         "x-approval-status": "proposed",
         "x-route-class": "attempt-proof",
         "x-public-apim-path": "/auth/google",
         "security": [
           {
+            "apimSubscriptionKey": [],
             "attemptCookie": []
           }
         ],
@@ -84,7 +85,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Draft: sesión básica Google previamente vinculada y autorizada; AuthResponse y cookie refresh requieren implementación B06/B07.",
+            "description": "Google ID Token validado: login por vínculo (issuer, sub) existente o registro institucional nuevo; AuthResponse con sesión inmediata.",
             "headers": {
               "X-Correlation-ID": {
                 "$ref": "#/components/headers/CorrelationId"
@@ -137,207 +138,13 @@
             "$ref": "#/components/responses/Auth400"
           },
           "401": {
-            "description": "Draft HTTP 401: rechazo sin datos de cuenta ni sesión; códigos de esta operación.",
-            "headers": {
-              "X-Correlation-ID": {
-                "$ref": "#/components/headers/CorrelationId"
-              },
-              "Cache-Control": {
-                "$ref": "#/components/headers/NoStore"
-              },
-              "WWW-Authenticate": {
-                "$ref": "#/components/headers/Authenticate"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/AuthErrorEnvelope"
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "error": {
-                          "type": "object",
-                          "properties": {
-                            "code": {
-                              "type": "string",
-                              "enum": [
-                                "AUTH_PROOF_INVALID"
-                              ]
-                            },
-                            "message": {
-                              "type": "string",
-                              "minLength": 1
-                            },
-                            "details": {
-                              "type": "array",
-                              "maxItems": 0
-                            },
-                            "correlationId": {
-                              "type": "string",
-                              "maxLength": 128
-                            },
-                            "timestamp": {
-                              "$ref": "#/components/schemas/EpochSeconds"
-                            }
-                          }
-                        }
-                      }
-                    }
-                  ]
-                },
-                "examples": {
-                  "synthetic": {
-                    "value": {
-                      "error": {
-                        "code": "AUTH_PROOF_INVALID",
-                        "message": "No se pudo completar la operación.",
-                        "details": [],
-                        "correlationId": "mtec15-synthetic",
-                        "timestamp": 1790000000
-                      }
-                    }
-                  }
-                }
-              }
-            }
+            "$ref": "#/components/responses/Auth401"
           },
           "403": {
-            "description": "Draft HTTP 403: rechazo sin datos de cuenta ni sesión; códigos de esta operación.",
-            "headers": {
-              "X-Correlation-ID": {
-                "$ref": "#/components/headers/CorrelationId"
-              },
-              "Cache-Control": {
-                "$ref": "#/components/headers/NoStore"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/AuthErrorEnvelope"
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "error": {
-                          "type": "object",
-                          "properties": {
-                            "code": {
-                              "type": "string",
-                              "enum": [
-                                "CSRF_INVALID",
-                                "ORIGIN_DENIED"
-                              ]
-                            },
-                            "message": {
-                              "type": "string",
-                              "minLength": 1
-                            },
-                            "details": {
-                              "type": "array",
-                              "maxItems": 0
-                            },
-                            "correlationId": {
-                              "type": "string",
-                              "maxLength": 128
-                            },
-                            "timestamp": {
-                              "$ref": "#/components/schemas/EpochSeconds"
-                            }
-                          }
-                        }
-                      }
-                    }
-                  ]
-                },
-                "examples": {
-                  "synthetic": {
-                    "value": {
-                      "error": {
-                        "code": "CSRF_INVALID",
-                        "message": "No se pudo completar la operación.",
-                        "details": [],
-                        "correlationId": "mtec15-synthetic",
-                        "timestamp": 1790000000
-                      }
-                    }
-                  }
-                }
-              }
-            }
+            "$ref": "#/components/responses/Auth403"
           },
           "409": {
-            "description": "Draft HTTP 409: rechazo sin datos de cuenta ni sesión; códigos de esta operación.",
-            "headers": {
-              "X-Correlation-ID": {
-                "$ref": "#/components/headers/CorrelationId"
-              },
-              "Cache-Control": {
-                "$ref": "#/components/headers/NoStore"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/AuthErrorEnvelope"
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "error": {
-                          "type": "object",
-                          "properties": {
-                            "code": {
-                              "type": "string",
-                              "enum": [
-                                "ATTEMPT_CONSUMED",
-                                "IDENTITY_CONFLICT"
-                              ]
-                            },
-                            "message": {
-                              "type": "string",
-                              "minLength": 1
-                            },
-                            "details": {
-                              "type": "array",
-                              "maxItems": 0
-                            },
-                            "correlationId": {
-                              "type": "string",
-                              "maxLength": 128
-                            },
-                            "timestamp": {
-                              "$ref": "#/components/schemas/EpochSeconds"
-                            }
-                          }
-                        }
-                      }
-                    }
-                  ]
-                },
-                "examples": {
-                  "synthetic": {
-                    "value": {
-                      "error": {
-                        "code": "ATTEMPT_CONSUMED",
-                        "message": "No se pudo completar la operación.",
-                        "details": [],
-                        "correlationId": "mtec15-synthetic",
-                        "timestamp": 1790000000
-                      }
-                    }
-                  }
-                }
-              }
-            }
+            "$ref": "#/components/responses/Auth409"
           },
           "410": {
             "$ref": "#/components/responses/Auth410"
@@ -354,15 +161,26 @@
             "INVALID_REQUEST"
           ],
           "401": [
-            "AUTH_PROOF_INVALID"
+            "AUTH_PROOF_INVALID",
+            "UNAUTHORIZED",
+            "ACCESS_TOKEN_EXPIRED",
+            "SESSION_EXPIRED",
+            "SESSION_REVOKED",
+            "REFRESH_INVALID"
           ],
           "403": [
+            "FORBIDDEN",
             "CSRF_INVALID",
-            "ORIGIN_DENIED"
+            "ORIGIN_DENIED",
+            "ELIGIBILITY_DENIED",
+            "REAUTHENTICATION_REQUIRED"
           ],
           "409": [
             "ATTEMPT_CONSUMED",
-            "IDENTITY_CONFLICT"
+            "IDENTITY_CONFLICT",
+            "CONTINUITY_REQUIRED",
+            "REGISTRATION_REQUIRED",
+            "ACTIVITY_NOT_ACCEPTED"
           ],
           "410": [
             "ATTEMPT_EXPIRED"
@@ -396,7 +214,18 @@
             }
           }
         },
-        "x-integration-readiness": "blocked-link-status-browser-http-refresh-CSRF-response-adapter-and-B07-pending",
+        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending",
+        "x-registration-flow": {
+          "purpose": "register",
+          "googleAssertion": "single-use",
+          "mailboxProof": "not-required-for-google",
+          "eligibleDomains": [
+            "estudiantec.cr",
+            "itcr.ac.cr",
+            "tec.ac.cr"
+          ],
+          "result": "200-AuthResponse-immediate"
+        },
         "x-browser-protocol": {
           "cookieAndCsrfRequired": true,
           "exactOriginRequired": true,
@@ -405,11 +234,6 @@
           "lostResponse": "start-new-attempt",
           "cacheControl": "no-store",
           "logsUrlsPersistentBrowserStorage": "no-secrets"
-        },
-        "x-registration-separation": {
-          "acceptedAttemptPurpose": "login",
-          "createsAccount": false,
-          "pendingLink": "reject-without-activation"
         }
       }
     },
@@ -503,8 +327,7 @@
             "ACCESS_TOKEN_EXPIRED",
             "SESSION_EXPIRED",
             "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
+            "REFRESH_INVALID"
           ],
           "403": [
             "FORBIDDEN",
@@ -637,8 +460,7 @@
             "ACCESS_TOKEN_EXPIRED",
             "SESSION_EXPIRED",
             "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
+            "REFRESH_INVALID"
           ],
           "403": [
             "FORBIDDEN",
@@ -681,14 +503,18 @@
     },
     "/v1/auth/attempts": {
       "post": {
-        "operationId": "createLoginAttempt",
-        "summary": "Iniciar intento de login, registro Google o correo",
-        "description": "Proposed — Sin sesión previa. El servidor valida Origin exacto, JSON y header web permitido, aplica CORS explícito y límites de tasa; X-MTEC-Client no es credencial. ms-users crea intento Google, nonce y secreto de navegador aleatorios; guarda hash del secreto y lo entrega por cookie HttpOnly, Secure, host-only, sin Domain. Caduca como máximo a los 300 segundos desde creación. El sincronizador CSRF se entrega en respuesta no-store y permanece solo en memoria. No acepta userId, clientId ni redirectUri arbitrarios. La APIM subscription key no es secreto de Angular. El intento de correo sigue pendiente y el método permanece en v1. purpose=register solo admite Google, fija intención de alta y nunca sirve para login; omitir purpose conserva login. El intento de registro y su nonce son de un solo uso.",
+        "operationId": "createAuthenticationAttempt",
+        "summary": "Iniciar intento de login o registro Google, o login por correo",
+        "description": "Proposed — Origin exacto, JSON y X-MTEC-Client obligatorios. method y purpose explícitos; el servidor crea identificador aleatorio, nonce Google, vínculo al navegador, CSRF, vencimiento y consumo único. El propósito persistido es autoritativo: register solo para Google en esta interfaz; login para Google o correo. No acepta userId, clientId, destinatario ni redirectUri arbitrarios. Cada creación genera un intento nuevo, sin sesión ni cuenta; limitar abuso. TTL Google 300 s/correo 600 s son candidatos, no plazos aprobados.",
         "x-implementation-status": "proposed",
         "x-approval-status": "proposed",
         "x-route-class": "pre-session",
         "x-public-apim-path": "/auth/attempts",
-        "security": [],
+        "security": [
+          {
+            "apimSubscriptionKey": []
+          }
+        ],
         "parameters": [
           {
             "$ref": "#/components/parameters/CorrelationId"
@@ -738,70 +564,10 @@
             "$ref": "#/components/responses/Auth400"
           },
           "403": {
-            "description": "Draft HTTP 403: rechazo sin datos de cuenta ni sesión; códigos de esta operación.",
-            "headers": {
-              "X-Correlation-ID": {
-                "$ref": "#/components/headers/CorrelationId"
-              },
-              "Cache-Control": {
-                "$ref": "#/components/headers/NoStore"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/AuthErrorEnvelope"
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "error": {
-                          "type": "object",
-                          "properties": {
-                            "code": {
-                              "type": "string",
-                              "enum": [
-                                "ORIGIN_DENIED"
-                              ]
-                            },
-                            "message": {
-                              "type": "string",
-                              "minLength": 1
-                            },
-                            "details": {
-                              "type": "array",
-                              "maxItems": 0
-                            },
-                            "correlationId": {
-                              "type": "string",
-                              "maxLength": 128
-                            },
-                            "timestamp": {
-                              "$ref": "#/components/schemas/EpochSeconds"
-                            }
-                          }
-                        }
-                      }
-                    }
-                  ]
-                },
-                "examples": {
-                  "synthetic": {
-                    "value": {
-                      "error": {
-                        "code": "ORIGIN_DENIED",
-                        "message": "No se pudo completar la operación.",
-                        "details": [],
-                        "correlationId": "mtec15-synthetic",
-                        "timestamp": 1790000000
-                      }
-                    }
-                  }
-                }
-              }
-            }
+            "$ref": "#/components/responses/Auth403"
+          },
+          "409": {
+            "$ref": "#/components/responses/Auth409"
           },
           "429": {
             "$ref": "#/components/responses/Auth429"
@@ -815,7 +581,18 @@
             "INVALID_REQUEST"
           ],
           "403": [
-            "ORIGIN_DENIED"
+            "FORBIDDEN",
+            "CSRF_INVALID",
+            "ORIGIN_DENIED",
+            "ELIGIBILITY_DENIED",
+            "REAUTHENTICATION_REQUIRED"
+          ],
+          "409": [
+            "ATTEMPT_CONSUMED",
+            "IDENTITY_CONFLICT",
+            "CONTINUITY_REQUIRED",
+            "REGISTRATION_REQUIRED",
+            "ACTIVITY_NOT_ACCEPTED"
           ],
           "429": [
             "RATE_LIMITED"
@@ -838,14 +615,16 @@
               "examples": {
                 "synthetic": {
                   "value": {
-                    "method": "google"
+                    "method": "google",
+                    "purpose": "login"
                   }
                 }
               }
             }
           }
         },
-        "x-integration-readiness": "blocked-browser-http-topology-and-CSRF-adapter-pending",
+        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending",
+        "x-registration-flow": "register-purpose-persisted-by-server-google-only",
         "x-browser-protocol": {
           "googleMaximumLifetimeSeconds": 300,
           "serverCreates": [
@@ -865,10 +644,10 @@
     },
     "/v1/auth/email/requests": {
       "post": {
-        "operationId": "requestInstitutionalLogin",
+        "operationId": "requestInstitutionalEmailLink",
         "summary": "Solicitar enlace institucional",
-        "description": "Proposed — Acuse uniforme para todo correo sintácticamente válido, existente/nuevo/no elegible; dominio exacto solo en servidor, no envío si no elegible. Misma forma y tiempos comparables. Tasa por destinatario se oculta en 202; 429 solo por origen/global independiente de cuenta. Envío asíncrono no garantiza entrega. Mismo intento en cooldown no reenvía; reenvío permitido invalida enlace anterior sin extender expiresAt del intento. Secreto CSPRNG y verificador hash; 256 bits/600s candidatos, TTL=min(plazo enlace,expiresAt intento). Si el intento complementa Google, destinatario y propósito quedan fijados al email del token Google ya validado y a su issuer/sub retenidos. No aceptar otro buzón para acreditar esa identidad. Email distinto mantiene el mismo 202 sin enviar ni cambiar destinatario; confirmar exige esa misma evidencia y no crea EmailIdentity.",
-        "x-implementation-status": "proposed",
+        "description": "Autenticación independiente por Magic Link institucional, todavía no implementada. Temporalmente responde 503 AUTH_TEMPORARILY_UNAVAILABLE; no forma parte del registro Google.",
+        "x-implementation-status": "temporarily-unavailable",
         "x-approval-status": "proposed",
         "x-route-class": "attempt-proof",
         "x-public-apim-path": "/auth/email/requests",
@@ -893,74 +672,11 @@
           }
         ],
         "responses": {
-          "202": {
-            "description": "Acuse genérico, sin revelar cuenta/método.",
-            "headers": {
-              "X-Correlation-ID": {
-                "$ref": "#/components/headers/CorrelationId"
-              },
-              "Cache-Control": {
-                "$ref": "#/components/headers/NoStore"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EmailAccepted"
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/Auth400"
-          },
-          "401": {
-            "$ref": "#/components/responses/Auth401"
-          },
-          "403": {
-            "$ref": "#/components/responses/EmailRequest403"
-          },
-          "409": {
-            "$ref": "#/components/responses/EmailRequest409"
-          },
-          "410": {
-            "$ref": "#/components/responses/Auth410"
-          },
-          "429": {
-            "$ref": "#/components/responses/Auth429"
-          },
           "503": {
             "$ref": "#/components/responses/Auth503"
           }
         },
         "x-error-codes": {
-          "400": [
-            "INVALID_REQUEST"
-          ],
-          "401": [
-            "AUTH_PROOF_INVALID",
-            "UNAUTHORIZED",
-            "ACCESS_TOKEN_EXPIRED",
-            "SESSION_EXPIRED",
-            "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
-          ],
-          "403": [
-            "FORBIDDEN",
-            "CSRF_INVALID",
-            "ORIGIN_DENIED",
-            "REAUTHENTICATION_REQUIRED"
-          ],
-          "409": [
-            "ATTEMPT_CONSUMED"
-          ],
-          "410": [
-            "ATTEMPT_EXPIRED"
-          ],
-          "429": [
-            "RATE_LIMITED"
-          ],
           "503": [
             "AUTH_TEMPORARILY_UNAVAILABLE"
           ]
@@ -987,15 +703,16 @@
             }
           }
         },
-        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending"
+        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending",
+        "x-registration-flow": "independent-email-authentication-only; not-google-continuation"
       }
     },
     "/v1/auth/email/confirm": {
       "post": {
-        "operationId": "confirmInstitutionalLogin",
-        "summary": "Confirmar enlace y establecer sesión interna",
-        "description": "Proposed — Solo confirmación explícita POST desde navegador iniciador con cookie/CSRF del intento, no IP/user-agent como vínculo. Validar secreto, propósito, email fijado, intento y plazo con reloj servidor; consumo atómico y una sola sesión/prueba. GET/previsualización/HEAD nunca consumen ni autentican: el enlace abre página Angular, no GET de API. Otro dispositivo reinicia allí autenticación; no transfiere sesión con enlace. Repetición 409, expiración 410, prueba alterada/ajena 401 genérico. B02 aprueba passkeys/códigos de un uso por userId, opcionales para básico; protocolos aún bloqueados: 409 CONTINUITY_REQUIRED, no acceso automático. No crea ni vincula cuentas por correo coincidente. Respuesta perdida exige intento nuevo. Al complementar Google, solo consume el enlace emitido al email fijado por la evidencia Google verificada de ese intento; emite la sesión de ese mapping y no una identidad de correo adicional.",
-        "x-implementation-status": "proposed",
+        "operationId": "confirmInstitutionalEmailLink",
+        "summary": "Confirmar enlace y completar login o registro pendiente",
+        "description": "Autenticación independiente por Magic Link institucional, todavía no implementada. Temporalmente responde 503 AUTH_TEMPORARILY_UNAVAILABLE; no forma parte del registro Google.",
+        "x-implementation-status": "temporarily-unavailable",
         "x-approval-status": "proposed",
         "x-route-class": "attempt-proof",
         "x-public-apim-path": "/auth/email/confirm",
@@ -1020,111 +737,11 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Sesión establecida; credenciales en cuerpo/cookie.",
-            "headers": {
-              "X-Correlation-ID": {
-                "$ref": "#/components/headers/CorrelationId"
-              },
-              "Cache-Control": {
-                "$ref": "#/components/headers/NoStore"
-              },
-              "Set-Cookie": {
-                "$ref": "#/components/headers/SetCookie"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthResponse"
-                },
-                "examples": {
-                  "synthetic": {
-                    "value": {
-                      "token": "internal-jwt-placeholder",
-                      "tokenType": "Bearer",
-                      "expiresAt": 1790000240,
-                      "user": {
-                        "userId": "usr_abc123",
-                        "email": "usuario@estudiantec.cr",
-                        "nombre": "Ana López",
-                        "fotoPerfil": "https://example.invalid/avatar.png"
-                      },
-                      "session": {
-                        "sessionId": "session-placeholder",
-                        "status": "active",
-                        "serverTime": 1790000000,
-                        "authenticatedAt": 1790000000,
-                        "renewedAt": 1790000000,
-                        "lastActivityAt": 1790000000,
-                        "windowExpiresAt": 1790003600,
-                        "inactivityExpiresAt": 1790001800,
-                        "absoluteExpiresAt": 1790028800,
-                        "expiresAt": 1790001800,
-                        "warningAt": 1790001500
-                      },
-                      "csrfToken": "csrf-placeholder"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/Auth400"
-          },
-          "401": {
-            "$ref": "#/components/responses/Auth401"
-          },
-          "403": {
-            "$ref": "#/components/responses/Auth403"
-          },
-          "409": {
-            "$ref": "#/components/responses/Auth409"
-          },
-          "410": {
-            "$ref": "#/components/responses/Auth410"
-          },
-          "429": {
-            "$ref": "#/components/responses/Auth429"
-          },
           "503": {
             "$ref": "#/components/responses/Auth503"
           }
         },
         "x-error-codes": {
-          "400": [
-            "INVALID_REQUEST"
-          ],
-          "401": [
-            "AUTH_PROOF_INVALID",
-            "UNAUTHORIZED",
-            "ACCESS_TOKEN_EXPIRED",
-            "SESSION_EXPIRED",
-            "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
-          ],
-          "403": [
-            "FORBIDDEN",
-            "CSRF_INVALID",
-            "ORIGIN_DENIED",
-            "ELIGIBILITY_DENIED",
-            "REAUTHENTICATION_REQUIRED"
-          ],
-          "409": [
-            "ATTEMPT_CONSUMED",
-            "IDENTITY_CONFLICT",
-            "CONTINUITY_REQUIRED",
-            "REGISTRATION_REQUIRED",
-            "ACTIVITY_NOT_ACCEPTED"
-          ],
-          "410": [
-            "ATTEMPT_EXPIRED"
-          ],
-          "429": [
-            "RATE_LIMITED"
-          ],
           "503": [
             "AUTH_TEMPORARILY_UNAVAILABLE"
           ]
@@ -1151,7 +768,8 @@
             }
           }
         },
-        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending"
+        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending",
+        "x-registration-flow": "independent-email-authentication-only; not-google-continuation"
       }
     },
     "/v1/auth/session": {
@@ -1242,8 +860,7 @@
             "ACCESS_TOKEN_EXPIRED",
             "SESSION_EXPIRED",
             "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
+            "REFRESH_INVALID"
           ],
           "403": [
             "FORBIDDEN",
@@ -1270,7 +887,7 @@
       "post": {
         "operationId": "refreshSession",
         "summary": "Rotar acceso o solicitar continuación voluntaria",
-        "description": "Proposed — No exige access JWT vigente. Valida cookie/familia, CSRF y sesión antes de consumir; a serverTime>=expiresAt rechaza sin renovar. mode=rotate no modifica renewedAt/window ni lastActivityAt; mode=continue solicita ventana min(now+3600,absoluteExpiresAt) solo vigente y con controles de actividad pendientes B03. Ningún modo cuenta por sí solo como actividad. B06 aprueba serialización entre pestañas sin gracia general. Detalle Draft pendiente de protocolo/pruebas: compare-and-swap atómico, reuso de cookie consumida revoca familia y responde 401 REFRESH_REUSED; una carrera puede invalidar también credenciales del ganador. Frontend serializa pestañas. No reintentar automáticamente tras respuesta perdida; reautenticar. No altera authenticatedAt/absoluteExpiresAt.",
+        "description": "Proposed — No exige access JWT vigente. Valida cookie, CSRF y sesión antes de consumir; a serverTime>=expiresAt rechaza sin renovar. mode=rotate está implementado en ms-users; mode=continue permanece pendiente y solo podría solicitar ventana min(now+3600,absoluteExpiresAt) con controles B03. Ningún modo cuenta por sí solo como actividad ni modifica authenticatedAt/absoluteExpiresAt; rotate tampoco cambia renewedAt/window ni lastActivityAt. Política C aprobada: cada generación se consume una vez, sin gracia ni reemisión; la pareja histórica refresh + CSRF coincidente se clasifica internamente como replay y requiere auditoría sin secretos. Una generación desconocida o CSRF distinto no es replay confirmado. La respuesta pública para refresh inválido, consumido o sesión cerrada es 401 REFRESH_INVALID, sin credenciales nuevas; un replay aislado no revoca automáticamente la generación ganadora. Revocación por compromiso exige evidencia independiente y autorización registrada. Angular debe serializar entre pestañas y evitar retries automáticos. Si se pierde la respuesta tras commit, recuperar CSRF mediante /v1/auth/session solo si llegó la cookie nueva; en otro caso reautenticar. Protocolo y pruebas distribuidas pendientes de B07.",
         "x-implementation-status": "proposed",
         "x-approval-status": "proposed",
         "x-route-class": "session-cookie",
@@ -1350,7 +967,70 @@
             "$ref": "#/components/responses/Auth400"
           },
           "401": {
-            "$ref": "#/components/responses/Auth401"
+            "description": "HTTP 401 de refresh: REFRESH_INVALID para prueba inválida, generación consumida o sesión cerrada; no revela replay ni emite credenciales.",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              },
+              "WWW-Authenticate": {
+                "$ref": "#/components/headers/Authenticate"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/AuthErrorEnvelope"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "const": "REFRESH_INVALID"
+                            },
+                            "message": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "details": {
+                              "type": "array",
+                              "maxItems": 0
+                            },
+                            "correlationId": {
+                              "type": "string",
+                              "maxLength": 128
+                            },
+                            "timestamp": {
+                              "$ref": "#/components/schemas/EpochSeconds"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                "examples": {
+                  "consumedGeneration": {
+                    "value": {
+                      "error": {
+                        "code": "REFRESH_INVALID",
+                        "message": "No se pudo completar la operación.",
+                        "details": [],
+                        "correlationId": "mtec15-synthetic",
+                        "timestamp": 1790000000
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "403": {
             "$ref": "#/components/responses/Auth403"
@@ -1367,13 +1047,7 @@
             "INVALID_REQUEST"
           ],
           "401": [
-            "AUTH_PROOF_INVALID",
-            "UNAUTHORIZED",
-            "ACCESS_TOKEN_EXPIRED",
-            "SESSION_EXPIRED",
-            "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
+            "REFRESH_INVALID"
           ],
           "403": [
             "FORBIDDEN",
@@ -1411,14 +1085,33 @@
           }
         },
         "x-refresh-rotation": {
-          "status": "draft-detail-under-approved-policy",
+          "status": "approved-policy-draft-protocol-and-tests-pending",
           "atomicConsumeAndReplace": true,
           "graceWindow": false,
           "reissueOnRetry": false,
-          "consumedGenerationReuse": "revoke-family-including-winner",
-          "lostResponse": "reauthenticate",
+          "consumedGenerationReuse": "reject-and-audit-without-automatic-winner-revocation",
+          "lostResponse": "recover-session-if-new-cookie-arrived-otherwise-reauthenticate",
           "serializedAcrossTabs": true,
-          "protocolAndConcurrencyTests": "pending"
+          "protocolAndConcurrencyTests": "pending",
+          "historicalPairClassification": "confirmed-only-when-refresh-and-csrf-match",
+          "unknownGenerationOrWrongCsrf": "invalid-proof-not-confirmed-replay",
+          "publicError": "401 REFRESH_INVALID",
+          "winnerRevokedOnIsolatedReplay": false,
+          "compromiseRevocation": "independent-evidence-and-recorded-authorization",
+          "audit": "structured-without-secrets-required-not-yet-implemented",
+          "modeImplementation": {
+            "rotate": "implemented-in-ms-users",
+            "continue": "pending"
+          },
+          "publicErrorExample": {
+            "error": {
+              "code": "REFRESH_INVALID",
+              "message": "No se pudo completar la operación.",
+              "details": [],
+              "correlationId": "mtec15-synthetic",
+              "timestamp": 1790000000
+            }
+          }
         },
         "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending"
       }
@@ -1496,8 +1189,7 @@
             "ACCESS_TOKEN_EXPIRED",
             "SESSION_EXPIRED",
             "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
+            "REFRESH_INVALID"
           ],
           "403": [
             "FORBIDDEN",
@@ -1534,7 +1226,11 @@
             }
           }
         },
-        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending"
+        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending",
+        "x-scope-implementation": {
+          "current": "implemented-in-ms-users",
+          "all": "pending"
+        }
       }
     },
     "/v1/auth/session/activity": {
@@ -1632,8 +1328,7 @@
             "ACCESS_TOKEN_EXPIRED",
             "SESSION_EXPIRED",
             "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
+            "REFRESH_INVALID"
           ],
           "403": [
             "FORBIDDEN",
@@ -1774,8 +1469,7 @@
             "ACCESS_TOKEN_EXPIRED",
             "SESSION_EXPIRED",
             "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
+            "REFRESH_INVALID"
           ],
           "403": [
             "FORBIDDEN",
@@ -1926,8 +1620,7 @@
             "ACCESS_TOKEN_EXPIRED",
             "SESSION_EXPIRED",
             "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
+            "REFRESH_INVALID"
           ],
           "403": [
             "FORBIDDEN",
@@ -2059,8 +1752,7 @@
             "ACCESS_TOKEN_EXPIRED",
             "SESSION_EXPIRED",
             "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
+            "REFRESH_INVALID"
           ],
           "403": [
             "FORBIDDEN",
@@ -2187,8 +1879,7 @@
             "ACCESS_TOKEN_EXPIRED",
             "SESSION_EXPIRED",
             "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
+            "REFRESH_INVALID"
           ],
           "403": [
             "FORBIDDEN",
@@ -2425,8 +2116,7 @@
             "ACCESS_TOKEN_EXPIRED",
             "SESSION_EXPIRED",
             "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
+            "REFRESH_INVALID"
           ],
           "403": [
             "FORBIDDEN",
@@ -2534,8 +2224,7 @@
             "ACCESS_TOKEN_EXPIRED",
             "SESSION_EXPIRED",
             "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
+            "REFRESH_INVALID"
           ],
           "403": [
             "FORBIDDEN",
@@ -2649,8 +2338,7 @@
             "ACCESS_TOKEN_EXPIRED",
             "SESSION_EXPIRED",
             "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
+            "REFRESH_INVALID"
           ],
           "403": [
             "FORBIDDEN",
@@ -2752,8 +2440,7 @@
             "ACCESS_TOKEN_EXPIRED",
             "SESSION_EXPIRED",
             "SESSION_REVOKED",
-            "REFRESH_INVALID",
-            "REFRESH_REUSED"
+            "REFRESH_INVALID"
           ],
           "403": [
             "FORBIDDEN",
@@ -2806,15 +2493,16 @@
     },
     "/v1/auth/google/registrations": {
       "post": {
-        "operationId": "registerWithGoogle",
-        "summary": "Registrar explícitamente una cuenta nueva con Google",
-        "description": "Proposed — Alta explícita solo con intento Google purpose=register, nonce generado y comprobado por servidor, cookie de navegador original, CSRF y Origin exacto. ms-users verifica criptográficamente firma, issuer, audience, expiración y subject del ID Token; busca la identidad exacta (issuer canónico validado, subject). Solo si no existe vínculo previo de ningún estado, consume intento de un uso y crea atómicamente un userId opaco nuevo, cuenta básica activa y vínculo Google ACTIVE. Nunca fusiona por correo, recupera historial, concede privilegios o afiliación TEC ni modifica vínculos PENDING. Identidad ya vinculada, incluso PENDING, recibe rechazo genérico sin sesión y sin revelar cuenta/estado. Colisión concurrente no crea segunda cuenta; respuesta perdida requiere intento nuevo. AuthResponse y cookie refresh siguen siendo Draft HTTP B06/B07; el backend interno G2B-D no constituye endpoint público.",
+        "operationId": "legacyGoogleRegistrationCompatibility",
+        "summary": "Compatibilidad de ruta Google de registro existente",
+        "description": "Alias de compatibilidad implementado por ms-users para registro Google; misma respuesta 200 AuthResponse sin Magic Link. Conservar ruta y semántica durante la migración de clientes. La ruta /v1/auth/google conserva el contrato propuesto y su estado de implementación debe verificarse por separado.",
         "x-implementation-status": "proposed",
         "x-approval-status": "proposed",
         "x-route-class": "attempt-proof",
         "x-public-apim-path": "/auth/google/registrations",
         "security": [
           {
+            "apimSubscriptionKey": [],
             "attemptCookie": []
           }
         ],
@@ -2833,8 +2521,29 @@
           }
         ],
         "responses": {
+          "400": {
+            "$ref": "#/components/responses/Auth400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Auth401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Auth403"
+          },
+          "409": {
+            "$ref": "#/components/responses/Auth409"
+          },
+          "410": {
+            "$ref": "#/components/responses/Auth410"
+          },
+          "429": {
+            "$ref": "#/components/responses/Auth429"
+          },
+          "503": {
+            "$ref": "#/components/responses/Auth503"
+          },
           "200": {
-            "description": "Draft: alta explícita de cuenta básica nueva; emisión HTTP y transporte sujetos a B06/B07.",
+            "description": "Google ID Token validado: login por vínculo (issuer, sub) existente o registro institucional nuevo; AuthResponse con sesión inmediata.",
             "headers": {
               "X-Correlation-ID": {
                 "$ref": "#/components/headers/CorrelationId"
@@ -2882,221 +2591,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "$ref": "#/components/responses/Auth400"
-          },
-          "401": {
-            "description": "Rechazo uniforme de prueba inválida o identidad ya vinculada, sin datos de cuenta, vínculo o historial.",
-            "headers": {
-              "X-Correlation-ID": {
-                "$ref": "#/components/headers/CorrelationId"
-              },
-              "Cache-Control": {
-                "$ref": "#/components/headers/NoStore"
-              },
-              "WWW-Authenticate": {
-                "$ref": "#/components/headers/Authenticate"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/AuthErrorEnvelope"
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "error": {
-                          "type": "object",
-                          "properties": {
-                            "code": {
-                              "type": "string",
-                              "enum": [
-                                "AUTH_PROOF_INVALID"
-                              ]
-                            },
-                            "message": {
-                              "type": "string",
-                              "minLength": 1
-                            },
-                            "details": {
-                              "type": "array",
-                              "maxItems": 0
-                            },
-                            "correlationId": {
-                              "type": "string",
-                              "maxLength": 128
-                            },
-                            "timestamp": {
-                              "$ref": "#/components/schemas/EpochSeconds"
-                            }
-                          }
-                        }
-                      }
-                    }
-                  ]
-                },
-                "examples": {
-                  "synthetic": {
-                    "value": {
-                      "error": {
-                        "code": "AUTH_PROOF_INVALID",
-                        "message": "No se pudo completar la operación.",
-                        "details": [],
-                        "correlationId": "mtec15-synthetic",
-                        "timestamp": 1790000000
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Draft HTTP 403: rechazo sin datos de cuenta ni sesión; códigos de esta operación.",
-            "headers": {
-              "X-Correlation-ID": {
-                "$ref": "#/components/headers/CorrelationId"
-              },
-              "Cache-Control": {
-                "$ref": "#/components/headers/NoStore"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/AuthErrorEnvelope"
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "error": {
-                          "type": "object",
-                          "properties": {
-                            "code": {
-                              "type": "string",
-                              "enum": [
-                                "CSRF_INVALID",
-                                "ORIGIN_DENIED"
-                              ]
-                            },
-                            "message": {
-                              "type": "string",
-                              "minLength": 1
-                            },
-                            "details": {
-                              "type": "array",
-                              "maxItems": 0
-                            },
-                            "correlationId": {
-                              "type": "string",
-                              "maxLength": 128
-                            },
-                            "timestamp": {
-                              "$ref": "#/components/schemas/EpochSeconds"
-                            }
-                          }
-                        }
-                      }
-                    }
-                  ]
-                },
-                "examples": {
-                  "synthetic": {
-                    "value": {
-                      "error": {
-                        "code": "CSRF_INVALID",
-                        "message": "No se pudo completar la operación.",
-                        "details": [],
-                        "correlationId": "mtec15-synthetic",
-                        "timestamp": 1790000000
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Intento consumido o conflicto de concurrencia; sin datos de cuenta o estado del vínculo.",
-            "headers": {
-              "X-Correlation-ID": {
-                "$ref": "#/components/headers/CorrelationId"
-              },
-              "Cache-Control": {
-                "$ref": "#/components/headers/NoStore"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/AuthErrorEnvelope"
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "error": {
-                          "type": "object",
-                          "properties": {
-                            "code": {
-                              "type": "string",
-                              "enum": [
-                                "ATTEMPT_CONSUMED",
-                                "IDENTITY_CONFLICT"
-                              ]
-                            },
-                            "message": {
-                              "type": "string",
-                              "minLength": 1
-                            },
-                            "details": {
-                              "type": "array",
-                              "maxItems": 0
-                            },
-                            "correlationId": {
-                              "type": "string",
-                              "maxLength": 128
-                            },
-                            "timestamp": {
-                              "$ref": "#/components/schemas/EpochSeconds"
-                            }
-                          }
-                        }
-                      }
-                    }
-                  ]
-                },
-                "examples": {
-                  "synthetic": {
-                    "value": {
-                      "error": {
-                        "code": "ATTEMPT_CONSUMED",
-                        "message": "No se pudo completar la operación.",
-                        "details": [],
-                        "correlationId": "mtec15-synthetic",
-                        "timestamp": 1790000000
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "410": {
-            "$ref": "#/components/responses/Auth410"
-          },
-          "429": {
-            "$ref": "#/components/responses/Auth429"
-          },
-          "503": {
-            "$ref": "#/components/responses/Auth503"
           }
         },
         "x-error-codes": {
@@ -3104,15 +2598,26 @@
             "INVALID_REQUEST"
           ],
           "401": [
-            "AUTH_PROOF_INVALID"
+            "AUTH_PROOF_INVALID",
+            "UNAUTHORIZED",
+            "ACCESS_TOKEN_EXPIRED",
+            "SESSION_EXPIRED",
+            "SESSION_REVOKED",
+            "REFRESH_INVALID"
           ],
           "403": [
+            "FORBIDDEN",
             "CSRF_INVALID",
-            "ORIGIN_DENIED"
+            "ORIGIN_DENIED",
+            "ELIGIBILITY_DENIED",
+            "REAUTHENTICATION_REQUIRED"
           ],
           "409": [
             "ATTEMPT_CONSUMED",
-            "IDENTITY_CONFLICT"
+            "IDENTITY_CONFLICT",
+            "CONTINUITY_REQUIRED",
+            "REGISTRATION_REQUIRED",
+            "ACTIVITY_NOT_ACCEPTED"
           ],
           "410": [
             "ATTEMPT_EXPIRED"
@@ -3124,7 +2629,7 @@
             "AUTH_TEMPORARILY_UNAVAILABLE"
           ]
         },
-        "x-idempotency": "Registro consume intento de un uso y crea usuario/vínculo de forma atómica; no reproduce credenciales ni cuenta en reintentos.",
+        "x-idempotency": "GET sin efectos; POST de prueba/refresh consume atómicamente y no reproduce credenciales. Reintentos específicos en IDENTITY_CONTRACT §3/4.",
         "x-confidentiality": "TLS; redactar body, Authorization, cookies, CSRF, enlaces y pruebas; no-store salvo metadata pública.",
         "x-angular-integration": "MTEC-10: fetch HttpClient JSON, withCredentials en contexto cookie, leer X-Correlation-ID; no Google bearer como sesión.",
         "x-apim-responsibility": "Admisión por método/ruta exactos, origen y tamaño/tasa, correlación, CORS, saneamiento de identidad; preservar cookies/CSRF. No sustituye validación y autorización ms-users.",
@@ -3146,7 +2651,21 @@
             }
           }
         },
-        "x-integration-readiness": "blocked-registration-http-refresh-CSRF-response-adapter-and-B07-pending",
+        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending",
+        "x-registration-flow": {
+          "purpose": "register",
+          "googleAssertion": "single-use",
+          "mailboxProof": "not-required-for-google",
+          "eligibleDomains": [
+            "estudiantec.cr",
+            "itcr.ac.cr",
+            "tec.ac.cr"
+          ],
+          "result": "200-AuthResponse-immediate",
+          "canonicalRoute": "/v1/auth/google"
+        },
+        "deprecated": false,
+        "x-legacy-backend-status": "implemented-200-immediate-registration",
         "x-browser-protocol": {
           "cookieAndCsrfRequired": true,
           "exactOriginRequired": true,
@@ -3430,7 +2949,7 @@
         }
       },
       "Auth401": {
-        "description": "Proposed HTTP 401: AUTH_PROOF_INVALID, UNAUTHORIZED, ACCESS_TOKEN_EXPIRED, SESSION_EXPIRED, SESSION_REVOKED, REFRESH_INVALID, REFRESH_REUSED. Sin detalles de cuenta.",
+        "description": "Proposed HTTP 401: AUTH_PROOF_INVALID, UNAUTHORIZED, ACCESS_TOKEN_EXPIRED, SESSION_EXPIRED, SESSION_REVOKED, REFRESH_INVALID. Sin detalles de cuenta.",
         "headers": {
           "X-Correlation-ID": {
             "$ref": "#/components/headers/CorrelationId"
@@ -3463,8 +2982,7 @@
                             "ACCESS_TOKEN_EXPIRED",
                             "SESSION_EXPIRED",
                             "SESSION_REVOKED",
-                            "REFRESH_INVALID",
-                            "REFRESH_REUSED"
+                            "REFRESH_INVALID"
                           ]
                         },
                         "message": {
@@ -4363,7 +3881,8 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "method"
+          "method",
+          "purpose"
         ],
         "properties": {
           "method": {
@@ -4375,8 +3894,7 @@
               "login",
               "register"
             ],
-            "default": "login",
-            "description": "register exige method=google; omisión conserva login."
+            "description": "Propósito del nuevo intento; register solo con method=google. El valor persistido por el servidor controla las continuaciones."
           }
         },
         "allOf": [
@@ -4425,9 +3943,9 @@
             "type": "string",
             "enum": [
               "login",
+              "register",
               "reauthenticate",
-              "link",
-              "register"
+              "link"
             ]
           },
           "expiresAt": {
@@ -4476,9 +3994,9 @@
                   "type": "string",
                   "enum": [
                     "login",
+                    "register",
                     "reauthenticate",
-                    "link",
-                    "register"
+                    "link"
                   ]
                 },
                 "expiresAt": {
@@ -4513,6 +4031,7 @@
                   "type": "string",
                   "enum": [
                     "login",
+                    "register",
                     "reauthenticate",
                     "link"
                   ]
@@ -4527,6 +4046,25 @@
                   "maxLength": 256
                 },
                 "nonce": false
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "purpose": {
+                  "const": "register"
+                }
+              },
+              "required": [
+                "purpose"
+              ]
+            },
+            "then": {
+              "properties": {
+                "method": {
+                  "const": "google"
+                }
               }
             }
           }
@@ -4549,7 +4087,7 @@
           "email": {
             "type": "string",
             "minLength": 1,
-            "description": "Normalizar solo dominio; no deducir alias, puntos ni case de parte local.",
+            "description": "Para login por correo, dirección solicitada. Para register Google, debe coincidir con la dirección Google verificada; el servidor utiliza solo el destinatario persistido y responde de forma uniforme si difiere.",
             "format": "email",
             "maxLength": 254
           }
@@ -5194,7 +4732,6 @@
                       "SESSION_EXPIRED",
                       "SESSION_REVOKED",
                       "REFRESH_INVALID",
-                      "REFRESH_REUSED",
                       "FORBIDDEN",
                       "CSRF_INVALID",
                       "ORIGIN_DENIED",
@@ -5290,7 +4827,9 @@
     "breakingChanges": [
       "JWT nominal máximo 240 s sustituye candidato 900 s; cero leeway positivo de exp y RSA-2048 requieren adaptación de emisor/validadores.",
       "IdentityMetadata.contract_version cambia const de 0.2.0-draft a 0.3.0-draft.",
-      "Persisten incompatibilidades heredadas 0.1→0.2: intento/cookie/CSRF Google, campos session/csrfToken y perfil solo propietario."
+      "Persisten incompatibilidades heredadas 0.1→0.2: intento/cookie/CSRF Google, campos session/csrfToken y perfil solo propietario.",
+      "Registro Google nuevo exige intento register y prueba institucional por enlace antes de alta/sesión; /v1/auth/google/registrations actual requiere migración o deshabilitación explícita.",
+      "operationIds de attempts y email/requests/confirm se generalizan para login y registro; regenerar clientes Angular tras revisión B07."
     ],
     "metadataMode": "custom-not-oidc-discovery",
     "blockers": [
@@ -5301,7 +4840,8 @@
       "B04-fresh-authentication-evidence",
       "B05-exact-environment-profile-cache-rotation-and-propagation",
       "B06-browser-topology-csrf-refresh-protocols",
-      "B07-consumer-signoffs"
+      "B07-consumer-signoffs",
+      "B07-google-registration-route-migration-and-existing-account-continuity"
     ]
   },
   "x-session-policy": {
@@ -5416,5 +4956,20 @@
     "historicalAccess": "requires-pre-established-verified-independent-continuity",
     "exceptionalRecovery": "pending-no-automatic-restitution",
     "webauthnEndpoints": "not-specified"
+  },
+  "x-registration-policy": {
+    "status": "approved-google-immediate-registration; email-magic-link-not-implemented",
+    "newGoogleRegistrationRequiresInstitutionalLink": false,
+    "googleEmailVerifiedAloneSufficient": true,
+    "eligibleDomainsExact": [
+      "estudiantec.cr",
+      "itcr.ac.cr",
+      "tec.ac.cr"
+    ],
+    "canonicalGoogleRoute": "/v1/auth/google",
+    "legacyRoute": "/v1/auth/google/registrations",
+    "legacyDisposition": "retain-implemented-200-compatible-alias",
+    "existingAccountContinuity": "preserve-compatible-google-login",
+    "refreshReplayPolicy": "C-no-grace-no-reissue-no-automatic-winner-revocation"
   }
 }
