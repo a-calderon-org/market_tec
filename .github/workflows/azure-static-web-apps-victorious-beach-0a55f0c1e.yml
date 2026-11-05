@@ -81,6 +81,7 @@ jobs:
 
   deploy_job:
     if: >-
+      false &&
       github.event_name == 'workflow_dispatch' &&
       github.ref == 'refs/heads/main' &&
       inputs.apim_compatible == true &&
