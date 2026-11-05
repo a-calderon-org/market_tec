@@ -20,9 +20,11 @@
 
 No hay scripts `lint`, cobertura ni E2E configurados. `npm ci` está documentado, pero no se ejecutó porque las dependencias ya estaban presentes y la tarea prohíbe instalaciones. Los Node instalados detectados fueron 22.22.0, 24.14.0 y 24.21.0; este último se invocó por ruta absoluta sin alterar configuración persistente.
 
+**Verificación MTEC-41 (2026-11-04):** `npm ci` y 205 pruebas Angular completaron con Node 24.21.0 en un worktree aislado. `npm run build` terminó con éxito fuera del sandbox local; dentro de él abortó con código 134. El artefacto de producción pasó la comprobación de ausencia de referencias a la subscription key. El CI remoto del PR debe confirmar el mismo resultado antes del merge.
+
 ## Configuración local
 
-Crear el entorno a partir del esquema documentado en [dependencias frontend](frontend/DEPENDENCIES.md), sin versionar valores. El job de despliegue genera las tres propiedades desde secrets; la validación de PR usa valores ficticios. Nunca copiar valores a documentación o commits.
+Crear el entorno a partir del esquema documentado en [dependencias frontend](frontend/DEPENDENCIES.md), sin versionar valores. La validación de PR, push y despacho manual usa valores ficticios; solo el job protegido de despliegue genera `apiBaseUrl` y `googleClientId` desde secrets. El workflow no lee la subscription key de APIM y verifica que ambos artefactos no contengan sus identificadores. Nunca copiar valores a documentación o commits.
 
 ## Convenciones observadas
 
@@ -30,6 +32,6 @@ Angular standalone, servicios `providedIn: 'root'`, signals para estado y formul
 
 ## Despliegue
 
-**Verificado en configuración:** el [workflow Azure](../.github/workflows/azure-static-web-apps-victorious-beach-0a55f0c1e.yml) valida el build Angular en PRs hacia `main` (`opened`, `synchronize`, `reopened`), incluidos Draft, con valores ficticios y sin referencias a secrets en el job de validación. Solo `push` a `refs/heads/main` habilita el job que genera `environment.ts` desde secrets, construye `app/frontend` y publica `dist/market-tec-frontend/browser` en Azure Static Web Apps. No despliega `app/backend`.
+**Verificado en configuración:** el [workflow Azure](../.github/workflows/azure-static-web-apps-victorious-beach-0a55f0c1e.yml) instala dependencias, ejecuta pruebas y build Angular, y comprueba el artefacto en PRs hacia `main`, pushes a `main` y despachos manuales. PR y push no ejecutan la acción de Azure ni crean previews; cerrar un PR tampoco activa el workflow. El job de validación solo tiene permiso `contents: read` y no referencia secrets.
 
-Se conserva la acción `close` al cerrar PRs del mismo repositorio cuyo actor no sea Dependabot para retirar previews anteriores; no publica artefactos ni se ejecuta al abrir o actualizar PRs. Deshabilitar nuevos previews no elimina los ya publicados. La [CLI oficial de Azure](https://learn.microsoft.com/en-us/cli/azure/staticwebapp/environment#az-staticwebapp-environment-delete) permite retirar un entorno concreto sin cerrar su PR, previa autorización y verificación de su nombre y recurso; no debe seleccionarse el entorno de producción `default`.
+El despliegue manual está **bloqueado incondicionalmente** por `false` en la condición del job. Para habilitarlo mediante un cambio revisado, primero debe comprobarse que el entorno `swa-production` tiene revisores obligatorios, restricción a `main`, revisión propia impedida y los tres secrets de compilación/publicación configurados **solo en ese entorno**; además, debe verificarse la compatibilidad real con APIM. Tras retirar esa condición de bloqueo, el job exige `workflow_dispatch` desde `main`, el SHA completo del commit de `main` aprobado, confirmación de compatibilidad APIM y la variable de repositorio `MTEC41_SWA_DEPLOY_ENABLED=true`. El job protegido vuelve a construir el SHA aprobado y rechaza referencias a la subscription key antes de publicar. **No determinado:** las reglas efectivas del entorno y el estado de la variable en GitHub. El workflow no despliega `app/backend`.

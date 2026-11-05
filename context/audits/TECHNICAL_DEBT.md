@@ -12,7 +12,8 @@ No se confirmó un hallazgo que justifique P0 con evidencia local.
 |---|---|---|---|---|---|
 | FE-001 / INT-002 | Riesgo externo + defecto documental | El cliente confía en claims no verificados y la guía promete validación previa inexistente | obtener políticas APIM, decidir flujo de sesión, corregir guía y añadir pruebas negativas | Medio-Alto | APIM/origen/Google |
 | FE-002 / INT-003 | Defecto local + riesgo externo | `USR-001` desacoplado de la cuenta; el impacto de acceso depende del servidor | definir identidad contractual y demostrar autorización multiusuario | Medio | API/ownership |
-| Verificación de build | Entorno/release | 179 tests y typecheck pasan, pero `ng build` todavía aborta con exit 134 | reproducir en CI limpio, fijar toolchain y validar presupuestos | Medio | entorno CI |
+| Verificación de build | Entorno/release | 205 tests y build pasan fuera del sandbox; el build dentro del sandbox aborta con exit 134 y hay dos advertencias de estilo | verificar CI limpio y revisar presupuestos de estilo | Bajo-Medio | entorno CI |
+| FE-003 / MTEC-41 | Riesgo externo; cliente corregido localmente | la clave primaria de `Markettec-Subs` (scope API) sigue en el JS productivo; el emisor JWT interno falta y APIM Consumption perdería el `rate-limit` actual sin key | implementar emisor/backend y control de abuso compatible, adaptar APIM, probar flujos y planificar rotación según consumidores antes de desplegar cliente | Alto | identidad/APIM/backend |
 
 ## P2 — Correcciones funcionales y de contrato
 
@@ -22,7 +23,6 @@ No se confirmó un hallazgo que justifique P0 con evidencia local.
 | SPV-001 | Defecto local | paginación de publicaciones propias es inerte y chats descarta metadatos | implementar query/navegación o cambiar contrato a no paginado | Medio | API externa |
 | INT-005 | Decisión arquitectónica | sin contrato versionado ni validación runtime | OpenAPI/esquemas y contract tests | Medio | proveedor API |
 | FE-007 | Defecto local de accesibilidad | panel de perfil sin patrón modal/foco | semántica, focus trap, Escape y pruebas | Bajo-Medio | ninguna |
-| FE-003 | Riesgo externo | subscription key pública; impacto depende de políticas | revisar alcance/cuotas y no tratarla como secreto | Medio | APIM |
 | FE-008 / BE-003 | Mejora de calidad | faltan E2E/a11y y tests backend | cubrir flujos/contratos críticos, proporcional al rol Express | Medio | CI y contratos |
 
 ## P3 — Mantenimiento y endurecimiento
