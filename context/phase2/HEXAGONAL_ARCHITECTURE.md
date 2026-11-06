@@ -7,6 +7,13 @@
 
 ---
 
+> **Actualizacion MTEC-28 (2026-11-04), Verificado en codigo:** `ms-catalog`
+> incorpora dominio y casos de uso locales de publicaciones, puertos de repositorio
+> e imagenes y adaptador de repositorio en memoria. El alcance y las limitaciones
+> estan en [su README](../../app/ms-catalog/README.md#publicaciones--mtec-28).
+> Solo `/health` esta conectado a HTTP; las estructuras siguientes siguen siendo
+> propuestas salvo esta implementacion concreta.
+
 ## 1. Principios generales
 
 La arquitectura hexagonal (Ports & Adapters, Alistair Cockburn) establece que el nucleo de la aplicacion (dominio + casos de uso) es independiente de cualquier tecnologia de infraestructura. Las dependencias siempre apuntan hacia adentro.

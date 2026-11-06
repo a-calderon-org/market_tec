@@ -13,6 +13,21 @@ No se confirmó un hallazgo que justifique P0 con evidencia local.
 | FE-001 / INT-002 | Riesgo externo + defecto documental | El cliente confía en claims no verificados y la guía promete validación previa inexistente | obtener políticas APIM, decidir flujo de sesión, corregir guía y añadir pruebas negativas | Medio-Alto | APIM/origen/Google |
 | FE-002 / INT-003 | Defecto local + riesgo externo | `USR-001` desacoplado de la cuenta; el impacto de acceso depende del servidor | definir identidad contractual y demostrar autorización multiusuario | Medio | API/ownership |
 | Verificación de build | Entorno/release | 179 tests y typecheck pasan, pero `ng build` todavía aborta con exit 134 | reproducir en CI limpio, fijar toolchain y validar presupuestos | Medio | entorno CI |
+| CAT-001 | Dependencia vulnerable, Verificado 2026-11-04 | `ms-catalog` fija transitivamente `body-parser@2.3.0`; npm reporta severidad alta por DoS en cuerpos comprimidos | actualizar lock a version corregida y validar parser/HTTP antes de produccion | Bajo-Medio | Express / registro npm |
+
+### CAT-001 — evidencia y limites
+
+**Alcance:** dependencias de `app/ms-catalog`, sin prueba de explotacion ni
+inspeccion Azure. **Metodologia:** instalacion desde lock sin modificarlo,
+`npm audit --json` en linea e inspeccion de `src/app.ts`.
+**Verificado:** lock contiene `body-parser@2.3.0`, Express lo consume y la app
+activa `express.json`. Audit reporta una vulnerabilidad alta,
+[GHSA-27r3-jxmh-p828](https://github.com/advisories/GHSA-27r3-jxmh-p828), rango
+`>=2.0.0 <2.4.0`, con correccion disponible. **Riesgo:** denegacion de servicio
+por bytes posteriores a un cuerpo comprimido segun el aviso.
+**No determinado:** explotabilidad efectiva en el despliegue/APIM.
+**Accion pendiente:** actualizar la dependencia transitiva y probar procesamiento
+de cuerpos comprimidos y regresion HTTP. No se cambiaron dependencias en MTEC-28.
 
 ## P2 — Correcciones funcionales y de contrato
 

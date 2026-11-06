@@ -4,11 +4,13 @@ on:
   push:
     paths:
       - 'app/ms-catalog/**'
+      - 'contracts/openapi/catalog.json'
       - '.nvmrc'
       - '.github/workflows/ci-ms-catalog.yml'
   pull_request:
     paths:
       - 'app/ms-catalog/**'
+      - 'contracts/openapi/catalog.json'
       - '.nvmrc'
       - '.github/workflows/ci-ms-catalog.yml'
 

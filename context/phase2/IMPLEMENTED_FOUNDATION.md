@@ -20,7 +20,7 @@ Ademas de las suites, los tres procesos se arrancaron y consultaron por HTTP rea
 
 ## Hexagono minimo real
 
-El unico comportamiento implementado es consultar el estado tecnico. En los tres servicios sigue el mismo flujo:
+El unico comportamiento de la fundacion original es consultar el estado tecnico. En los tres servicios sigue el mismo flujo:
 
 ```text
 adaptador HTTP -> puerto GetHealthQuery -> caso de uso GetHealthService -> ServiceHealth
@@ -30,6 +30,14 @@ adaptador HTTP -> puerto GetHealthQuery -> caso de uso GetHealthService -> Servi
 - La composicion ocurre en `config/`.
 - No existen puertos de salida ni adaptadores Azure vacios. Se agregaran cuando haya un caso de uso que los consuma.
 - `ms-users` incluye ArchUnit para impedir dependencias salientes desde dominio y aplicacion, imports de Spring/Jakarta en esas capas y ciclos entre paquetes superiores.
+
+### Extension local de ms-catalog — 2026-11-04
+
+**Verificado en codigo:** MTEC-28 agrega nucleo de publicaciones, puertos de salida
+consumidos por casos de uso y repositorio en memoria. El detalle vigente esta en
+[README de ms-catalog](../../app/ms-catalog/README.md#publicaciones--mtec-28).
+Esta extension no agrega rutas HTTP, adaptadores Azure ni autenticacion; la tabla
+anterior conserva la evidencia historica de la fundacion, no el total actual de pruebas.
 
 ## Convenciones tecnicas implementadas
 
@@ -60,7 +68,7 @@ Los comandos detallados y pruebas estan en el README de cada servicio.
 Se agregaron workflows de CI con filtros por ruta:
 
 - `.github/workflows/ci-ms-users.yml`: JDK 21 y `./mvnw verify`.
-- `.github/workflows/ci-ms-catalog.yml`: Node desde `.nvmrc`, filtro que tambien observa ese archivo, `npm ci` y `npm run check`.
+- `.github/workflows/ci-ms-catalog.yml`: Node desde `.nvmrc`, filtro que tambien observa ese archivo y `contracts/openapi/catalog.json`, `npm ci` y `npm run check`. La prueba local de superficie DTO/paginacion de MTEC-28 consume ese borrador; no certifica endpoints HTTP de negocio.
 - `.github/workflows/ci-ms-notifications.yml`: Python 3.12, dependencias transitivas fijadas en `requirements-dev.lock`, instalacion editable sin resolver nuevamente, importacion y pytest.
 
 No contienen pasos de despliegue ni alteran el workflow existente de Angular.
