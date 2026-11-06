@@ -11,21 +11,9 @@ export const apiKeyInterceptor: HttpInterceptorFn = (req, next) => {
 
   const authToken = inject(AuthTokenService);
   const token = authToken.getToken();
-  const headers: Record<string, string> = {};
-
-  if (environment.subscriptionKey) {
-    headers['Ocp-Apim-Subscription-Key'] = environment.subscriptionKey;
-  }
-
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  const authenticatedRequest = req.clone({
-    setHeaders: {
-      ...headers
-    }
-  });
+  const authenticatedRequest = token
+    ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } })
+    : req;
 
   return next(authenticatedRequest).pipe(
     catchError((error: unknown) => {

@@ -37,7 +37,6 @@ de cuerpos comprimidos y regresion HTTP. No se cambiaron dependencias en MTEC-28
 | SPV-001 | Defecto local | paginación de publicaciones propias es inerte y chats descarta metadatos | implementar query/navegación o cambiar contrato a no paginado | Medio | API externa |
 | INT-005 | Decisión arquitectónica | sin contrato versionado ni validación runtime | OpenAPI/esquemas y contract tests | Medio | proveedor API |
 | FE-007 | Defecto local de accesibilidad | panel de perfil sin patrón modal/foco | semántica, focus trap, Escape y pruebas | Bajo-Medio | ninguna |
-| FE-003 | Riesgo externo | subscription key pública; impacto depende de políticas | revisar alcance/cuotas y no tratarla como secreto | Medio | APIM |
 | FE-008 / BE-003 | Mejora de calidad | faltan E2E/a11y y tests backend | cubrir flujos/contratos críticos, proporcional al rol Express | Medio | CI y contratos |
 
 ## P3 — Mantenimiento y endurecimiento

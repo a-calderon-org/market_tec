@@ -56,6 +56,7 @@ def validate_session(snapshot):
 def validate_auth(value):
     validate_session(value["session"])
     assert value["session"]["serverTime"] < value["expiresAt"] <= value["session"]["expiresAt"], "access beyond session"
+    assert value["expiresAt"] - value["session"]["serverTime"] <= 240, "access lifetime exceeds 240"
 
 
 def validate_semantics(schema, value):
@@ -82,6 +83,7 @@ class AuthContractsTest(unittest.TestCase):
     def test_required_operations_exist_and_remain_proposed(self):
         required = {
             ("/v1/auth/attempts", "post"), ("/v1/auth/google", "post"),
+            ("/v1/auth/google/registrations", "post"),
             ("/v1/auth/email/requests", "post"), ("/v1/auth/email/confirm", "post"),
             ("/v1/auth/session", "get"), ("/v1/auth/refresh", "post"),
             ("/v1/auth/logout", "post"), ("/v1/auth/session/activity", "post"),
@@ -97,7 +99,7 @@ class AuthContractsTest(unittest.TestCase):
         for route, method in required:
             self.assertEqual("proposed", self.api["paths"][route][method]["x-implementation-status"])
         self.assertEqual("draft-pending-team-approval", self.api["x-contract-status"])
-        self.assertEqual("0.2.0-draft", self.api["info"]["version"])
+        self.assertEqual("0.3.0-draft", self.api["info"]["version"])
         self.assertGreaterEqual(len(self.api["x-design-review"]["breakingChanges"]), 3)
 
     def test_login_refresh_and_metadata_have_no_bearer_bootstrap_cycle(self):
@@ -256,23 +258,46 @@ class AuthContractsTest(unittest.TestCase):
         with self.assertRaises(AssertionError):
             validate_auth(expired_access)
 
-    def test_expired_revoked_and_reused_session_errors_are_declared(self):
-        for route in ("/v1/auth/session", "/v1/auth/refresh"):
-            method = "get" if route.endswith("session") else "post"
-            codes = self.api["paths"][route][method]["x-error-codes"]["401"]
-            self.assertTrue({"SESSION_EXPIRED", "SESSION_REVOKED"}.issubset(codes))
-        self.assertIn("REFRESH_REUSED", self.api["paths"]["/v1/auth/refresh"]["post"]["x-error-codes"]["401"])
+    def test_session_errors_and_public_refresh_error_are_declared(self):
+        session_codes = self.api["paths"]["/v1/auth/session"]["get"]["x-error-codes"]["401"]
+        self.assertTrue({"SESSION_EXPIRED", "SESSION_REVOKED"}.issubset(session_codes))
+        self.assertEqual(["REFRESH_INVALID"], self.api["paths"]["/v1/auth/refresh"]["post"]["x-error-codes"]["401"])
 
     def test_mail_proof_is_only_consumed_by_post_not_preview_get(self):
         for route in ("/v1/auth/email/confirm", "/v1/auth/proofs/email/confirm"):
             self.assertEqual({"post"}, set(self.api["paths"][route]))
-        for route in ("/v1/auth/email/requests", "/v1/auth/proofs/email/requests"):
+        for route in ("/v1/auth/proofs/email/requests",):
             codes = self.api["paths"][route]["post"]["x-error-codes"]
             self.assertNotIn("ELIGIBILITY_DENIED", codes["403"])
             self.assertEqual(["ATTEMPT_CONSUMED"], codes["409"])
         schema = self.api["components"]["schemas"]["EmailAccepted"]
         self.assertEqual({"status", "message"}, set(schema["properties"]))
         self.assertIn("const", schema["properties"]["message"])
+
+    def test_google_registration_returns_auth_response_without_mailbox_step(self):
+        policy = self.api["x-registration-policy"]
+        self.assertFalse(policy["newGoogleRegistrationRequiresInstitutionalLink"])
+        self.assertFalse(policy["googleEmailVerifiedAloneSufficient"])
+        self.assertTrue(policy["verifiedGoogleIdTokenAndEligibleEmailSufficient"])
+        self.assertEqual({"estudiantec.cr", "itcr.ac.cr", "tec.ac.cr"}, set(policy["eligibleDomainsExact"]))
+        for route in ("/v1/auth/google", "/v1/auth/google/registrations"):
+            op = self.api["paths"][route]["post"]
+            self.assertIn("200", op["responses"])
+            self.assertNotIn("202", op["responses"])
+            self.assertEqual("#/components/schemas/AuthResponse",
+                             op["responses"]["200"]["content"]["application/json"]["schema"]["$ref"])
+            self.assertEqual("not-required-for-google", op["x-registration-flow"]["mailboxProof"])
+        self.assertFalse(self.api["paths"]["/v1/auth/google/registrations"]["post"]["deprecated"])
+        self.assertNotIn("202", self.api["paths"]["/v1/auth/proofs/google"]["post"]["responses"])
+        self.assertNotIn("MailboxVerificationRequired", self.api["components"]["schemas"])
+        self.assertFalse(self.api["x-identity-policy"]["automaticMergeByEmail"])
+
+    def test_email_magic_link_remains_independent_and_unavailable(self):
+        for route in ("/v1/auth/email/requests", "/v1/auth/email/confirm"):
+            op = self.api["paths"][route]["post"]
+            self.assertEqual({"503"}, set(op["responses"]))
+            self.assertEqual(["AUTH_TEMPORARILY_UNAVAILABLE"], op["x-error-codes"]["503"])
+            self.assertIn("independent-email-authentication-only", op["x-registration-flow"])
 
     def test_google_and_email_use_same_internal_user_shape(self):
         logins = [case["value"] for case in self.cases if case["name"] in {"google-login", "email-login-same-internal-user"}]
@@ -328,12 +353,74 @@ class AuthContractsTest(unittest.TestCase):
 
     def test_refresh_concurrency_policy_is_explicit_and_not_idempotent_reissuance(self):
         rotation = self.api["paths"]["/v1/auth/refresh"]["post"]["x-refresh-rotation"]
-        self.assertEqual("proposed", rotation["status"])
+        self.assertEqual("approved-policy-draft-protocol-and-tests-pending", rotation["status"])
+        self.assertTrue(rotation["serializedAcrossTabs"])
+        self.assertEqual("pending", rotation["protocolAndConcurrencyTests"])
         self.assertTrue(rotation["atomicConsumeAndReplace"])
         self.assertFalse(rotation["graceWindow"])
         self.assertFalse(rotation["reissueOnRetry"])
-        self.assertEqual("revoke-family-including-winner", rotation["consumedGenerationReuse"])
-        self.assertEqual("reauthenticate", rotation["lostResponse"])
+        self.assertEqual("reject-and-audit-without-automatic-winner-revocation", rotation["consumedGenerationReuse"])
+        self.assertFalse(rotation["winnerRevokedOnIsolatedReplay"])
+        self.assertEqual("confirmed-only-when-refresh-and-csrf-match", rotation["historicalPairClassification"])
+        self.assertEqual("invalid-proof-not-confirmed-replay", rotation["unknownGenerationOrWrongCsrf"])
+        self.assertEqual("401 REFRESH_INVALID", rotation["publicError"])
+        self.assertEqual("REFRESH_INVALID", rotation["publicErrorExample"]["error"]["code"])
+        self.assertEqual([], rotation["publicErrorExample"]["error"]["details"])
+        public_error = self.api["paths"]["/v1/auth/refresh"]["post"]["responses"]["401"]
+        self.assertNotIn("Set-Cookie", public_error["headers"])
+        self.assertNotIn("token", json.dumps(public_error["content"]["application/json"]["examples"]))
+        self.assertEqual({"REFRESH_INVALID"}, {public_error["content"]["application/json"]
+                         ["schema"]["allOf"][1]["properties"]["error"]["properties"]["code"]["const"]})
+        self.assertEqual("structured-without-secrets-required-not-yet-implemented", rotation["audit"])
+        self.assertEqual("independent-evidence-and-recorded-authorization", rotation["compromiseRevocation"])
+        self.assertEqual("recover-session-if-new-cookie-arrived-otherwise-reauthenticate", rotation["lostResponse"])
+        self.assertEqual({"rotate": "implemented-in-ms-users", "continue": "pending"}, rotation["modeImplementation"])
+        self.assertEqual({"current": "implemented-in-ms-users", "all": "pending"},
+                         self.api["paths"]["/v1/auth/logout"]["post"]["x-scope-implementation"])
+        self.assertNotIn("REFRESH_REUSED", json.dumps(self.api))
+        self.assertEqual("draft-pending-team-approval", self.api["x-contract-status"])
+
+
+    def test_short_access_lifetime_and_profile_policy_are_explicit(self):
+        policy = self.api["x-jwt-policy"]
+        self.assertEqual(("RS256", 2048, 240, 0), tuple(policy[k] for k in (
+            "algorithm", "rsaBits", "maximumNominalLifetimeSeconds", "positiveExpirationLeewaySeconds"
+        )))
+        self.assertEqual(["alg", "kid"], policy["joseHeaderRequired"])
+        self.assertNotIn("kid", policy["claimsRequired"])
+        self.assertEqual(240, self.api["x-session-policy"]["accessTokenLifetimeSeconds"]["maximum"])
+        auth = next(c["value"] for c in self.cases if c["name"] == "google-login")
+        for ttl in (239, 240, 241, 900):
+            value = copy.deepcopy(auth)
+            value["expiresAt"] = value["session"]["serverTime"] + ttl
+            if ttl <= 240:
+                validate_auth(value)
+            else:
+                with self.assertRaises(AssertionError):
+                    validate_auth(value)
+
+    def test_identity_and_browser_policies_preserve_safety_boundaries(self):
+        identity = self.api["x-identity-policy"]
+        self.assertFalse(identity["automaticMergeByEmail"])
+        self.assertFalse(identity["automaticHistoryTransfer"])
+        self.assertFalse(identity["continuityRequiredForBasicAccess"])
+        self.assertEqual(["passkey-bound-to-userId", "single-use-recovery-code"], identity["approvedContinuityMechanisms"])
+        browser = self.api["x-browser-policy"]
+        self.assertEqual("memory-only", browser["accessAndCsrfStorage"])
+        self.assertEqual("opaque-rotating-cookie", browser["refresh"])
+        self.assertTrue(browser["refreshSerializedAcrossTabs"])
+        self.assertFalse(browser["generalReuseGrace"])
+        self.assertEqual("effective-session-deadline-not-access-jwt",
+                         self.api["x-session-policy"]["warningLeadSeconds"]["relativeTo"])
+
+    def test_activity_contract_does_not_claim_client_request_is_evidence(self):
+        activity = self.api["x-session-policy"]["activity"]
+        self.assertEqual(60, activity["maximumProcessingDelaySeconds"])
+        self.assertTrue(activity["singleCount"])
+        self.assertTrue(activity["neverReviveExpiredSession"])
+        self.assertFalse(activity["requestAloneIsEvidence"])
+        op = self.api["paths"]["/v1/auth/session/activity"]["post"]
+        self.assertEqual("blocked-pending-approved-evidence-protocol", op["x-integration-readiness"])
 
     def test_public_key_schemas_cannot_expose_private_material(self):
         public = next(c["value"] for c in self.cases if c["name"] == "public-jwks-structural-only")
