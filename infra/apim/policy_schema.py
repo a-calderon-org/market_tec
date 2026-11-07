@@ -111,7 +111,9 @@ def valid_https_origin(origin: str) -> bool:
     except ValueError:
         return False
     if (parts.scheme != "https" or parts.username is not None or parts.password is not None or parts.path
-            or parts.query or parts.fragment or not host or "@" in parts.netloc or "[" in parts.netloc):
+            or parts.query or parts.fragment or not host or "@" in parts.netloc or "[" in parts.netloc
+            # urlsplit() reports empty query/fragment for a bare "?" or "#"; the whole string must be the origin.
+            or origin != f"https://{parts.netloc}"):
         return False
     if port is not None and not 1 <= port <= 65535:
         return False
