@@ -401,21 +401,26 @@ class UpstreamHardeningTest(unittest.TestCase):
 
     def test_empty_query_and_fragment_delimiters_rejected_in_every_scope(self):
         """urlsplit() hides a bare '?' or '#'; the origin must equal https://<netloc> exactly."""
-        bad = ["https://spa.example?", "https://spa.example#", "https://spa.example?#", "https://spa.example:443?",
-               "https://spa.example:443#", "https://spa.example#?", "https://spa.example??", "https://spa.example##"]
-        cors = lambda origin: f"<cors><allowed-origins><origin>{origin}</origin></allowed-origins></cors>"
-        for origin in bad:
-            self.assertFalse(valid_https_origin(origin), origin)
-            for scope, xml in self.each_scope():
-                broken = self.put(xml, cors(origin), scope)
-                with self.assertRaises(ValueError, msg=f"{scope}: {origin}"):
-                    check_upstream(scope, broken)
-                with self.assertRaises(ValueError, msg=f"package {scope}: {origin}"):
-                    package(upstream=dict(UPSTREAM, **{scope: broken}))
+        def with_origin(scope, xml, origin):
+            if scope == "global":  # global already carries the single allowed <cors>
+                return xml.replace("https://app.example.com", origin)
+            return self.put(xml, f"<cors><allowed-origins><origin>{origin}</origin></allowed-origins></cors>", scope)
+
         for origin in ("https://spa.example", "https://spa.example:1", "https://spa.example:65535"):
             self.assertTrue(valid_https_origin(origin), origin)
             for scope, xml in self.each_scope():
-                package(upstream=dict(UPSTREAM, **{scope: self.put(xml, cors(origin), scope)}))
+                package(upstream=dict(UPSTREAM, **{scope: with_origin(scope, xml, origin)}))  # control: accepted
+        bad = ["https://spa.example?", "https://spa.example#", "https://spa.example?#", "https://spa.example:443?",
+               "https://spa.example:443#", "https://spa.example#?", "https://spa.example??", "https://spa.example##"]
+        for origin in bad:
+            self.assertFalse(valid_https_origin(origin), origin)
+            for scope, xml in self.each_scope():
+                broken = with_origin(scope, xml, origin)
+                with self.assertRaises(ValueError, msg=f"{scope}: {origin}") as caught:
+                    check_upstream(scope, broken)
+                self.assertIn("literal https origin", str(caught.exception))  # rejected for the origin, not another reason
+                with self.assertRaises(ValueError, msg=f"package {scope}: {origin}"):
+                    package(upstream=dict(UPSTREAM, **{scope: broken}))
 
     def test_forward_request_attribute_types_ranges_and_exclusions(self):
         accept = ['timeout="30"', 'timeout-ms="5000"', 'timeout-ms="1"', 'follow-redirects="true"', 'continue-timeout="0"',
