@@ -1,17 +1,27 @@
 {
   "version": 3,
   "backend": "ms-users",
+  "approvals": {
+    "abuse_protection": null,
+    "ms_users_contract": null
+  },
+  "target": {
+    "environment": null,
+    "apim_revision": null
+  },
   "upstream_scopes": [
     "global",
     "product",
     "api"
   ],
   "external_requirements": [
-    "exported global, product and api policy XML (see README.md) accepted by check_upstream",
+    "exported global, product and api policy XML for every scope in the real hierarchy (see README.md)",
     "named value allowed-origins (comma-separated exact origins)",
     "reviewed public JWKS snapshot plus issuer and audience",
-    "abuse protection for anonymous admission that works on APIM Consumption (rate-limit-by-key is unavailable there); evidence hash added to APPROVED_EVIDENCE through code review",
-    "ms-users proof/link contract reconciliation; evidence hash added to APPROVED_EVIDENCE through code review"
+    "target environment and APIM revision recorded in the manifest",
+    "abuse-protection evidence document (works on APIM Consumption; rate-limit-by-key is unavailable there)",
+    "ms-users contract-reconciliation evidence document (B07)",
+    "gateway validation of policies and expressions, and operator deployment approval"
   ],
   "operations": [
     {
@@ -324,9 +334,5 @@
       "anonymous_admission": false,
       "contract_status": "reconciled"
     }
-  ],
-  "approvals": {
-    "abuse_protection": null,
-    "ms_users_contract": null
-  }
+  ]
 }

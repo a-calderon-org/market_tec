@@ -1,15 +1,21 @@
 import base64
 import copy
+import hashlib
 import json
+import os
 import re
+import subprocess
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 from xml.etree import ElementTree as ET
 
 import generate_policies as gp
-import security_reference
-from generate_policies import PackageError, SPOOFABLE, analyze, build_package, check_upstream, validate, verify_sources
+from generate_policies import (PackageError, SPOOFABLE, analyze, build_package, check_upstream, validate,
+                               verify_sources, write_output)
+from policy_schema import validate_policy
 
 HERE = Path(__file__).parent
 ISS, AUD = "https://users.example.com", "markettec-api"
@@ -29,10 +35,11 @@ PENDING = {"createMethodProofAttempt", "verifyGoogleMethodProof", "requestEmailM
 ADMISSION = {"createAuthenticationAttempt", "exchangeGoogleCredential", "legacyGoogleRegistrationCompatibility",
              "requestInstitutionalEmailLink", "confirmInstitutionalEmailLink"}
 OPS = {o["id"]: o for o in MANIFEST["operations"]}
+SECTIONS = ("inbound", "backend", "outbound", "on-error")
 
 
-def package(manifest=MANIFEST, upstream=UPSTREAM):
-    return build_package(manifest, JWKS, ISS, AUD, upstream, OPENAPI, ROUTES)
+def package(manifest=MANIFEST, upstream=UPSTREAM, evidence_dir=None):
+    return build_package(manifest, JWKS, ISS, AUD, upstream, OPENAPI, ROUTES, evidence_dir)
 
 
 def mutated(fn):
@@ -45,11 +52,20 @@ def op_of(m, op_id):
     return next(o for o in m["operations"] if o["id"] == op_id)
 
 
-def approve(*names):
-    """Approve through the reviewed allowlist, as a code change would."""
-    evidence = {n: "a" * 63 + str(i) for i, n in enumerate(names)}
-    manifest = mutated(lambda m: m["approvals"].update({n: {"evidence_sha256": h} for n, h in evidence.items()}))
-    return manifest, mock.patch.dict(security_reference.APPROVED_EVIDENCE, evidence)
+def evidence_case(testcase, names=("abuse_protection", "ms_users_contract"), **overrides):
+    """Write real evidence documents to a temp dir and return (manifest, dir)."""
+    directory = Path(tempfile.mkdtemp())
+    testcase.addCleanup(lambda: __import__("shutil").rmtree(directory, ignore_errors=True))
+    approvals = {}
+    for name in names:
+        doc = {"approval_type": name, "backend_sha": ROUTES["sha"], "openapi_contract_version": OPENAPI["info"]["version"],
+               "environment": "staging", "apim_revision": "rev-7", "review_id": f"review/{name}-1"}
+        doc.update(overrides.get(name, {}))
+        data = json.dumps(doc).encode()
+        (directory / f"{name}.json").write_bytes(data)
+        approvals[name] = {"evidence_file": f"{name}.json", "evidence_sha256": hashlib.sha256(data).hexdigest()}
+    manifest = mutated(lambda m: (m["approvals"].update(approvals), m["target"].update(environment="staging", apim_revision="rev-7")))
+    return manifest, directory
 
 
 def simulate(policy_xml, parent_inbound=("send-request",), parent_backend=("forward-request",)):
@@ -71,7 +87,7 @@ def simulate(policy_xml, parent_inbound=("send-request",), parent_backend=("forw
 
 
 def regexes(condition):
-    return [p.replace("\\z", "\\Z").replace("\\A", "\\A") for p in re.findall(r'@"([^"]+)"', condition)]
+    return [p.replace("\\z", "\\Z") for p in re.findall(r'@"([^"]+)"', condition)]
 
 
 class RoutesTest(unittest.TestCase):
@@ -124,69 +140,184 @@ class ReferenceTest(unittest.TestCase):
             with self.assertRaises(ValueError, msg=name):
                 analyze(mutated(edit), JWKS, ISS, AUD, None, OPENAPI, ROUTES)
 
-    def test_boolean_or_unknown_evidence_never_unblocks(self):
-        for claim in ({"evidence_sha256": "b" * 64}, None):
-            manifest = mutated(lambda m: m["approvals"].update(abuse_protection=claim, ms_users_contract=claim))
-            result = package(manifest)
-            self.assertTrue(all(result["definitions"][i]["status"] == "blocked"
-                                for i, d in enumerate(result["definitions"]) if d["id"] in ADMISSION | PENDING))
-        with self.assertRaises(ValueError):
-            validate(mutated(lambda m: m["approvals"].update(abuse_protection=True)))
-
-    def test_reviewed_allowlist_unblocks_only_its_own_group(self):
-        manifest, patch = approve("abuse_protection")
-        with patch:
-            d = {x["id"]: x["status"] for x in package(manifest)["definitions"]}
-        self.assertTrue(all(d[n] == "enabled" for n in ADMISSION))
-        self.assertTrue(all(d[n] == "blocked" for n in PENDING))
-        manifest, patch = approve("ms_users_contract")
-        with patch:
-            d = {x["id"]: x["status"] for x in package(manifest)["definitions"]}
-        self.assertTrue(all(d[n] == "enabled" for n in PENDING))
-        self.assertTrue(all(d[n] == "blocked" for n in ADMISSION))
-
-    def test_committed_state_has_no_approved_evidence(self):
-        self.assertEqual({}, security_reference.APPROVED_EVIDENCE)
+    def test_committed_state_has_no_approvals_or_target(self):
         self.assertEqual({"abuse_protection": None, "ms_users_contract": None}, MANIFEST["approvals"])
-        self.assertEqual(64, len(security_reference.reference_digest()))
+        self.assertEqual({"environment": None, "apim_revision": None}, MANIFEST["target"])
+        self.assertFalse((HERE / "evidence").exists())
+        result = package()
+        self.assertEqual({"abuse_protection": False, "ms_users_contract": False}, result["approvals_verified"])
 
 
-class UpstreamTest(unittest.TestCase):
+class ApprovalTest(unittest.TestCase):
+    def statuses(self, manifest, directory):
+        return {d["id"]: d["status"] for d in package(manifest, evidence_dir=directory)["definitions"]}
+
+    def test_real_evidence_unblocks_only_its_own_group(self):
+        manifest, directory = evidence_case(self, names=("abuse_protection",))
+        status = self.statuses(manifest, directory)
+        self.assertTrue(all(status[n] == "enabled" for n in ADMISSION))
+        self.assertTrue(all(status[n] == "blocked" for n in PENDING))
+        manifest, directory = evidence_case(self, names=("ms_users_contract",))
+        status = self.statuses(manifest, directory)
+        self.assertTrue(all(status[n] == "enabled" for n in PENDING))
+        self.assertTrue(all(status[n] == "blocked" for n in ADMISSION))
+
+    def test_invented_or_incomplete_references_rejected(self):
+        manifest, directory = evidence_case(self)
+        cases = {
+            "invented hash": lambda m: m["approvals"]["abuse_protection"].update(evidence_sha256="b" * 64),
+            "missing file": lambda m: m["approvals"]["abuse_protection"].update(evidence_file="missing.json"),
+            "traversal": lambda m: m["approvals"]["abuse_protection"].update(evidence_file="../x.json"),
+            "hash only": lambda m: m["approvals"].update(abuse_protection={"evidence_sha256": "b" * 64}),
+            "boolean": lambda m: m["approvals"].update(abuse_protection=True),
+            "no target": lambda m: m["target"].update(environment=None),
+        }
+        for name, edit in cases.items():
+            broken = copy.deepcopy(manifest)
+            edit(broken)
+            with self.assertRaises(ValueError, msg=name):
+                package(broken, evidence_dir=directory)
+
+    def test_evidence_for_another_backend_contract_environment_or_type_rejected(self):
+        wrong = {
+            "backend": {"abuse_protection": {"backend_sha": "1" * 40}},
+            "openapi": {"abuse_protection": {"openapi_contract_version": "0.0.0-other"}},
+            "environment": {"abuse_protection": {"environment": "production"}},
+            "revision": {"abuse_protection": {"apim_revision": "rev-8"}},
+            "type": {"abuse_protection": {"approval_type": "ms_users_contract"}},
+            "review id": {"abuse_protection": {"review_id": "x"}},
+            "extra field": {"abuse_protection": {"approved": "yes"}},
+        }
+        for name, overrides in wrong.items():
+            manifest, directory = evidence_case(self, **overrides)
+            with self.assertRaises(ValueError, msg=name):
+                package(manifest, evidence_dir=directory)
+
+    def test_incomplete_or_tampered_documents_rejected(self):
+        manifest, directory = evidence_case(self)
+        path = directory / "abuse_protection.json"
+        doc = json.loads(path.read_text())
+        del doc["review_id"]
+        data = json.dumps(doc).encode()
+        path.write_bytes(data)
+        with self.assertRaises(ValueError):  # hash no longer matches
+            package(manifest, evidence_dir=directory)
+        manifest["approvals"]["abuse_protection"]["evidence_sha256"] = hashlib.sha256(data).hexdigest()
+        with self.assertRaises(ValueError):  # matches the hash but lacks a required field
+            package(manifest, evidence_dir=directory)
+        path.write_bytes(b"not json")
+        manifest["approvals"]["abuse_protection"]["evidence_sha256"] = hashlib.sha256(b"not json").hexdigest()
+        with self.assertRaises(ValueError):
+            package(manifest, evidence_dir=directory)
+
+    def test_symlinked_evidence_rejected(self):
+        manifest, directory = evidence_case(self)
+        link = directory / "link.json"
+        os.symlink(directory / "abuse_protection.json", link)
+        manifest["approvals"]["abuse_protection"]["evidence_file"] = "link.json"
+        with self.assertRaises(ValueError):
+            package(manifest, evidence_dir=directory)
+
+    def test_valid_approval_still_leaves_deployment_unapproved(self):
+        manifest, directory = evidence_case(self)
+        result = package(manifest, evidence_dir=directory)
+        self.assertFalse(result["deployment_approved"])
+        self.assertFalse(result["azure_validated"])
+        self.assertTrue(any("GitHub required review" in item for item in result["external_evidence_required"]))
+
+
+class SchemaTest(unittest.TestCase):
+    def swap(self, xml, old, new):
+        self.assertIn(old, xml)
+        return xml.replace(old, new)
+
     def test_valid_exports_accepted(self):
         for scope, xml in UPSTREAM.items():
             check_upstream(scope, xml)
+        safe = SCOPED.replace("<outbound><base />", '<outbound><base /><set-header name="X-Served-By" exists-action="override"><value>gw</value></set-header>'
+                              '<trace source="a"><message>m</message></trace>')
+        check_upstream("api", safe)
 
-    def test_structure_and_unknown_elements_rejected(self):
+    def test_invalid_structures_rejected(self):
         bad = {
-            "anything": "<policies><inbound><anything/></inbound><backend/><outbound/><on-error/></policies>",
-            "fragment": SCOPED.replace("<inbound><base />", "<inbound><base /><include-fragment fragment-id=\"x\" />"),
-            "wrong root": "<foo/>",
-            "missing section": "<policies><inbound><base /></inbound></policies>",
-            "order": "<policies><backend><base /></backend><inbound><base /></inbound><outbound><base /></outbound><on-error><base /></on-error></policies>",
-            "no base": SCOPED.replace("<outbound><base /></outbound>", "<outbound />"),
-            "double base": SCOPED.replace("<inbound><base />", "<inbound><base /><base />"),
-            "jwt": SCOPED.replace("<inbound><base />", "<inbound><base /><validate-jwt header-name=\"Authorization\" />"),
-            "google": SCOPED.replace("<inbound><base />", "<inbound><base /><set-variable name=\"a\" value=\"https://accounts.google.com\" />"),
-            "wildcard cors": GLOBAL.replace("https://app.example.com", "*"),
-            "identity header": SCOPED.replace("<inbound><base />", "<inbound><base /><set-header name=\"X-User-Id\" exists-action=\"override\"><value>1</value></set-header>"),
-            "dtd": "<!DOCTYPE a [<!ENTITY x 'y'>]>" + SCOPED,
-            "global with base": SCOPED,
+            ("api", "backend base + forward-request"): self.swap(SCOPED, "<backend><base />", "<backend><base /><forward-request />"),
+            ("api", "forward-request in outbound"): self.swap(SCOPED, "<outbound><base />", "<outbound><base /><forward-request />"),
+            ("api", "forward-request in inbound"): self.swap(SCOPED, "<inbound><base />", "<inbound><base /><forward-request />"),
+            ("api", "forward-request replaces base"): self.swap(SCOPED, "<backend><base /></backend>", "<backend><forward-request /></backend>"),
+            ("global", "global backend base"): self.swap(GLOBAL, "<forward-request />", "<base />"),
+            ("global", "two forward-request"): self.swap(GLOBAL, "<forward-request />", "<forward-request /><forward-request />"),
+            ("global", "global empty backend"): self.swap(GLOBAL, "<backend><forward-request /></backend>", "<backend />"),
+            ("global", "cors outbound"): self.swap(GLOBAL, "<outbound />", "<outbound><cors><allowed-origins><origin>https://a.example</origin></allowed-origins></cors></outbound>"),
+            ("global", "cors without origins"): self.swap(GLOBAL, "<allowed-origins><origin>https://app.example.com</origin></allowed-origins>", ""),
+            ("global", "bad forward attr"): self.swap(GLOBAL, "<forward-request />", '<forward-request retries="3" />'),
+            ("global", "bad bool"): self.swap(GLOBAL, "<forward-request />", '<forward-request follow-redirects="maybe" />'),
+            ("api", "set-header no name"): self.swap(SCOPED, "<outbound><base />", "<outbound><base /><set-header><value>a</value></set-header>"),
+            ("api", "set-header no value"): self.swap(SCOPED, "<outbound><base />", '<outbound><base /><set-header name="X-A" exists-action="override" />'),
+            ("api", "delete with value"): self.swap(SCOPED, "<outbound><base />", '<outbound><base /><set-header name="X-A" exists-action="delete"><value>a</value></set-header>'),
+            ("api", "bad action"): self.swap(SCOPED, "<outbound><base />", '<outbound><base /><set-header name="X-A" exists-action="x"><value>a</value></set-header>'),
+            ("api", "trace without message"): self.swap(SCOPED, "<outbound><base />", '<outbound><base /><trace source="a" />'),
+            ("api", "stray text"): self.swap(SCOPED, "<inbound><base />", "<inbound>hello<base />"),
+            ("api", "unknown element"): self.swap(SCOPED, "<inbound><base />", "<inbound><base /><anything />"),
+            ("api", "unknown attr on base"): self.swap(SCOPED, "<inbound><base />", '<inbound><base x="1" />'),
+            ("api", "section order"): "<policies><backend><base /></backend><inbound><base /></inbound><outbound><base /></outbound><on-error><base /></on-error></policies>",
+            ("api", "missing base"): self.swap(SCOPED, "<outbound><base /></outbound>", "<outbound />"),
+            ("api", "double base"): self.swap(SCOPED, "<inbound><base />", "<inbound><base /><base />"),
+            ("global", "global with base"): SCOPED,
+            ("api", "fragment"): self.swap(SCOPED, "<inbound><base />", '<inbound><base /><include-fragment fragment-id="x" />'),
+            ("api", "dtd"): "<!DOCTYPE a [<!ENTITY x 'y'>]>" + SCOPED,
+            ("api", "wrong root"): "<foo/>",
         }
-        for name, xml in bad.items():
+        for (scope, name), xml in bad.items():
             with self.assertRaises(ValueError, msg=name):
-                check_upstream("api" if name != "global with base" else "global", xml)
+                check_upstream(scope, xml)
+
+    def test_inherited_scopes_cannot_touch_credentials_or_end_the_request(self):
+        injected = {
+            "authorization": '<set-header name="Authorization" exists-action="override"><value>x</value></set-header>',
+            "authorization delete": '<set-header name="authorization" exists-action="delete" />',
+            "cookie": '<set-header name="Cookie" exists-action="delete" />',
+            "csrf": '<set-header name="X-CSRF-Token" exists-action="override"><value>x</value></set-header>',
+            "origin": '<set-header name="Origin" exists-action="override"><value>x</value></set-header>',
+            "identity": '<set-header name="X-User-Id" exists-action="override"><value>1</value></set-header>',
+            "return-response": '<return-response><set-status code="200" reason="OK" /></return-response>',
+            "choose": '<choose><when condition="@(true)"><return-response><set-status code="403" reason="no" /></return-response></when></choose>',
+            "set-variable": '<set-variable name="internalJwt" value="x" />',
+            "jwt": '<validate-jwt header-name="Authorization" />',
+            "google": '<set-header name="X-A" exists-action="override"><value>accounts.google.com</value></set-header>',
+        }
+        for name, fragment in injected.items():
+            for scope, xml in (("api", SCOPED), ("global", GLOBAL), ("product", SCOPED)):
+                anchor = "<inbound><base />" if scope != "global" else "<inbound>"
+                with self.assertRaises(ValueError, msg=f"{name}/{scope}"):
+                    check_upstream(scope, xml.replace(anchor, anchor + fragment, 1))
+
+    def test_wildcard_credentialed_cors_rejected(self):
+        with self.assertRaises(ValueError):
+            check_upstream("global", GLOBAL.replace("https://app.example.com", "*"))
 
     def test_comments_are_not_controls(self):
-        commented = SCOPED.replace("<inbound><base />", "<inbound><base /><!-- <validate-jwt /> accounts.google.com -->")
-        check_upstream("api", commented)  # an inert comment is neither a control nor a violation
-        only_comment_base = SCOPED.replace("<inbound><base />", "<inbound><!-- <base /> -->")
+        check_upstream("api", SCOPED.replace("<inbound><base />", "<inbound><base /><!-- <validate-jwt /> accounts.google.com -->"))
         with self.assertRaises(ValueError):
-            check_upstream("api", only_comment_base)  # a commented <base /> does not provide precedence
+            check_upstream("api", SCOPED.replace("<inbound><base />", "<inbound><!-- <base /> -->"))
+
+    def test_generated_policies_pass_own_schema_and_bad_own_policies_fail(self):
+        for xml in package()["policies"].values():
+            validate_policy(ET.fromstring(xml), "own")
+        invalid = [
+            "<policies><inbound><base /></inbound><backend><base /><forward-request /></backend></policies>",
+            "<policies><inbound><base /><forward-request /></inbound></policies>",
+            "<policies><inbound><base /></inbound><outbound><forward-request /></outbound></policies>",
+            "<policies><inbound><return-response><set-body>x</set-body><set-status code=\"1\" reason=\"r\" /></return-response></inbound></policies>",
+            "<policies><inbound><choose><otherwise><base /></otherwise></choose></inbound></policies>",
+        ]
+        for xml in invalid:
+            with self.assertRaises(ValueError, msg=xml):
+                validate_policy(ET.fromstring(xml), "own")
 
     def test_missing_scope_names_exact_exports(self):
         result = analyze(MANIFEST, JWKS, ISS, AUD, {"global": GLOBAL}, OPENAPI, ROUTES)
         self.assertEqual({"product", "api"}, set(result["missing_exports"]))
-        self.assertFalse(result["publishable"])
+        self.assertEqual("analysis", result["kind"])
         with self.assertRaises(ValueError):
             analyze(MANIFEST, JWKS, ISS, AUD, {"operation": SCOPED}, OPENAPI, ROUTES)
 
@@ -196,8 +327,10 @@ class PackageTest(unittest.TestCase):
         for upstream in (None, {}, {"global": GLOBAL}, {"global": GLOBAL, "product": SCOPED}):
             with self.assertRaises(PackageError):
                 package(upstream=upstream)
-        with self.assertRaises(ValueError):
-            package(upstream=dict(UPSTREAM, api=SCOPED.replace("<on-error><base />", "<on-error><x/><base />")))
+        invalid = SCOPED.replace("<backend><base />", "<backend><base /><forward-request />")
+        for scope in ("product", "api"):
+            with self.assertRaises(ValueError):
+                package(upstream=dict(UPSTREAM, **{scope: invalid}))
 
     def test_package_requires_jwks_issuer_audience(self):
         with self.assertRaises(PackageError):
@@ -205,9 +338,13 @@ class PackageTest(unittest.TestCase):
         with self.assertRaises(PackageError):
             build_package(MANIFEST, JWKS, "", AUD, UPSTREAM, OPENAPI, ROUTES)
 
-    def test_analysis_is_never_publishable(self):
-        self.assertFalse(analyze(MANIFEST, JWKS, ISS, AUD, UPSTREAM, OPENAPI, ROUTES)["publishable"])
-        self.assertTrue(package()["publishable"])
+    def test_results_never_claim_azure_validation_or_deployment_approval(self):
+        for result in (analyze(MANIFEST, JWKS, ISS, AUD, UPSTREAM, OPENAPI, ROUTES), package()):
+            self.assertFalse(result["azure_validated"])
+            self.assertFalse(result["deployment_approved"])
+            self.assertTrue(result["external_evidence_required"])
+        self.assertEqual("candidate_package", package()["kind"])
+        self.assertEqual("analysis", analyze(MANIFEST, JWKS, ISS, AUD, UPSTREAM, OPENAPI, ROUTES)["kind"])
 
     def test_definitions_apply_backend_path_and_policy(self):
         result = package()
@@ -223,19 +360,99 @@ class PackageTest(unittest.TestCase):
             self.assertEqual(64, len(definition["policy_sha256"]))
         self.assertEqual("/v1/usuarios/{userId}", ET.fromstring(result["policies"]["getUserProfile"]).find("./inbound/rewrite-uri").attrib["template"])
 
-    def test_cli_separates_analysis_from_package(self):
-        import subprocess, sys, tempfile
-        with tempfile.TemporaryDirectory() as tmp:
-            jwks = Path(tmp, "jwks.json")
-            jwks.write_text(json.dumps(JWKS))
-            base = [sys.executable, str(HERE / "generate_policies.py"), "--jwks", str(jwks), "--issuer", ISS, "--audience", AUD]
-            out = Path(tmp, "analysis")
-            subprocess.run(base + ["--mode", "analyze", "--output-dir", str(out)], check=True, cwd=tmp)
-            self.assertFalse(list(out.glob("*.xml")))
-            self.assertEqual(22, len(list(out.glob("*.xml.txt"))))
-            refused = subprocess.run(base + ["--mode", "package", "--output-dir", str(Path(tmp, "pkg"))], cwd=tmp, capture_output=True)
-            self.assertNotEqual(0, refused.returncode)
-            self.assertFalse(Path(tmp, "pkg").exists())
+
+
+class OutputTest(unittest.TestCase):
+    def tmp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        return Path(directory.name)
+
+    def cli(self, root, mode, out, extra=()):
+        jwks = root / "jwks.json"
+        jwks.write_text(json.dumps(JWKS))
+        args = [sys.executable, str(HERE / "generate_policies.py"), "--mode", mode, "--jwks", str(jwks), "--issuer", ISS,
+                "--audience", AUD, "--output-dir", str(out), *extra]
+        return subprocess.run(args, cwd=root, capture_output=True, text=True)
+
+    def upstream_args(self, root):
+        args = []
+        for scope, xml in UPSTREAM.items():
+            (root / f"{scope}.xml").write_text(xml)
+            args += [f"--upstream-{scope}", str(root / f"{scope}.xml")]
+        return args
+
+    def test_analysis_and_candidate_names_are_distinct_and_indexed(self):
+        root = self.tmp()
+        analysis = self.cli(root, "analyze", root / "a")
+        self.assertEqual(0, analysis.returncode, analysis.stderr)
+        self.assertEqual([], list((root / "a").glob("*.xml")))
+        candidate = self.cli(root, "package", root / "p", self.upstream_args(root))
+        self.assertEqual(0, candidate.returncode, candidate.stderr)
+        self.assertEqual([], list((root / "p").glob("*.xml.txt")))
+        for directory, suffix, index in ((root / "a", ".xml.txt", "operations.analysis.json"),
+                                         (root / "p", ".candidate.xml", "operations.candidate.json")):
+            meta = json.loads((directory / index).read_text())
+            files = {p.name for p in directory.iterdir()} - {index}
+            self.assertEqual(files, {d["policy_file"] for d in meta["definitions"]})
+            self.assertTrue(all(name.endswith(suffix) for name in files))
+            self.assertEqual(22, len(files))
+            self.assertFalse(meta["deployment_approved"])
+            self.assertFalse(meta["azure_validated"])
+            self.assertNotIn("policies", meta)
+
+    def test_consecutive_runs_cannot_reuse_or_mix_previous_artifacts(self):
+        root = self.tmp()
+        self.assertEqual(0, self.cli(root, "package", root / "out", self.upstream_args(root)).returncode)
+        before = sorted(p.name for p in (root / "out").iterdir())
+        again = self.cli(root, "analyze", root / "out")
+        self.assertNotEqual(0, again.returncode)
+        self.assertIn("not empty", again.stderr)
+        self.assertEqual(before, sorted(p.name for p in (root / "out").iterdir()))  # untouched, not mixed
+        self.assertTrue(any(n.endswith(".candidate.xml") for n in before))
+        self.assertFalse(any(n.endswith(".xml.txt") for n in before))
+
+    def test_existing_empty_directory_is_accepted_and_file_path_rejected(self):
+        root = self.tmp()
+        (root / "empty").mkdir()
+        self.assertEqual(0, self.cli(root, "analyze", root / "empty").returncode)
+        self.assertEqual(23, len(list((root / "empty").iterdir())))
+        (root / "file").write_text("x")
+        self.assertNotEqual(0, self.cli(root, "analyze", root / "file").returncode)
+
+    def test_refused_package_leaves_nothing_behind(self):
+        root = self.tmp()
+        refused = self.cli(root, "package", root / "out")  # no upstream exports
+        self.assertNotEqual(0, refused.returncode)
+        self.assertIn("refused", refused.stderr)
+        self.assertEqual([], list(root.glob("out*")) + list(root.glob(".out*")))
+
+    def test_failure_midway_leaves_no_partial_artifacts(self):
+        root = self.tmp()
+        result = analyze(MANIFEST, JWKS, ISS, AUD, UPSTREAM, OPENAPI, ROUTES)
+        real = Path.write_text
+        calls = {"n": 0}
+
+        def flaky(self_path, *args, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 5:
+                raise OSError("disk full")
+            return real(self_path, *args, **kwargs)
+
+        with mock.patch.object(Path, "write_text", flaky):
+            with self.assertRaises(OSError):
+                write_output(result, root / "out")
+        self.assertEqual([], list(root.iterdir()))  # neither out/ nor a staging directory
+        write_output(result, root / "out")  # a retry into the same path works
+        self.assertEqual(23, len(list((root / "out").iterdir())))
+
+    def test_write_output_refuses_non_empty_directory(self):
+        root = self.tmp()
+        (root / "out").mkdir()
+        (root / "out" / "stale.xml").write_text("<policies/>")
+        with self.assertRaises(FileExistsError):
+            write_output(analyze(MANIFEST, JWKS, ISS, AUD, UPSTREAM, OPENAPI, ROUTES), root / "out")
+        self.assertEqual(["stale.xml"], [p.name for p in (root / "out").iterdir()])
 
 
 class BlockedRoutesTest(unittest.TestCase):
@@ -271,9 +488,8 @@ class BlockedRoutesTest(unittest.TestCase):
 
 class PolicyTest(unittest.TestCase):
     def setUp(self):
-        manifest, patch = approve("abuse_protection", "ms_users_contract")
-        with patch:
-            self.open = package(manifest)["policies"]  # every operation unblocked, to inspect real controls
+        manifest, directory = evidence_case(self)
+        self.open = package(manifest, evidence_dir=directory)["policies"]  # every operation unblocked, to inspect real controls
         self.closed = package()["policies"]
 
     def conditions(self, name, policies=None):
@@ -288,7 +504,10 @@ class PolicyTest(unittest.TestCase):
     def test_open_policies_inherit_once_and_strip_identity(self):
         for name, xml in self.open.items():
             root = ET.fromstring(xml)
-            for section in ("inbound", "backend", "outbound", "on-error"):
+            for section in SECTIONS:
+                if section == "backend":
+                    self.assertEqual(["base"], [c.tag for c in root.find("backend")], name)
+                    continue
                 self.assertEqual(1, len(root.findall(f"./{section}/base")), (name, section))
             self.assertEqual("base", root.find("./inbound")[0].tag)
             stripped = {h.attrib["name"] for h in root.findall("./inbound/set-header") if h.attrib.get("exists-action") == "delete"}
@@ -402,6 +621,13 @@ class PolicyTest(unittest.TestCase):
             rewrite = ET.fromstring(self.open[name]).find("./inbound/rewrite-uri")
             self.assertEqual("/v1/usuarios/{userId}", rewrite.attrib["template"])
             self.assertEqual("true", rewrite.attrib["copy-unmatched-params"])
+
+    def test_expressions_use_plain_dictionary_members(self):
+        for xml in self.open.values():
+            self.assertNotIn("GetValueOrDefault", xml)
+        origin = next(c for c in ET.fromstring(self.open["refreshSession"]).iter("when") if "allowed-origins" in c.attrib["condition"])
+        self.assertIn('ContainsKey("Origin") ? context.Request.Headers["Origin"] : new string[0]', origin.attrib["condition"])
+        self.assertFalse(package()["azure_validated"])  # expressions are not gateway-verified
 
     def test_committed_package_closes_blocked_routes(self):
         for name in ADMISSION | PENDING:

@@ -1,6 +1,6 @@
 {
  "source": "a-calderon-org/ms-users-market-tec adapters/in/web controllers",
- "sha": "2927bc64aed9c82f0a2353fc811be9f87df9c24d",
+ "sha": "20898978d7f49c38e21b49187250bdd1821c370f",
  "routes": [
   [
    "GET",

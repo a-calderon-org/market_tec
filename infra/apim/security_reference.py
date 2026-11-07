@@ -2,14 +2,10 @@
 
 Operations.json is editable data; this module is reviewed code. The generator rejects any
 manifest whose security fields differ from this table, so a route cannot be downgraded
-(e.g. jwt -> public) or unblocked by editing the manifest. Changing it needs a code review.
+(e.g. jwt -> public) or unblocked by editing the manifest. Approvals are separate: they need an evidence document.
 """
 
 import hashlib
-
-# Evidence documents approved through code review: name -> sha256 of the approved evidence.
-# Empty on purpose: flipping a manifest value is never evidence of approval.
-APPROVED_EVIDENCE = {}
 
 COOKIE_NAMES = {"attempt": "__Host-mtec-attempt", "email_attempt": "__Host-mtec-email-attempt",
                 "refresh": "__Host-mtec-refresh"}

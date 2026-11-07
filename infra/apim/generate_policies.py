@@ -1,13 +1,15 @@
 """Generate APIM operation definitions and policies from operations.json (policy as code).
 
-Two clearly separated outputs:
-* analyze(): local review. Never publishable; the CLI writes it as *.xml.txt.
-* build_package(): publishable package. Refuses (PackageError) unless exported global,
-  product and api policies pass check_upstream and every other input is present.
+Two clearly separated outputs, each written to a fresh directory by the CLI:
+* analyze(): local review (*.xml.txt). Never a package.
+* build_package(): a *candidate* package (*.candidate.xml). It passed LOCAL structural checks only:
+  Azure has not validated it and deployment is not approved (see EXTERNAL_EVIDENCE).
 
 Fail-closed rules:
 * Security fields must equal SECURITY_REFERENCE (reviewed code), so editing operations.json
   cannot downgrade protection or lift a block.
+* Approvals need a real evidence document whose SHA-256, backend SHA, OpenAPI version,
+  environment and APIM revision all match; a bare hash proves nothing.
 * Blocked operations get a terminal deny: no <base /> before return-response and an empty
   backend section, so neither inherited actions nor the backend are reachable.
 * Cookies are only checked for presence/format; they never authenticate. Session and CSRF
@@ -16,12 +18,15 @@ Fail-closed rules:
 import argparse
 import hashlib
 import json
+import os
 import re
+import shutil
+import tempfile
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from build_jwt_policy import build as build_jwt
-import security_reference
+from policy_schema import validate_policy
 from security_reference import COOKIE_NAMES, SECURITY_REFERENCE
 
 HERE = Path(__file__).parent
@@ -37,24 +42,25 @@ FIELDS = {"id", "method", "public_path", "backend_path", "auth", "cookies", "coo
           "csrf", "anonymous_admission", "contract_status"}
 REFERENCE_FIELDS = ("auth", "cookies", "cookie_mode", "origin", "csrf", "anonymous_admission", "contract_status")
 APPROVALS = ("abuse_protection", "ms_users_contract")
+UPSTREAM_MARKERS = ("accounts.google.com", "openid-config", "googleapis", "validate-jwt", "validate-azure-ad-token")
 SECTIONS = ("inbound", "backend", "outbound", "on-error")
 COOKIE_VALUE = r"[A-Za-z0-9._~+/=-]{16,512}"
 CSRF_VALUE = r"\A[\x21-\x2B\x2D-\x7E]{1,256}\z"
-
-# Elements an exported upstream policy may contain. Anything else (including <anything/>) is rejected.
-UPSTREAM_ALLOWED = {
-    "policies", "inbound", "backend", "outbound", "on-error", "base", "cors", "allowed-origins", "origin",
-    "allowed-methods", "method", "allowed-headers", "expose-headers", "header", "set-header", "value",
-    "set-variable", "choose", "when", "otherwise", "return-response", "set-status", "set-body",
-    "forward-request", "trace", "metadata", "find-and-replace", "check-header", "ip-filter", "address",
-    "address-range"}
-UPSTREAM_EXPLICIT_REJECT = {"validate-jwt", "validate-azure-ad-token", "include-fragment", "send-request",
-                            "send-one-way-request", "rewrite-uri", "set-backend-service"}
-UPSTREAM_MARKERS = ("accounts.google.com", "openid-config", "googleapis", "validate-jwt", "validate-azure-ad-token")
+EVIDENCE_DIR = HERE / "evidence"
+EVIDENCE_FIELDS = {"approval_type", "backend_sha", "openapi_contract_version", "environment", "apim_revision", "review_id"}
+EVIDENCE_FILE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,79}\.json")
+TOKEN = re.compile(r"[A-Za-z0-9._:/#-]{3,128}")
+BACKEND_SHA = re.compile(r"[0-9a-f]{40}")
 REQUIRED_EXPORTS = {
     "global": "policy exported at global scope (service-wide policy)",
-    "product": "policy exported for every product that contains the users API",
+    "product": "policy exported for the product containing the users API",
     "api": "policy exported at API scope for the users API"}
+EXTERNAL_EVIDENCE = [
+    "effective policy of EVERY product containing the users API (one export per scope is not the whole hierarchy)",
+    "operation-level policies currently on the API (they are replaced, and were not exported)",
+    "effective-policy review showing no fragments, named-value effects or extra scopes beyond the exports",
+    "gateway validation of each policy and expression on the target tier (Consumption); local checks are not that",
+    "operator deployment approval, plus GitHub required review/branch protection covering infra/apim/** and evidence/ (not verifiable by this tool)"]
 
 
 class PackageError(ValueError):
@@ -72,9 +78,14 @@ def validate(manifest: dict) -> list:
     if not isinstance(approvals, dict) or set(approvals) != set(APPROVALS):
         raise ValueError("approvals must list exactly " + ", ".join(APPROVALS))
     for value in approvals.values():
-        if value is not None and (not isinstance(value, dict) or set(value) != {"evidence_sha256"}
+        if value is not None and (not isinstance(value, dict) or set(value) != {"evidence_file", "evidence_sha256"}
+                                  or not EVIDENCE_FILE.fullmatch(str(value["evidence_file"]))
                                   or not SHA256.fullmatch(str(value["evidence_sha256"]))):
-            raise ValueError("approval must be null or an evidence_sha256 object")
+            raise ValueError("approval must be null or an {evidence_file, evidence_sha256} object")
+    target = manifest.get("target")
+    if not isinstance(target, dict) or set(target) != {"environment", "apim_revision"} or any(
+            v is not None and not (isinstance(v, str) and TOKEN.fullmatch(v)) for v in target.values()):
+        raise ValueError("target must hold environment and apim_revision (null until known)")
     if manifest.get("upstream_scopes") != SCOPES:
         raise ValueError("upstream scopes must be global, product, api")
     ops, ids, routes, backend = manifest.get("operations"), set(), set(), set()
@@ -157,10 +168,12 @@ def verify_sources(manifest: dict, openapi: dict, backend_routes: dict) -> None:
 
 
 def check_upstream(scope: str, xml: str) -> None:
-    """Validate the structure and content of an exported policy for one inheritance scope.
+    """Local structural validation of one exported scope. Not Azure validation.
 
-    Only parsed elements count: XML comments are ignored by the parser, so a commented-out
-    control is neither a control nor a reason to reject.
+    Only parsed elements count: comments are ignored by the parser, so a commented-out control is
+    neither a control nor a violation. Anything able to alter credentials, set identity or end the
+    request before the operation controls is rejected, because its effect cannot be determined
+    without the effective policy evaluated in Azure.
     """
     if scope not in SCOPES:
         raise ValueError(f"unknown upstream scope {scope}")
@@ -170,31 +183,16 @@ def check_upstream(scope: str, xml: str) -> None:
         root = ET.fromstring(xml)
     except ET.ParseError as error:
         raise ValueError(f"{scope}: unparseable policy") from error
-    if root.tag != "policies":
-        raise ValueError(f"{scope}: root must be <policies>")
-    if [child.tag for child in root] != list(SECTIONS):
-        raise ValueError(f"{scope}: expected sections {SECTIONS} exactly once and in order")
+    validate_policy(root, "upstream", scope)
     for element in root.iter():
-        if element.tag in UPSTREAM_EXPLICIT_REJECT:
-            raise ValueError(f"{scope}: forbidden element <{element.tag}>")
-        if element.tag not in UPSTREAM_ALLOWED:
-            raise ValueError(f"{scope}: unknown or unexpandable element <{element.tag}>")
         blob = " ".join([element.text or "", *element.attrib.values()]).lower()
         for marker in UPSTREAM_MARKERS:
             if marker in blob:
                 raise ValueError(f"{scope}: inherited {marker}")
-        if element.tag == "set-header" and element.attrib.get("name", "").lower() in {h.lower() for h in SPOOFABLE}:
-            raise ValueError(f"{scope}: sets identity header")
         if element.tag == "cors" and element.attrib.get("allow-credentials", "").lower() == "true":
             origins = [o.text for o in element.findall("./allowed-origins/origin")]
-            if not origins or "*" in origins:
+            if "*" in origins:
                 raise ValueError(f"{scope}: credentialed CORS must list exact origins")
-    bases = {section.tag: len(section.findall("./base")) for section in root}
-    if scope == "global":
-        if any(bases.values()):
-            raise ValueError("global: <base /> has no parent scope")
-    elif set(bases.values()) != {1}:
-        raise ValueError(f"{scope}: every section needs exactly one <base /> so parent scopes keep applying")
 
 
 def _skeleton() -> ET.Element:
@@ -229,7 +227,8 @@ def _guard(condition: str, status: int, reason: str, code: str) -> ET.Element:
 
 
 def _header(name: str) -> str:
-    return f'context.Request.Headers.GetValueOrDefault("{name}", new string[0])'
+    # Plain IReadOnlyDictionary members (ContainsKey + indexer), not APIM-specific GetValueOrDefault overloads.
+    return (f'(context.Request.Headers.ContainsKey("{name}") ? context.Request.Headers["{name}"] : new string[0])')
 
 
 def _cookie_header() -> str:
@@ -273,17 +272,48 @@ def checks_for(op: dict) -> list:
     return checks
 
 
-def approved(manifest: dict, name: str) -> bool:
-    """Approval needs evidence whose hash was added to APPROVED_EVIDENCE by code review."""
+def verify_approval(manifest: dict, name: str, ctx: dict) -> bool:
+    """True only for a real evidence document bound to this backend, contract, environment and APIM revision.
+
+    The generator cannot prove who produced the document; that needs GitHub review controls or an
+    operator (see EXTERNAL_EVIDENCE). Invalid claims raise instead of silently staying blocked.
+    """
     claim = manifest["approvals"][name]
-    expected = security_reference.APPROVED_EVIDENCE.get(name)
-    return bool(claim and expected and claim["evidence_sha256"] == expected)
+    if claim is None:
+        return False
+    target = manifest["target"]
+    if target["environment"] is None or target["apim_revision"] is None:
+        raise ValueError(f"{name}: approval needs a target environment and APIM revision")
+    directory = Path(ctx["evidence_dir"]).resolve()
+    path = (directory / claim["evidence_file"])
+    if path.is_symlink() or path.resolve().parent != directory or not path.is_file():
+        raise ValueError(f"{name}: evidence document not found")
+    data = path.read_bytes()
+    if hashlib.sha256(data).hexdigest() != claim["evidence_sha256"]:
+        raise ValueError(f"{name}: evidence hash mismatch")
+    try:
+        doc = json.loads(data)
+    except ValueError as error:
+        raise ValueError(f"{name}: evidence is not JSON") from error
+    if not isinstance(doc, dict) or set(doc) != EVIDENCE_FIELDS or not all(isinstance(v, str) for v in doc.values()):
+        raise ValueError(f"{name}: evidence needs exactly {sorted(EVIDENCE_FIELDS)}")
+    if doc["approval_type"] != name:
+        raise ValueError(f"{name}: evidence is for {doc['approval_type']}")
+    if not BACKEND_SHA.fullmatch(doc["backend_sha"]) or doc["backend_sha"] != ctx["backend_sha"]:
+        raise ValueError(f"{name}: evidence is for another ms-users backend")
+    if doc["openapi_contract_version"] != ctx["openapi_version"]:
+        raise ValueError(f"{name}: evidence is for another OpenAPI contract version")
+    if doc["environment"] != target["environment"] or doc["apim_revision"] != target["apim_revision"]:
+        raise ValueError(f"{name}: evidence is for another environment or APIM revision")
+    if not TOKEN.fullmatch(doc["review_id"]):
+        raise ValueError(f"{name}: invalid review id")
+    return True
 
 
-def blocked_reason(op: dict, manifest: dict):
-    if op["anonymous_admission"] and not approved(manifest, "abuse_protection"):
+def blocked_reason(op: dict, approvals: dict):
+    if op["anonymous_admission"] and not approvals["abuse_protection"]:
         return "abuse_protection_unapproved", "ADMISSION_DISABLED"
-    if op["contract_status"] != "reconciled" and not approved(manifest, "ms_users_contract"):
+    if op["contract_status"] != "reconciled" and not approvals["ms_users_contract"]:
         return "ms_users_contract_unreconciled", "BACKEND_CONTRACT_PENDING"
     return None
 
@@ -298,77 +328,109 @@ def terminal_deny(code: str) -> str:
     return _text(root)
 
 
-def policy_for(op: dict, manifest: dict, jwks, issuer: str, audience: str) -> str:
-    blocked = blocked_reason(op, manifest)
+def policy_for(op: dict, approvals: dict, jwks, issuer: str, audience: str) -> str:
+    blocked = blocked_reason(op, approvals)
     if blocked:
-        return terminal_deny(blocked[1])
-    if op["auth"] in ("jwt", "jwt_cookie"):
-        if jwks is None:
-            raise ValueError("jwks snapshot required for internal-JWT operations")
-        root = ET.fromstring(build_jwt(jwks, issuer, audience))
+        xml = terminal_deny(blocked[1])
     else:
-        root = _skeleton()
-    inbound = root.find("inbound")
-    anchor = 1 + len(SPOOFABLE)  # after <base /> and identity-header removal
-    for offset, check in enumerate(checks_for(op)):
-        inbound.insert(anchor + offset, check)
-    ET.SubElement(inbound, "rewrite-uri", template=op["backend_path"], **{"copy-unmatched-params": "true"})
-    return _text(root)
+        if op["auth"] in ("jwt", "jwt_cookie"):
+            if jwks is None:
+                raise ValueError("jwks snapshot required for internal-JWT operations")
+            root = ET.fromstring(build_jwt(jwks, issuer, audience))
+        else:
+            root = _skeleton()
+        inbound = root.find("inbound")
+        anchor = 1 + len(SPOOFABLE)  # after <base /> and identity-header removal
+        for offset, check in enumerate(checks_for(op)):
+            inbound.insert(anchor + offset, check)
+        ET.SubElement(inbound, "rewrite-uri", template=op["backend_path"], **{"copy-unmatched-params": "true"})
+        xml = _text(root)
+    validate_policy(ET.fromstring(xml), "own")  # never emit our own policy without the local structure check
+    return xml
 
 
-def _prepare(manifest, openapi, backend_routes):
+def _prepare(manifest, openapi, backend_routes, evidence_dir):
     ops = validate(manifest)
     verify_reference(ops)
     if openapi is None or backend_routes is None:
         raise ValueError("openapi and backend routes are required")
     verify_sources(manifest, openapi, backend_routes)
-    return ops
+    ctx = {"evidence_dir": evidence_dir or EVIDENCE_DIR, "backend_sha": backend_routes.get("sha"),
+           "openapi_version": openapi.get("info", {}).get("version")}
+    return ops, {name: verify_approval(manifest, name, ctx) for name in APPROVALS}
 
 
-def _definitions(ops, manifest, jwks, issuer, audience):
+def _definitions(ops, manifest, approvals, jwks, issuer, audience, suffix):
     policies, definitions = {}, []
     for op in ops:
-        xml = policy_for(op, manifest, jwks, issuer, audience)
-        blocked = blocked_reason(op, manifest)
+        xml = policy_for(op, approvals, jwks, issuer, audience)
+        blocked = blocked_reason(op, approvals)
         policies[op["id"]] = xml
         definitions.append({
             "id": op["id"], "method": op["method"], "url_template": op["public_path"],
             "backend": manifest["backend"], "backend_path": op["backend_path"],
-            "classification": op["auth"], "policy_file": f"{op['id']}.xml",
+            "classification": op["auth"], "policy_file": f"{op['id']}{suffix}",
             "policy_sha256": hashlib.sha256(xml.encode()).hexdigest(),
             "status": "blocked" if blocked else "enabled", "blocked_reasons": [blocked[0]] if blocked else []})
     return policies, definitions
 
 
 def upstream_report(upstream_xml: dict) -> dict:
-    """Validate every supplied scope; report which exports are still missing."""
+    """Validate every supplied scope locally; report which exports are still missing."""
     upstream_xml = upstream_xml or {}
     if set(upstream_xml) - set(SCOPES):
         raise ValueError("unknown upstream scope")
     for scope, xml in upstream_xml.items():
         check_upstream(scope, xml)
-    return {"missing_exports": {s: REQUIRED_EXPORTS[s] for s in SCOPES if s not in upstream_xml}}
+    return {"missing_exports": {s: REQUIRED_EXPORTS[s] for s in SCOPES if s not in upstream_xml},
+            "validated": [s for s in SCOPES if s in upstream_xml]}
 
 
-def analyze(manifest, jwks, issuer, audience, upstream_xml=None, openapi=None, backend_routes=None) -> dict:
-    """Local review output. Never publishable, whatever the inputs."""
-    ops = _prepare(manifest, openapi, backend_routes)
+def _result(kind, suffix, index, ops, manifest, approvals, report, jwks, issuer, audience):
+    policies, definitions = _definitions(ops, manifest, approvals, jwks, issuer, audience, suffix)
+    return {"kind": kind, "index_file": index, "azure_validated": False, "deployment_approved": False,
+            "local_structure_validated": True, "upstream_scopes_validated_locally": report["validated"],
+            "missing_exports": report["missing_exports"], "approvals_verified": approvals,
+            "external_evidence_required": EXTERNAL_EVIDENCE, "policies": policies, "definitions": definitions}
+
+
+def analyze(manifest, jwks, issuer, audience, upstream_xml=None, openapi=None, backend_routes=None, evidence_dir=None) -> dict:
+    """Local review output (*.xml.txt). Never a package, whatever the inputs."""
+    ops, approvals = _prepare(manifest, openapi, backend_routes, evidence_dir)
     report = upstream_report(upstream_xml)
-    policies, definitions = _definitions(ops, manifest, jwks, issuer, audience)
-    return {"publishable": False, "missing_exports": report["missing_exports"],
-            "policies": policies, "definitions": definitions}
+    return _result("analysis", ".xml.txt", "operations.analysis.json", ops, manifest, approvals, report, jwks, issuer, audience)
 
 
-def build_package(manifest, jwks, issuer, audience, upstream_xml=None, openapi=None, backend_routes=None) -> dict:
-    """Publishable package, or PackageError. Blocked operations are terminal denials."""
-    ops = _prepare(manifest, openapi, backend_routes)
+def build_package(manifest, jwks, issuer, audience, upstream_xml=None, openapi=None, backend_routes=None, evidence_dir=None) -> dict:
+    """Candidate package (*.candidate.xml) or PackageError. Locally checked only; not Azure-validated or approved."""
+    ops, approvals = _prepare(manifest, openapi, backend_routes, evidence_dir)
     report = upstream_report(upstream_xml)
     if report["missing_exports"]:
         raise PackageError("missing verified upstream policy exports: " + ", ".join(report["missing_exports"]))
     if jwks is None or not issuer or not audience:
         raise PackageError("reviewed JWKS snapshot, issuer and audience are required")
-    policies, definitions = _definitions(ops, manifest, jwks, issuer, audience)
-    return {"publishable": True, "policies": policies, "definitions": definitions}
+    return _result("candidate_package", ".candidate.xml", "operations.candidate.json", ops, manifest, approvals, report, jwks, issuer, audience)
+
+
+def write_output(result: dict, output_dir: Path) -> None:
+    """Write into a brand-new directory or not at all; a failure leaves no partial artifacts."""
+    out = Path(output_dir)
+    if out.exists() and (not out.is_dir() or any(out.iterdir())):
+        raise FileExistsError(f"output directory {out} already exists and is not empty; use a new directory")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix=f".{out.name}.staging-", dir=out.parent))
+    try:
+        by_id = {d["id"]: d["policy_file"] for d in result["definitions"]}
+        for name, xml in result["policies"].items():
+            (staging / by_id[name]).write_text(xml)
+        meta = {k: v for k, v in result.items() if k not in ("policies", "index_file")}
+        (staging / result["index_file"]).write_text(json.dumps(meta, indent=2) + "\n")
+        if out.exists():
+            out.rmdir()
+        os.rename(staging, out)
+    except BaseException:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
 
 
 def main() -> None:
@@ -377,24 +439,26 @@ def main() -> None:
     parser.add_argument("--manifest", type=Path, default=HERE / "operations.json")
     parser.add_argument("--openapi", type=Path, default=HERE / "../../contracts/openapi/users.json")
     parser.add_argument("--backend-routes", type=Path, default=HERE / "backend-routes.json")
+    parser.add_argument("--evidence-dir", type=Path, default=EVIDENCE_DIR)
     parser.add_argument("--jwks", type=Path)
     parser.add_argument("--issuer", required=True)
     parser.add_argument("--audience", required=True)
     for scope in SCOPES:
         parser.add_argument(f"--upstream-{scope}", type=Path, help=f"exported {scope}-scope policy XML")
-    parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--output-dir", type=Path, required=True, help="must not exist or be empty")
     args = parser.parse_args()
-    upstream = {s: getattr(args, f"upstream_{s}").read_text() for s in SCOPES if getattr(args, f"upstream_{s}")}
-    inputs = (json.loads(args.manifest.read_text()), json.loads(args.jwks.read_text()) if args.jwks else None,
-              args.issuer, args.audience, upstream, json.loads(args.openapi.read_text()),
-              json.loads(args.backend_routes.read_text()))
-    result = (build_package if args.mode == "package" else analyze)(*inputs)
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    suffix, index = (".xml", "operations.generated.json") if result["publishable"] else (".xml.txt", "operations.analysis.json")
-    for name, xml in result["policies"].items():
-        (args.output_dir / f"{name}{suffix}").write_text(xml)
-    meta = {k: v for k, v in result.items() if k != "policies"}
-    (args.output_dir / index).write_text(json.dumps(meta, indent=2) + "\n")
+    try:
+        out = Path(args.output_dir)
+        if out.exists() and (not out.is_dir() or any(out.iterdir())):
+            raise FileExistsError(f"output directory {out} already exists and is not empty; use a new directory")
+        upstream = {s: getattr(args, f"upstream_{s}").read_text() for s in SCOPES if getattr(args, f"upstream_{s}")}
+        result = (build_package if args.mode == "package" else analyze)(
+            json.loads(args.manifest.read_text()), json.loads(args.jwks.read_text()) if args.jwks else None,
+            args.issuer, args.audience, upstream, json.loads(args.openapi.read_text()),
+            json.loads(args.backend_routes.read_text()), args.evidence_dir)
+        write_output(result, out)
+    except (ValueError, OSError) as error:  # PackageError is a ValueError
+        raise SystemExit(f"refused: {error}")
 
 
 if __name__ == "__main__":
