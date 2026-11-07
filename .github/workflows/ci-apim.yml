@@ -1,0 +1,27 @@
+name: CI APIM Policies
+
+on:
+  push:
+    paths:
+      - 'infra/apim/**'
+      - 'contracts/openapi/users.json'
+      - '.github/workflows/ci-apim.yml'
+  pull_request:
+    paths:
+      - 'infra/apim/**'
+      - 'contracts/openapi/users.json'
+      - '.github/workflows/ci-apim.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test-apim-policies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test APIM manifest and policy generation
+        run: python -m unittest discover -s infra/apim -p 'test_*.py' -v
