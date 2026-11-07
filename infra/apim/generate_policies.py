@@ -47,7 +47,8 @@ SECTIONS = ("inbound", "backend", "outbound", "on-error")
 COOKIE_VALUE = r"[A-Za-z0-9._~+/=-]{16,512}"
 CSRF_VALUE = r"\A[\x21-\x2B\x2D-\x7E]{1,256}\z"
 EVIDENCE_DIR = HERE / "evidence"
-EVIDENCE_FIELDS = {"approval_type", "backend_sha", "openapi_contract_version", "environment", "apim_revision", "review_id"}
+EVIDENCE_FIELDS = {"approval_type", "backend_sha", "openapi_contract_version", "openapi_sha256", "environment",
+                   "apim_revision", "review_id"}
 EVIDENCE_FILE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,79}\.json")
 TOKEN = re.compile(r"[A-Za-z0-9._:/#-]{3,128}")
 BACKEND_SHA = re.compile(r"[0-9a-f]{40}")
@@ -189,10 +190,6 @@ def check_upstream(scope: str, xml: str) -> None:
         for marker in UPSTREAM_MARKERS:
             if marker in blob:
                 raise ValueError(f"{scope}: inherited {marker}")
-        if element.tag == "cors" and element.attrib.get("allow-credentials", "").lower() == "true":
-            origins = [o.text for o in element.findall("./allowed-origins/origin")]
-            if "*" in origins:
-                raise ValueError(f"{scope}: credentialed CORS must list exact origins")
 
 
 def _skeleton() -> ET.Element:
@@ -303,6 +300,8 @@ def verify_approval(manifest: dict, name: str, ctx: dict) -> bool:
         raise ValueError(f"{name}: evidence is for another ms-users backend")
     if doc["openapi_contract_version"] != ctx["openapi_version"]:
         raise ValueError(f"{name}: evidence is for another OpenAPI contract version")
+    if not SHA256.fullmatch(doc["openapi_sha256"]) or doc["openapi_sha256"] != ctx["openapi_sha256"]:
+        raise ValueError(f"{name}: evidence is for different OpenAPI file bytes")
     if doc["environment"] != target["environment"] or doc["apim_revision"] != target["apim_revision"]:
         raise ValueError(f"{name}: evidence is for another environment or APIM revision")
     if not TOKEN.fullmatch(doc["review_id"]):
@@ -349,14 +348,17 @@ def policy_for(op: dict, approvals: dict, jwks, issuer: str, audience: str) -> s
     return xml
 
 
-def _prepare(manifest, openapi, backend_routes, evidence_dir):
+def _prepare(manifest, openapi_bytes, backend_routes, evidence_dir):
+    """`openapi_bytes` are the exact bytes of the contract used; evidence is bound to their SHA-256."""
     ops = validate(manifest)
     verify_reference(ops)
-    if openapi is None or backend_routes is None:
-        raise ValueError("openapi and backend routes are required")
+    if not isinstance(openapi_bytes, (bytes, bytearray)) or backend_routes is None:
+        raise ValueError("openapi file bytes and backend routes are required")
+    openapi = json.loads(openapi_bytes)
     verify_sources(manifest, openapi, backend_routes)
     ctx = {"evidence_dir": evidence_dir or EVIDENCE_DIR, "backend_sha": backend_routes.get("sha"),
-           "openapi_version": openapi.get("info", {}).get("version")}
+           "openapi_version": openapi.get("info", {}).get("version"),
+           "openapi_sha256": hashlib.sha256(openapi_bytes).hexdigest()}
     return ops, {name: verify_approval(manifest, name, ctx) for name in APPROVALS}
 
 
@@ -454,7 +456,7 @@ def main() -> None:
         upstream = {s: getattr(args, f"upstream_{s}").read_text() for s in SCOPES if getattr(args, f"upstream_{s}")}
         result = (build_package if args.mode == "package" else analyze)(
             json.loads(args.manifest.read_text()), json.loads(args.jwks.read_text()) if args.jwks else None,
-            args.issuer, args.audience, upstream, json.loads(args.openapi.read_text()),
+            args.issuer, args.audience, upstream, args.openapi.read_bytes(),
             json.loads(args.backend_routes.read_text()), args.evidence_dir)
         write_output(result, out)
     except (ValueError, OSError) as error:  # PackageError is a ValueError

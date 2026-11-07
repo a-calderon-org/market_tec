@@ -20,7 +20,8 @@ from policy_schema import validate_policy
 HERE = Path(__file__).parent
 ISS, AUD = "https://users.example.com", "markettec-api"
 MANIFEST = json.loads((HERE / "operations.json").read_text())
-OPENAPI = json.loads((HERE / "../../contracts/openapi/users.json").read_text())
+OPENAPI_BYTES = (HERE / "../../contracts/openapi/users.json").read_bytes()
+OPENAPI = json.loads(OPENAPI_BYTES)
 ROUTES = json.loads((HERE / "backend-routes.json").read_text())
 KEY = {"kty": "RSA", "use": "sig", "alg": "RS256", "kid": "key1", "e": "AQAB",
        "n": base64.urlsafe_b64encode(bytes([128]) + bytes(254) + bytes([1])).decode().rstrip("=")}
@@ -39,7 +40,7 @@ SECTIONS = ("inbound", "backend", "outbound", "on-error")
 
 
 def package(manifest=MANIFEST, upstream=UPSTREAM, evidence_dir=None):
-    return build_package(manifest, JWKS, ISS, AUD, upstream, OPENAPI, ROUTES, evidence_dir)
+    return build_package(manifest, JWKS, ISS, AUD, upstream, OPENAPI_BYTES, ROUTES, evidence_dir)
 
 
 def mutated(fn):
@@ -59,6 +60,7 @@ def evidence_case(testcase, names=("abuse_protection", "ms_users_contract"), **o
     approvals = {}
     for name in names:
         doc = {"approval_type": name, "backend_sha": ROUTES["sha"], "openapi_contract_version": OPENAPI["info"]["version"],
+               "openapi_sha256": hashlib.sha256(OPENAPI_BYTES).hexdigest(),
                "environment": "staging", "apim_revision": "rev-7", "review_id": f"review/{name}-1"}
         doc.update(overrides.get(name, {}))
         data = json.dumps(doc).encode()
@@ -138,7 +140,7 @@ class ReferenceTest(unittest.TestCase):
         }
         for name, edit in edits.items():
             with self.assertRaises(ValueError, msg=name):
-                analyze(mutated(edit), JWKS, ISS, AUD, None, OPENAPI, ROUTES)
+                analyze(mutated(edit), JWKS, ISS, AUD, None, OPENAPI_BYTES, ROUTES)
 
     def test_committed_state_has_no_approvals_or_target(self):
         self.assertEqual({"abuse_protection": None, "ms_users_contract": None}, MANIFEST["approvals"])
@@ -210,6 +212,29 @@ class ApprovalTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             package(manifest, evidence_dir=directory)
 
+    def test_evidence_is_bound_to_exact_openapi_bytes_not_just_version(self):
+        manifest, directory = evidence_case(self)
+        package(manifest, evidence_dir=directory)  # exact bytes: accepted
+        changed = OPENAPI_BYTES + b"\n"  # same info.version, different file bytes
+        self.assertEqual(json.loads(changed)["info"]["version"], OPENAPI["info"]["version"])
+        with self.assertRaises(ValueError):
+            build_package(manifest, JWKS, ISS, AUD, UPSTREAM, changed, ROUTES, directory)
+        for bad in ("0" * 64, "xyz"):
+            m2, d2 = evidence_case(self, abuse_protection={"openapi_sha256": bad})
+            with self.assertRaises(ValueError):
+                package(m2, evidence_dir=d2)
+        m3, d3 = evidence_case(self)
+        path = d3 / "abuse_protection.json"
+        doc = json.loads(path.read_text())
+        del doc["openapi_sha256"]
+        data = json.dumps(doc).encode()
+        path.write_bytes(data)
+        m3["approvals"]["abuse_protection"]["evidence_sha256"] = hashlib.sha256(data).hexdigest()
+        with self.assertRaises(ValueError):  # old-schema evidence without the file hash is incomplete
+            package(m3, evidence_dir=d3)
+        with self.assertRaises(ValueError):
+            build_package(MANIFEST, JWKS, ISS, AUD, UPSTREAM, OPENAPI, ROUTES)  # parsed dict instead of bytes
+
     def test_symlinked_evidence_rejected(self):
         manifest, directory = evidence_case(self)
         link = directory / "link.json"
@@ -226,6 +251,107 @@ class ApprovalTest(unittest.TestCase):
         self.assertTrue(any("GitHub required review" in item for item in result["external_evidence_required"]))
 
 
+class UpstreamHardeningTest(unittest.TestCase):
+    """Regressions for Codex reproductions against inherited (global/product/api) policies."""
+
+    @staticmethod
+    def put(xml, fragment, scope):
+        anchor = "<inbound>" if scope == "global" else "<inbound><base />"
+        return xml.replace(anchor, anchor + fragment, 1)
+
+    @staticmethod
+    def header(name, value="x"):
+        return f'<set-header name="{name}" exists-action="override"><value>{value}</value></set-header>'
+
+    def each_scope(self):
+        return (("global", GLOBAL), ("product", SCOPED), ("api", SCOPED))
+
+    def test_dynamic_or_encoded_header_names_rejected_in_every_scope(self):
+        names = ['@(&quot;Authorization&quot;)', '@(&quot;Coo&quot;+&quot;kie&quot;)', '@(&quot;X-User-&quot;+&quot;Id&quot;)',
+                 "@{ return &quot;Authorization&quot;; }", "{{header-name}}", "@(@(&quot;Authorization&quot;))",
+                 "&#65;uthorization", "&#x41;uthorization", "AUTHORIZATION", "authorization", "Cookie", "COOKIE",
+                 "__Host-mtec-refresh", "X-User-Id", "X-Session-Id", "X-Authenticated-User", "X-CSRF-Token",
+                 "Ocp-Apim-Subscription-Key", "X-Safe-But-Not-Listed", "X-Served-By ", " X-Served-By", "X Served By"]
+        for scope, xml in self.each_scope():
+            for name in names:
+                with self.assertRaises(ValueError, msg=f"{scope}: {name}"):
+                    check_upstream(scope, self.put(xml, self.header(name), scope))
+
+    def test_dynamic_header_values_and_any_expression_rejected(self):
+        for value in ('@(context.Request.Headers.GetValueOrDefault(&quot;Authorization&quot;,&quot;&quot;))', "{{secret}}", "@{ return 1; }"):
+            for scope, xml in self.each_scope():
+                with self.assertRaises(ValueError, msg=value):
+                    check_upstream(scope, self.put(xml, self.header("X-Served-By", value), scope))
+
+    def test_allowlisted_literal_headers_accepted_in_every_scope(self):
+        for scope, xml in self.each_scope():
+            for name in ("X-Served-By", "x-content-type-options", "Strict-Transport-Security", "Cache-Control", "X-Correlation-ID"):
+                check_upstream(scope, self.put(xml, self.header(name, "nosniff"), scope))
+
+    def test_trace_is_not_supported_anywhere(self):
+        trace = '<trace source="s"><message>@(context.Request.Headers.GetValueOrDefault(&quot;Authorization&quot;,&quot;&quot;))</message></trace>'
+        harmless = '<trace source="s"><message>hello</message></trace>'
+        for scope, xml in self.each_scope():
+            for fragment in (trace, harmless):
+                with self.assertRaises(ValueError):
+                    check_upstream(scope, self.put(xml, fragment, scope))
+        with self.assertRaises(ValueError):
+            validate_policy(ET.fromstring("<policies><inbound><base /><trace source=\"s\"><message>m</message></trace></inbound></policies>"), "own")
+
+    def test_cors_shape_rules(self):
+        cors = lambda body, attrs="": f"<cors{attrs}><allowed-origins>{body}</allowed-origins></cors>"
+        base = GLOBAL.replace(GLOBAL[GLOBAL.index("<cors"):GLOBAL.index("</cors>") + 7], "{CORS}")
+        ok = [cors("<origin>https://app.example.com</origin>", ' allow-credentials="true"'),
+              cors("<origin>https://a.example.com</origin><origin>https://b.example.com:8443</origin>", ' allow-credentials="true"'),
+              cors("<origin>*</origin>")]
+        for xml in ok:
+            check_upstream("global", base.replace("{CORS}", xml))
+        bad = [cors("<origin> * </origin>"), cors("<origin> * </origin>", ' allow-credentials="true"'),
+               cors("<origin>*</origin>", ' allow-credentials="true"'),
+               cors("<origin>{{allowed-origins}}</origin>", ' allow-credentials="true"'),
+               cors("<origin>{{allowed-origins}}</origin>"),
+               cors("<origin>http://app.example.com</origin>", ' allow-credentials="true"'),
+               cors("<origin>https://app.example.com/path</origin>"), cors("<origin>https://*.example.com</origin>"),
+               cors("<origin> https://app.example.com</origin>", ' allow-credentials="true"'),
+               cors("<origin>https://a.example.com</origin>", ' allow-credentials="True"'),
+               cors("<origin>@(&quot;https://x&quot;)</origin>"),
+               cors("<origin>https://a.example.com</origin>") + cors("<origin>https://b.example.com</origin>"),
+               cors("<origin>https://a.example.com</origin>") + "<cors/>"]
+        for xml in bad:
+            with self.assertRaises(ValueError, msg=xml):
+                check_upstream("global", base.replace("{CORS}", xml))
+
+    def test_forward_request_attribute_types_ranges_and_exclusions(self):
+        accept = ['timeout="30"', 'timeout-ms="5000"', 'timeout-ms="1"', 'follow-redirects="true"', 'continue-timeout="0"',
+                  'timeout="300"', 'buffer-request-body="false" fail-on-error-status-code="true"']
+        reject = ['timeout="not-an-integer"', 'timeout="0"', 'timeout="301"', 'timeout="-1"', 'timeout="1.5"', 'timeout=" 5"',
+                  'timeout-ms="abc"', 'timeout-ms="0"', 'timeout-ms="300001"', 'timeout="5" timeout-ms="5000"',
+                  'follow-redirects="yes"', 'retries="3"', 'continue-timeout="61"', 'timeout="٣"']
+        for attrs in accept:
+            check_upstream("global", GLOBAL.replace("<forward-request />", f"<forward-request {attrs} />"))
+        for attrs in reject:
+            with self.assertRaises(ValueError, msg=attrs):
+                check_upstream("global", GLOBAL.replace("<forward-request />", f"<forward-request {attrs} />"))
+        for scope in ("product", "api"):  # only the global scope may forward
+            with self.assertRaises(ValueError):
+                check_upstream(scope, SCOPED.replace("<backend><base /></backend>", "<backend><forward-request /></backend>"))
+
+    def test_stray_attributes_and_text_rejected(self):
+        bad = [SCOPED.replace("<policies>", '<policies x="1">'), SCOPED.replace("<policies>", "<policies>hello"),
+               SCOPED.replace("</inbound>", "</inbound>hello"), SCOPED.replace("</policies>", "hello</policies>"),
+               SCOPED.replace("<inbound>", '<inbound x="1">'), SCOPED.replace("<inbound><base />", "<inbound>hi<base />"),
+               SCOPED.replace("<base /></inbound>", "<base />hi</inbound>"), SCOPED.replace("<outbound><base />", "<outbound><base />hi")]
+        for xml in bad:
+            with self.assertRaises(ValueError, msg=xml):
+                check_upstream("api", xml)
+
+    def test_every_scope_and_section_rejects_a_second_singleton(self):
+        with self.assertRaises(ValueError):
+            check_upstream("api", SCOPED.replace("<outbound><base />", "<outbound><base /><base />"))
+        with self.assertRaises(ValueError):
+            check_upstream("global", GLOBAL.replace("<on-error />", "<on-error><cors><allowed-origins><origin>https://a.example.com</origin></allowed-origins></cors></on-error>"))
+
+
 class SchemaTest(unittest.TestCase):
     def swap(self, xml, old, new):
         self.assertIn(old, xml)
@@ -235,7 +361,7 @@ class SchemaTest(unittest.TestCase):
         for scope, xml in UPSTREAM.items():
             check_upstream(scope, xml)
         safe = SCOPED.replace("<outbound><base />", '<outbound><base /><set-header name="X-Served-By" exists-action="override"><value>gw</value></set-header>'
-                              '<trace source="a"><message>m</message></trace>')
+)
         check_upstream("api", safe)
 
     def test_invalid_structures_rejected(self):
@@ -315,11 +441,11 @@ class SchemaTest(unittest.TestCase):
                 validate_policy(ET.fromstring(xml), "own")
 
     def test_missing_scope_names_exact_exports(self):
-        result = analyze(MANIFEST, JWKS, ISS, AUD, {"global": GLOBAL}, OPENAPI, ROUTES)
+        result = analyze(MANIFEST, JWKS, ISS, AUD, {"global": GLOBAL}, OPENAPI_BYTES, ROUTES)
         self.assertEqual({"product", "api"}, set(result["missing_exports"]))
         self.assertEqual("analysis", result["kind"])
         with self.assertRaises(ValueError):
-            analyze(MANIFEST, JWKS, ISS, AUD, {"operation": SCOPED}, OPENAPI, ROUTES)
+            analyze(MANIFEST, JWKS, ISS, AUD, {"operation": SCOPED}, OPENAPI_BYTES, ROUTES)
 
 
 class PackageTest(unittest.TestCase):
@@ -334,17 +460,17 @@ class PackageTest(unittest.TestCase):
 
     def test_package_requires_jwks_issuer_audience(self):
         with self.assertRaises(PackageError):
-            build_package(MANIFEST, None, ISS, AUD, UPSTREAM, OPENAPI, ROUTES)
+            build_package(MANIFEST, None, ISS, AUD, UPSTREAM, OPENAPI_BYTES, ROUTES)
         with self.assertRaises(PackageError):
-            build_package(MANIFEST, JWKS, "", AUD, UPSTREAM, OPENAPI, ROUTES)
+            build_package(MANIFEST, JWKS, "", AUD, UPSTREAM, OPENAPI_BYTES, ROUTES)
 
     def test_results_never_claim_azure_validation_or_deployment_approval(self):
-        for result in (analyze(MANIFEST, JWKS, ISS, AUD, UPSTREAM, OPENAPI, ROUTES), package()):
+        for result in (analyze(MANIFEST, JWKS, ISS, AUD, UPSTREAM, OPENAPI_BYTES, ROUTES), package()):
             self.assertFalse(result["azure_validated"])
             self.assertFalse(result["deployment_approved"])
             self.assertTrue(result["external_evidence_required"])
         self.assertEqual("candidate_package", package()["kind"])
-        self.assertEqual("analysis", analyze(MANIFEST, JWKS, ISS, AUD, UPSTREAM, OPENAPI, ROUTES)["kind"])
+        self.assertEqual("analysis", analyze(MANIFEST, JWKS, ISS, AUD, UPSTREAM, OPENAPI_BYTES, ROUTES)["kind"])
 
     def test_definitions_apply_backend_path_and_policy(self):
         result = package()
@@ -429,7 +555,7 @@ class OutputTest(unittest.TestCase):
 
     def test_failure_midway_leaves_no_partial_artifacts(self):
         root = self.tmp()
-        result = analyze(MANIFEST, JWKS, ISS, AUD, UPSTREAM, OPENAPI, ROUTES)
+        result = analyze(MANIFEST, JWKS, ISS, AUD, UPSTREAM, OPENAPI_BYTES, ROUTES)
         real = Path.write_text
         calls = {"n": 0}
 
@@ -451,7 +577,7 @@ class OutputTest(unittest.TestCase):
         (root / "out").mkdir()
         (root / "out" / "stale.xml").write_text("<policies/>")
         with self.assertRaises(FileExistsError):
-            write_output(analyze(MANIFEST, JWKS, ISS, AUD, UPSTREAM, OPENAPI, ROUTES), root / "out")
+            write_output(analyze(MANIFEST, JWKS, ISS, AUD, UPSTREAM, OPENAPI_BYTES, ROUTES), root / "out")
         self.assertEqual(["stale.xml"], [p.name for p in (root / "out").iterdir()])
 
 

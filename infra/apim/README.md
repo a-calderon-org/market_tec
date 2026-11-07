@@ -20,19 +20,21 @@ check and JWKS, issuer and audience are given.
 ## Approvals
 
 `approvals.*` in the manifest point to a JSON document in `infra/apim/evidence/` and its SHA-256. The
-document must contain exactly `approval_type`, `backend_sha`, `openapi_contract_version`,
+document must contain exactly `approval_type`, `backend_sha`, `openapi_contract_version`, `openapi_sha256`,
 `environment`, `apim_revision`, `review_id`, and match: the approval type, `backend-routes.json` sha,
-OpenAPI `info.version` and the manifest `target`. Anything else raises. The tool cannot prove who
+OpenAPI `info.version`, the SHA-256 of the exact OpenAPI file bytes used to generate, and the manifest `target`.
+A well-formed `review_id` is not an independent review. Anything else raises. The tool cannot prove who
 wrote a document: that needs GitHub required review / branch protection on `infra/apim/**` and an
 operator, which are **not** configured or checked here. Until then keep every approval `null`.
 
 ## Exports and evidence still required (outside this repo)
 
 * Exported policy XML for global, every product that contains the users API, and the API scope
-  (`--upstream-global|product|api`). Inherited scopes may hold only `base`, `cors`, `trace` and
-  non-protected `set-header`; `forward-request` only in global backend. Anything that could alter
-  `Authorization`/cookies/identity or end the request early is rejected because its effect needs the
-  effective policy evaluated in Azure.
+  (`--upstream-global|product|api`). Inherited scopes may hold only literal content: `base`, `cors`
+  (literal https origins; no named values, no `*` with credentials), `set-header` for the reviewed
+  literal names in `UPSTREAM_HEADER_ALLOWLIST`, and `forward-request` (global backend only). No
+  expressions, named values, `trace`, `choose`, `return-response` or `set-variable`: their effect on
+  credentials, identity or early termination needs the effective policy evaluated in Azure.
 * Operation-level policies currently on the API, effective-policy review, gateway compile/request
   tests of every expression on the target tier (Consumption), and operator deployment approval.
 * Named value `allowed-origins`; reviewed JWKS, issuer, audience; `target` environment/APIM revision.
