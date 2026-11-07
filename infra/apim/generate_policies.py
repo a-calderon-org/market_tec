@@ -1,15 +1,17 @@
 """Generate APIM operation definitions and policies from operations.json (policy as code).
 
-Fail-closed: any inconsistency aborts before output is written.
-* Routes are cross-checked against OpenAPI (x-public-apim-path) and the ms-users
-  controller route snapshot (backend-routes.json).
-* Anonymous admission stays 503 until abuse_protection_verified is true.
-* Operations tied to unreconciled ms-users contracts stay 503 until
-  contract_reconciliation_verified is true.
-* `<base />` cannot be skipped in APIM, so a definition is only "enabled" when the
-  exported global/product/api policies were supplied and contain no JWT/Google validation.
-* Cookies are only checked for presence/format; they never authenticate. Session
-  and CSRF verification belong to ms-users.
+Two clearly separated outputs:
+* analyze(): local review. Never publishable; the CLI writes it as *.xml.txt.
+* build_package(): publishable package. Refuses (PackageError) unless exported global,
+  product and api policies pass check_upstream and every other input is present.
+
+Fail-closed rules:
+* Security fields must equal SECURITY_REFERENCE (reviewed code), so editing operations.json
+  cannot downgrade protection or lift a block.
+* Blocked operations get a terminal deny: no <base /> before return-response and an empty
+  backend section, so neither inherited actions nor the backend are reachable.
+* Cookies are only checked for presence/format; they never authenticate. Session and CSRF
+  verification belong to ms-users.
 """
 import argparse
 import hashlib
@@ -19,20 +21,44 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from build_jwt_policy import build as build_jwt
+import security_reference
+from security_reference import COOKIE_NAMES, SECURITY_REFERENCE
 
 HERE = Path(__file__).parent
 AUTH = {"public", "cookie", "jwt", "jwt_cookie"}
-COOKIE_NAMES = {"attempt": "__Host-mtec-attempt", "refresh": "__Host-mtec-refresh"}
-COOKIE_ERRORS = {"attempt": "AUTH_PROOF_INVALID", "refresh": "REFRESH_INVALID"}
+COOKIE_ERRORS = {"attempt": "AUTH_PROOF_INVALID", "email_attempt": "AUTH_PROOF_INVALID", "refresh": "REFRESH_INVALID"}
 METHODS = {"GET", "POST", "PUT"}
 SPOOFABLE = ("X-User-Id", "X-Session-Id", "X-Authenticated-User")
+SCOPES = ["global", "product", "api"]
 PATH = re.compile(r"/[A-Za-z0-9._{}/-]*")
 ID = re.compile(r"[A-Za-z][A-Za-z0-9]{2,63}")
+SHA256 = re.compile(r"[0-9a-f]{64}")
 FIELDS = {"id", "method", "public_path", "backend_path", "auth", "cookies", "cookie_mode", "origin",
           "csrf", "anonymous_admission", "contract_status"}
-UPSTREAM_FORBIDDEN = ("validate-jwt", "validate-azure-ad-token", "accounts.google.com", "openid-config")
+REFERENCE_FIELDS = ("auth", "cookies", "cookie_mode", "origin", "csrf", "anonymous_admission", "contract_status")
+APPROVALS = ("abuse_protection", "ms_users_contract")
+SECTIONS = ("inbound", "backend", "outbound", "on-error")
 COOKIE_VALUE = r"[A-Za-z0-9._~+/=-]{16,512}"
-CSRF_VALUE = r"^[\x21-\x2B\x2D-\x7E]{1,256}$"
+CSRF_VALUE = r"\A[\x21-\x2B\x2D-\x7E]{1,256}\z"
+
+# Elements an exported upstream policy may contain. Anything else (including <anything/>) is rejected.
+UPSTREAM_ALLOWED = {
+    "policies", "inbound", "backend", "outbound", "on-error", "base", "cors", "allowed-origins", "origin",
+    "allowed-methods", "method", "allowed-headers", "expose-headers", "header", "set-header", "value",
+    "set-variable", "choose", "when", "otherwise", "return-response", "set-status", "set-body",
+    "forward-request", "trace", "metadata", "find-and-replace", "check-header", "ip-filter", "address",
+    "address-range"}
+UPSTREAM_EXPLICIT_REJECT = {"validate-jwt", "validate-azure-ad-token", "include-fragment", "send-request",
+                            "send-one-way-request", "rewrite-uri", "set-backend-service"}
+UPSTREAM_MARKERS = ("accounts.google.com", "openid-config", "googleapis", "validate-jwt", "validate-azure-ad-token")
+REQUIRED_EXPORTS = {
+    "global": "policy exported at global scope (service-wide policy)",
+    "product": "policy exported for every product that contains the users API",
+    "api": "policy exported at API scope for the users API"}
+
+
+class PackageError(ValueError):
+    """The inputs cannot produce a publishable package."""
 
 
 def _params(path: str) -> list:
@@ -40,25 +66,29 @@ def _params(path: str) -> list:
 
 
 def validate(manifest: dict) -> list:
-    if manifest.get("version") != 2 or manifest.get("backend") != "ms-users":
+    if manifest.get("version") != 3 or manifest.get("backend") != "ms-users":
         raise ValueError("unsupported manifest")
-    for flag in ("abuse_protection_verified", "contract_reconciliation_verified"):
-        if not isinstance(manifest.get(flag), bool):
-            raise ValueError(f"{flag} must be boolean")
-    if manifest.get("upstream_scopes") != ["global", "product", "api"]:
+    approvals = manifest.get("approvals")
+    if not isinstance(approvals, dict) or set(approvals) != set(APPROVALS):
+        raise ValueError("approvals must list exactly " + ", ".join(APPROVALS))
+    for value in approvals.values():
+        if value is not None and (not isinstance(value, dict) or set(value) != {"evidence_sha256"}
+                                  or not SHA256.fullmatch(str(value["evidence_sha256"]))):
+            raise ValueError("approval must be null or an evidence_sha256 object")
+    if manifest.get("upstream_scopes") != SCOPES:
         raise ValueError("upstream scopes must be global, product, api")
-    ops, ids, routes = manifest.get("operations"), set(), set()
+    ops, ids, routes, backend = manifest.get("operations"), set(), set(), set()
     if not isinstance(ops, list) or not ops:
         raise ValueError("no operations")
     for op in ops:
-        if set(op) != FIELDS:
+        if not isinstance(op, dict) or set(op) != FIELDS:
             raise ValueError("unexpected operation fields")
         if not ID.fullmatch(str(op["id"])) or op["id"] in ids:
             raise ValueError("invalid or duplicate id")
         if op["method"] not in METHODS or op["auth"] not in AUTH:
             raise ValueError("invalid method or auth")
         for key in ("public_path", "backend_path"):
-            if not PATH.fullmatch(str(op[key])) or ".." in op[key] or "//" in op[key]:
+            if not isinstance(op[key], str) or not PATH.fullmatch(op[key]) or ".." in op[key] or "//" in op[key]:
                 raise ValueError("invalid path")
         if _params(op["public_path"]) != _params(op["backend_path"]):
             raise ValueError("path parameters differ between public and backend path")
@@ -88,20 +118,31 @@ def validate(manifest: dict) -> list:
         if op["auth"] in ("public", "jwt") and cookies:
             raise ValueError("unexpected cookies")
         route = (op["method"], op["public_path"])
-        if route in routes:
-            raise ValueError("duplicate public route")
+        if route in routes or (op["method"], op["backend_path"]) in backend:
+            raise ValueError("duplicate route")
         ids.add(op["id"])
         routes.add(route)
+        backend.add((op["method"], op["backend_path"]))
     return ops
 
 
+def verify_reference(ops: list) -> None:
+    """The manifest may not differ from the reviewed security reference in any direction."""
+    if {(o["method"], o["backend_path"]) for o in ops} != set(SECURITY_REFERENCE):
+        raise ValueError("operations differ from the security reference")
+    for op in ops:
+        expected = SECURITY_REFERENCE[(op["method"], op["backend_path"])]
+        for field in REFERENCE_FIELDS:
+            if op[field] != expected[field]:
+                raise ValueError(f"{op['id']}: {field} differs from the security reference")
+
+
 def verify_sources(manifest: dict, openapi: dict, backend_routes: dict) -> None:
-    """Reject mappings that disagree with the OpenAPI contract or the real controllers."""
+    """Reject mappings that disagree with the security reference, OpenAPI or the real controllers."""
     ops = validate(manifest)
+    verify_reference(ops)
     java = {tuple(route) for route in backend_routes["routes"]}
     declared = {(op["method"], op["backend_path"]) for op in ops}
-    if len(declared) != len(ops):
-        raise ValueError("duplicate backend route")
     if declared != java:
         raise ValueError(f"manifest and controller routes differ: {sorted(declared ^ java)}")
     spec = {(m.upper(), p): o for p, item in openapi["paths"].items() for m, o in item.items() if m in ("get", "post", "put")}
@@ -116,14 +157,44 @@ def verify_sources(manifest: dict, openapi: dict, backend_routes: dict) -> None:
 
 
 def check_upstream(scope: str, xml: str) -> None:
+    """Validate the structure and content of an exported policy for one inheritance scope.
+
+    Only parsed elements count: XML comments are ignored by the parser, so a commented-out
+    control is neither a control nor a reason to reject.
+    """
+    if scope not in SCOPES:
+        raise ValueError(f"unknown upstream scope {scope}")
+    if re.search(r"<!(DOCTYPE|ENTITY)", xml, re.I):
+        raise ValueError(f"{scope}: DTD/entities not allowed")
     try:
-        ET.fromstring(xml)
+        root = ET.fromstring(xml)
     except ET.ParseError as error:
-        raise ValueError(f"unparseable {scope} policy") from error
-    lowered = xml.lower()
-    for marker in UPSTREAM_FORBIDDEN:
-        if marker in lowered:
-            raise ValueError(f"{scope} policy contains inherited {marker}")
+        raise ValueError(f"{scope}: unparseable policy") from error
+    if root.tag != "policies":
+        raise ValueError(f"{scope}: root must be <policies>")
+    if [child.tag for child in root] != list(SECTIONS):
+        raise ValueError(f"{scope}: expected sections {SECTIONS} exactly once and in order")
+    for element in root.iter():
+        if element.tag in UPSTREAM_EXPLICIT_REJECT:
+            raise ValueError(f"{scope}: forbidden element <{element.tag}>")
+        if element.tag not in UPSTREAM_ALLOWED:
+            raise ValueError(f"{scope}: unknown or unexpandable element <{element.tag}>")
+        blob = " ".join([element.text or "", *element.attrib.values()]).lower()
+        for marker in UPSTREAM_MARKERS:
+            if marker in blob:
+                raise ValueError(f"{scope}: inherited {marker}")
+        if element.tag == "set-header" and element.attrib.get("name", "").lower() in {h.lower() for h in SPOOFABLE}:
+            raise ValueError(f"{scope}: sets identity header")
+        if element.tag == "cors" and element.attrib.get("allow-credentials", "").lower() == "true":
+            origins = [o.text for o in element.findall("./allowed-origins/origin")]
+            if not origins or "*" in origins:
+                raise ValueError(f"{scope}: credentialed CORS must list exact origins")
+    bases = {section.tag: len(section.findall("./base")) for section in root}
+    if scope == "global":
+        if any(bases.values()):
+            raise ValueError("global: <base /> has no parent scope")
+    elif set(bases.values()) != {1}:
+        raise ValueError(f"{scope}: every section needs exactly one <base /> so parent scopes keep applying")
 
 
 def _skeleton() -> ET.Element:
@@ -157,55 +228,80 @@ def _guard(condition: str, status: int, reason: str, code: str) -> ET.Element:
     return choose
 
 
-def _cookie_count(name: str) -> str:
-    return f'System.Text.RegularExpressions.Regex.Matches(context.Request.Headers.GetValueOrDefault("Cookie",""), @"(^|;\\s*){name}=").Count'
+def _header(name: str) -> str:
+    return f'context.Request.Headers.GetValueOrDefault("{name}", new string[0])'
 
 
-def _cookie_valid(name: str) -> str:
-    return f'System.Text.RegularExpressions.Regex.IsMatch(context.Request.Headers.GetValueOrDefault("Cookie",""), @"(^|;\\s*){name}={COOKIE_VALUE}(;|$)")'
+def _cookie_header() -> str:
+    return f'string.Join("; ", {_header("Cookie")})'
+
+
+def _count(name: str) -> str:
+    return f'System.Text.RegularExpressions.Regex.Matches({_cookie_header()}, @"(^|;\\s*){name}=").Count'
+
+
+def _valid(name: str) -> str:
+    return f'System.Text.RegularExpressions.Regex.IsMatch({_cookie_header()}, @"(^|;\\s*){name}={COOKIE_VALUE}(;|\\z)")'
 
 
 def _csrf_invalid() -> str:
-    return f'!System.Text.RegularExpressions.Regex.IsMatch(context.Request.Headers.GetValueOrDefault("X-CSRF-Token",""), @"{CSRF_VALUE}")'
+    return (f'{_header("X-CSRF-Token")}.Length != 1 || '
+            f'!System.Text.RegularExpressions.Regex.IsMatch({_header("X-CSRF-Token")}[0], @"{CSRF_VALUE}")')
 
 
 def checks_for(op: dict) -> list:
     """Cheap gateway checks. Cookie presence/format is never treated as authentication."""
     checks = []
     if op["origin"]:
+        origin = _header("Origin")
         checks.append(_guard(
-            '@{ var o = context.Request.Headers.GetValueOrDefault("Origin",""); return o == "" || !"{{allowed-origins}}".Split(\',\').Contains(o); }',
+            f'@{{ var o = {origin}; return o.Length != 1 || o[0] == "" || o[0] == "null" || !"{{{{allowed-origins}}}}".Split(\',\').Contains(o[0]); }}',
             403, "Forbidden", "ORIGIN_DENIED"))
     for kind in op["cookies"]:
         name = COOKIE_NAMES[kind]
         if op["cookie_mode"] == "required":
-            condition = f"@{{ return {_cookie_count(name)} != 1 || !{_cookie_valid(name)}; }}"
+            condition = f"@{{ return {_count(name)} != 1 || !{_valid(name)}; }}"
         else:
-            condition = f"@{{ return {_cookie_count(name)} > 1 || ({_cookie_count(name)} == 1 && !{_cookie_valid(name)}); }}"
+            condition = f"@{{ return {_count(name)} > 1 || ({_count(name)} == 1 && !{_valid(name)}); }}"
         checks.append(_guard(condition, 401, "Unauthorized", COOKIE_ERRORS[kind]))
     if op["csrf"] == "required":
         checks.append(_guard(f"@{{ return {_csrf_invalid()}; }}", 403, "Forbidden", "CSRF_INVALID"))
     elif op["csrf"] == "if_cookie":
         # Idempotent logout: no cookie means no CSRF demand and ms-users answers 204.
-        present = " || ".join(f"{_cookie_count(COOKIE_NAMES[k])} == 1" for k in op["cookies"])
-        checks.append(_guard(f"@{{ return ({present}) && {_csrf_invalid()}; }}", 403, "Forbidden", "CSRF_INVALID"))
+        present = " || ".join(f"{_count(COOKIE_NAMES[k])} == 1" for k in op["cookies"])
+        checks.append(_guard(f"@{{ return ({present}) && ({_csrf_invalid()}); }}", 403, "Forbidden", "CSRF_INVALID"))
     return checks
 
 
+def approved(manifest: dict, name: str) -> bool:
+    """Approval needs evidence whose hash was added to APPROVED_EVIDENCE by code review."""
+    claim = manifest["approvals"][name]
+    expected = security_reference.APPROVED_EVIDENCE.get(name)
+    return bool(claim and expected and claim["evidence_sha256"] == expected)
+
+
 def blocked_reason(op: dict, manifest: dict):
-    if op["anonymous_admission"] and not manifest["abuse_protection_verified"]:
-        return "abuse_protection_unverified", "ADMISSION_DISABLED"
-    if op["contract_status"] != "reconciled" and not manifest["contract_reconciliation_verified"]:
+    if op["anonymous_admission"] and not approved(manifest, "abuse_protection"):
+        return "abuse_protection_unapproved", "ADMISSION_DISABLED"
+    if op["contract_status"] != "reconciled" and not approved(manifest, "ms_users_contract"):
         return "ms_users_contract_unreconciled", "BACKEND_CONTRACT_PENDING"
     return None
+
+
+def terminal_deny(code: str) -> str:
+    """No <base /> in inbound/backend/outbound: parent scopes and the backend are unreachable."""
+    root = ET.Element("policies")
+    ET.SubElement(root, "inbound").append(_deny(503, "Service Unavailable", code))
+    ET.SubElement(root, "backend")
+    ET.SubElement(root, "outbound")
+    ET.SubElement(root, "on-error")
+    return _text(root)
 
 
 def policy_for(op: dict, manifest: dict, jwks, issuer: str, audience: str) -> str:
     blocked = blocked_reason(op, manifest)
     if blocked:
-        root = _skeleton()
-        root.find("inbound").append(_deny(503, "Service Unavailable", blocked[1]))
-        return _text(root)
+        return terminal_deny(blocked[1])
     if op["auth"] in ("jwt", "jwt_cookie"):
         if jwks is None:
             raise ValueError("jwks snapshot required for internal-JWT operations")
@@ -220,59 +316,85 @@ def policy_for(op: dict, manifest: dict, jwks, issuer: str, audience: str) -> st
     return _text(root)
 
 
-def generate(manifest: dict, jwks, issuer: str, audience: str, upstream_xml: dict = None,
-             openapi: dict = None, backend_routes: dict = None) -> dict:
-    """Return {"policies": {id: xml}, "definitions": [...]}."""
+def _prepare(manifest, openapi, backend_routes):
     ops = validate(manifest)
-    if (openapi is None) != (backend_routes is None):
-        raise ValueError("openapi and backend routes must be supplied together")
-    if openapi is not None:
-        verify_sources(manifest, openapi, backend_routes)
-    upstream_xml = upstream_xml or {}
-    if set(upstream_xml) - set(manifest["upstream_scopes"]):
-        raise ValueError("unknown upstream scope")
-    for scope, xml in upstream_xml.items():
-        check_upstream(scope, xml)
-    upstream_verified = set(upstream_xml) == set(manifest["upstream_scopes"])
+    verify_reference(ops)
+    if openapi is None or backend_routes is None:
+        raise ValueError("openapi and backend routes are required")
+    verify_sources(manifest, openapi, backend_routes)
+    return ops
+
+
+def _definitions(ops, manifest, jwks, issuer, audience):
     policies, definitions = {}, []
     for op in ops:
         xml = policy_for(op, manifest, jwks, issuer, audience)
-        policies[op["id"]] = xml
-        reasons = []
         blocked = blocked_reason(op, manifest)
-        if blocked:
-            reasons.append(blocked[0])
-        if not upstream_verified:
-            reasons.append("inherited_policy_scopes_unverified")
+        policies[op["id"]] = xml
         definitions.append({
             "id": op["id"], "method": op["method"], "url_template": op["public_path"],
             "backend": manifest["backend"], "backend_path": op["backend_path"],
             "classification": op["auth"], "policy_file": f"{op['id']}.xml",
             "policy_sha256": hashlib.sha256(xml.encode()).hexdigest(),
-            "status": "blocked" if reasons else "enabled", "blocked_reasons": reasons})
-    return {"policies": policies, "definitions": definitions}
+            "status": "blocked" if blocked else "enabled", "blocked_reasons": [blocked[0]] if blocked else []})
+    return policies, definitions
+
+
+def upstream_report(upstream_xml: dict) -> dict:
+    """Validate every supplied scope; report which exports are still missing."""
+    upstream_xml = upstream_xml or {}
+    if set(upstream_xml) - set(SCOPES):
+        raise ValueError("unknown upstream scope")
+    for scope, xml in upstream_xml.items():
+        check_upstream(scope, xml)
+    return {"missing_exports": {s: REQUIRED_EXPORTS[s] for s in SCOPES if s not in upstream_xml}}
+
+
+def analyze(manifest, jwks, issuer, audience, upstream_xml=None, openapi=None, backend_routes=None) -> dict:
+    """Local review output. Never publishable, whatever the inputs."""
+    ops = _prepare(manifest, openapi, backend_routes)
+    report = upstream_report(upstream_xml)
+    policies, definitions = _definitions(ops, manifest, jwks, issuer, audience)
+    return {"publishable": False, "missing_exports": report["missing_exports"],
+            "policies": policies, "definitions": definitions}
+
+
+def build_package(manifest, jwks, issuer, audience, upstream_xml=None, openapi=None, backend_routes=None) -> dict:
+    """Publishable package, or PackageError. Blocked operations are terminal denials."""
+    ops = _prepare(manifest, openapi, backend_routes)
+    report = upstream_report(upstream_xml)
+    if report["missing_exports"]:
+        raise PackageError("missing verified upstream policy exports: " + ", ".join(report["missing_exports"]))
+    if jwks is None or not issuer or not audience:
+        raise PackageError("reviewed JWKS snapshot, issuer and audience are required")
+    policies, definitions = _definitions(ops, manifest, jwks, issuer, audience)
+    return {"publishable": True, "policies": policies, "definitions": definitions}
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--mode", choices=("analyze", "package"), required=True)
     parser.add_argument("--manifest", type=Path, default=HERE / "operations.json")
     parser.add_argument("--openapi", type=Path, default=HERE / "../../contracts/openapi/users.json")
     parser.add_argument("--backend-routes", type=Path, default=HERE / "backend-routes.json")
     parser.add_argument("--jwks", type=Path)
     parser.add_argument("--issuer", required=True)
     parser.add_argument("--audience", required=True)
-    for scope in ("global", "product", "api"):
+    for scope in SCOPES:
         parser.add_argument(f"--upstream-{scope}", type=Path, help=f"exported {scope}-scope policy XML")
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
-    upstream = {s: getattr(args, f"upstream_{s}").read_text() for s in ("global", "product", "api") if getattr(args, f"upstream_{s}")}
-    result = generate(json.loads(args.manifest.read_text()),
-                      json.loads(args.jwks.read_text()) if args.jwks else None, args.issuer, args.audience, upstream,
-                      json.loads(args.openapi.read_text()), json.loads(args.backend_routes.read_text()))
+    upstream = {s: getattr(args, f"upstream_{s}").read_text() for s in SCOPES if getattr(args, f"upstream_{s}")}
+    inputs = (json.loads(args.manifest.read_text()), json.loads(args.jwks.read_text()) if args.jwks else None,
+              args.issuer, args.audience, upstream, json.loads(args.openapi.read_text()),
+              json.loads(args.backend_routes.read_text()))
+    result = (build_package if args.mode == "package" else analyze)(*inputs)
     args.output_dir.mkdir(parents=True, exist_ok=True)
+    suffix, index = (".xml", "operations.generated.json") if result["publishable"] else (".xml.txt", "operations.analysis.json")
     for name, xml in result["policies"].items():
-        (args.output_dir / f"{name}.xml").write_text(xml)
-    (args.output_dir / "operations.generated.json").write_text(json.dumps(result["definitions"], indent=2) + "\n")
+        (args.output_dir / f"{name}{suffix}").write_text(xml)
+    meta = {k: v for k, v in result.items() if k != "policies"}
+    (args.output_dir / index).write_text(json.dumps(meta, indent=2) + "\n")
 
 
 if __name__ == "__main__":

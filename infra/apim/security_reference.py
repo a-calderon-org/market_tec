@@ -1,0 +1,223 @@
+"""Independent security reference for every ms-users operation.
+
+Operations.json is editable data; this module is reviewed code. The generator rejects any
+manifest whose security fields differ from this table, so a route cannot be downgraded
+(e.g. jwt -> public) or unblocked by editing the manifest. Changing it needs a code review.
+"""
+
+import hashlib
+
+# Evidence documents approved through code review: name -> sha256 of the approved evidence.
+# Empty on purpose: flipping a manifest value is never evidence of approval.
+APPROVED_EVIDENCE = {}
+
+COOKIE_NAMES = {"attempt": "__Host-mtec-attempt", "email_attempt": "__Host-mtec-email-attempt",
+                "refresh": "__Host-mtec-refresh"}
+
+SECURITY_REFERENCE = {
+    ('GET', '/health'): {
+        'auth': 'public',
+        'cookies': [],
+        'cookie_mode': 'none',
+        'origin': False,
+        'csrf': 'none',
+        'anonymous_admission': False,
+        'contract_status': 'reconciled',
+    },
+    ('GET', '/.well-known/jwks.json'): {
+        'auth': 'public',
+        'cookies': [],
+        'cookie_mode': 'none',
+        'origin': False,
+        'csrf': 'none',
+        'anonymous_admission': False,
+        'contract_status': 'reconciled',
+    },
+    ('GET', '/.well-known/markettec-identity'): {
+        'auth': 'public',
+        'cookies': [],
+        'cookie_mode': 'none',
+        'origin': False,
+        'csrf': 'none',
+        'anonymous_admission': False,
+        'contract_status': 'reconciled',
+    },
+    ('POST', '/v1/auth/attempts'): {
+        'auth': 'public',
+        'cookies': [],
+        'cookie_mode': 'none',
+        'origin': True,
+        'csrf': 'none',
+        'anonymous_admission': True,
+        'contract_status': 'reconciled',
+    },
+    ('POST', '/v1/auth/google'): {
+        'auth': 'cookie',
+        'cookies': ['attempt'],
+        'cookie_mode': 'required',
+        'origin': True,
+        'csrf': 'required',
+        'anonymous_admission': True,
+        'contract_status': 'reconciled',
+    },
+    ('POST', '/v1/auth/google/registrations'): {
+        'auth': 'cookie',
+        'cookies': ['attempt'],
+        'cookie_mode': 'required',
+        'origin': True,
+        'csrf': 'required',
+        'anonymous_admission': True,
+        'contract_status': 'reconciled',
+    },
+    ('POST', '/v1/auth/email/requests'): {
+        'auth': 'public',
+        'cookies': [],
+        'cookie_mode': 'none',
+        'origin': True,
+        'csrf': 'none',
+        'anonymous_admission': True,
+        'contract_status': 'reconciled',
+    },
+    ('POST', '/v1/auth/email/confirm'): {
+        'auth': 'cookie',
+        'cookies': ['email_attempt'],
+        'cookie_mode': 'required',
+        'origin': True,
+        'csrf': 'required',
+        'anonymous_admission': True,
+        'contract_status': 'reconciled',
+    },
+    ('GET', '/v1/auth/session'): {
+        'auth': 'cookie',
+        'cookies': ['refresh'],
+        'cookie_mode': 'optional',
+        'origin': False,
+        'csrf': 'none',
+        'anonymous_admission': False,
+        'contract_status': 'reconciled',
+    },
+    ('POST', '/v1/auth/refresh'): {
+        'auth': 'cookie',
+        'cookies': ['refresh'],
+        'cookie_mode': 'required',
+        'origin': True,
+        'csrf': 'required',
+        'anonymous_admission': False,
+        'contract_status': 'reconciled',
+    },
+    ('POST', '/v1/auth/logout'): {
+        'auth': 'cookie',
+        'cookies': ['refresh'],
+        'cookie_mode': 'optional',
+        'origin': True,
+        'csrf': 'if_cookie',
+        'anonymous_admission': False,
+        'contract_status': 'reconciled',
+    },
+    ('POST', '/v1/auth/session/activity'): {
+        'auth': 'jwt_cookie',
+        'cookies': ['refresh'],
+        'cookie_mode': 'required',
+        'origin': True,
+        'csrf': 'required',
+        'anonymous_admission': False,
+        'contract_status': 'reconciled',
+    },
+    ('POST', '/v1/auth/proofs/attempts'): {
+        'auth': 'jwt_cookie',
+        'cookies': ['refresh'],
+        'cookie_mode': 'required',
+        'origin': True,
+        'csrf': 'required',
+        'anonymous_admission': False,
+        'contract_status': 'pending_ms_users_pr23',
+    },
+    ('POST', '/v1/auth/proofs/google'): {
+        'auth': 'jwt_cookie',
+        'cookies': ['refresh'],
+        'cookie_mode': 'required',
+        'origin': True,
+        'csrf': 'required',
+        'anonymous_admission': False,
+        'contract_status': 'pending_ms_users_pr23',
+    },
+    ('POST', '/v1/auth/proofs/email/requests'): {
+        'auth': 'jwt_cookie',
+        'cookies': ['refresh'],
+        'cookie_mode': 'required',
+        'origin': True,
+        'csrf': 'required',
+        'anonymous_admission': False,
+        'contract_status': 'pending_ms_users_pr23',
+    },
+    ('POST', '/v1/auth/proofs/email/confirm'): {
+        'auth': 'jwt_cookie',
+        'cookies': ['refresh'],
+        'cookie_mode': 'required',
+        'origin': True,
+        'csrf': 'required',
+        'anonymous_admission': False,
+        'contract_status': 'pending_ms_users_pr23',
+    },
+    ('POST', '/v1/me/auth-methods'): {
+        'auth': 'jwt_cookie',
+        'cookies': ['refresh'],
+        'cookie_mode': 'required',
+        'origin': True,
+        'csrf': 'required',
+        'anonymous_admission': False,
+        'contract_status': 'pending_ms_users_pr23',
+    },
+    ('GET', '/v1/me/auth-methods'): {
+        'auth': 'jwt',
+        'cookies': [],
+        'cookie_mode': 'none',
+        'origin': False,
+        'csrf': 'none',
+        'anonymous_admission': False,
+        'contract_status': 'reconciled',
+    },
+    ('GET', '/v1/me/profile'): {
+        'auth': 'jwt',
+        'cookies': [],
+        'cookie_mode': 'none',
+        'origin': False,
+        'csrf': 'none',
+        'anonymous_admission': False,
+        'contract_status': 'reconciled',
+    },
+    ('PUT', '/v1/me/profile'): {
+        'auth': 'jwt',
+        'cookies': [],
+        'cookie_mode': 'none',
+        'origin': True,
+        'csrf': 'none',
+        'anonymous_admission': False,
+        'contract_status': 'reconciled',
+    },
+    ('GET', '/v1/usuarios/{userId}'): {
+        'auth': 'jwt',
+        'cookies': [],
+        'cookie_mode': 'none',
+        'origin': False,
+        'csrf': 'none',
+        'anonymous_admission': False,
+        'contract_status': 'reconciled',
+    },
+    ('PUT', '/v1/usuarios/{userId}'): {
+        'auth': 'jwt',
+        'cookies': [],
+        'cookie_mode': 'none',
+        'origin': True,
+        'csrf': 'none',
+        'anonymous_admission': False,
+        'contract_status': 'reconciled',
+    },
+}
+
+
+
+def reference_digest() -> str:
+    """Stable fingerprint of the reference, for reviewers and tests."""
+    canonical = repr(sorted((k, sorted(v.items())) for k, v in SECURITY_REFERENCE.items()))
+    return hashlib.sha256(canonical.encode()).hexdigest()

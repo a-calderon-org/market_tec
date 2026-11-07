@@ -1,19 +1,17 @@
 {
-  "version": 2,
+  "version": 3,
   "backend": "ms-users",
-  "abuse_protection_verified": false,
-  "contract_reconciliation_verified": false,
   "upstream_scopes": [
     "global",
     "product",
     "api"
   ],
   "external_requirements": [
+    "exported global, product and api policy XML (see README.md) accepted by check_upstream",
     "named value allowed-origins (comma-separated exact origins)",
-    "exported global/product/api policy XML verified free of Google/JWT validation",
-    "reviewed public JWKS snapshot, issuer and audience",
-    "verified abuse protection for anonymous admission",
-    "ms-users PR #23 proof/link contract reconciliation"
+    "reviewed public JWKS snapshot plus issuer and audience",
+    "abuse protection for anonymous admission that works on APIM Consumption (rate-limit-by-key is unavailable there); evidence hash added to APPROVED_EVIDENCE through code review",
+    "ms-users proof/link contract reconciliation; evidence hash added to APPROVED_EVIDENCE through code review"
   ],
   "operations": [
     {
@@ -103,13 +101,11 @@
       "method": "POST",
       "public_path": "/auth/email/requests",
       "backend_path": "/v1/auth/email/requests",
-      "auth": "cookie",
-      "cookies": [
-        "attempt"
-      ],
-      "cookie_mode": "required",
+      "auth": "public",
+      "cookies": [],
+      "cookie_mode": "none",
       "origin": true,
-      "csrf": "required",
+      "csrf": "none",
       "anonymous_admission": true,
       "contract_status": "reconciled"
     },
@@ -120,7 +116,7 @@
       "backend_path": "/v1/auth/email/confirm",
       "auth": "cookie",
       "cookies": [
-        "attempt"
+        "email_attempt"
       ],
       "cookie_mode": "required",
       "origin": true,
@@ -328,5 +324,9 @@
       "anonymous_admission": false,
       "contract_status": "reconciled"
     }
-  ]
+  ],
+  "approvals": {
+    "abuse_protection": null,
+    "ms_users_contract": null
+  }
 }
