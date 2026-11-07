@@ -1,231 +1,332 @@
 {
-  "version": 1,
+  "version": 2,
   "backend": "ms-users",
   "abuse_protection_verified": false,
+  "contract_reconciliation_verified": false,
+  "upstream_scopes": [
+    "global",
+    "product",
+    "api"
+  ],
+  "external_requirements": [
+    "named value allowed-origins (comma-separated exact origins)",
+    "exported global/product/api policy XML verified free of Google/JWT validation",
+    "reviewed public JWKS snapshot, issuer and audience",
+    "verified abuse protection for anonymous admission",
+    "ms-users PR #23 proof/link contract reconciliation"
+  ],
   "operations": [
     {
       "id": "getUsersHealth",
       "method": "GET",
-      "path": "/health",
+      "public_path": "/health",
       "backend_path": "/health",
       "auth": "public",
       "cookies": [],
-      "anonymous_admission": false
+      "cookie_mode": "none",
+      "origin": false,
+      "csrf": "none",
+      "anonymous_admission": false,
+      "contract_status": "reconciled"
     },
     {
       "id": "getPublicSigningKeys",
       "method": "GET",
-      "path": "/.well-known/jwks.json",
+      "public_path": "/.well-known/jwks.json",
       "backend_path": "/.well-known/jwks.json",
       "auth": "public",
       "cookies": [],
-      "anonymous_admission": false
+      "cookie_mode": "none",
+      "origin": false,
+      "csrf": "none",
+      "anonymous_admission": false,
+      "contract_status": "reconciled"
     },
     {
       "id": "getIdentityMetadata",
       "method": "GET",
-      "path": "/.well-known/markettec-identity",
+      "public_path": "/.well-known/markettec-identity",
       "backend_path": "/.well-known/markettec-identity",
       "auth": "public",
       "cookies": [],
-      "anonymous_admission": false
+      "cookie_mode": "none",
+      "origin": false,
+      "csrf": "none",
+      "anonymous_admission": false,
+      "contract_status": "reconciled"
     },
     {
       "id": "createAuthenticationAttempt",
       "method": "POST",
-      "path": "/v1/auth/attempts",
+      "public_path": "/auth/attempts",
       "backend_path": "/v1/auth/attempts",
       "auth": "public",
       "cookies": [],
-      "anonymous_admission": true
+      "cookie_mode": "none",
+      "origin": true,
+      "csrf": "none",
+      "anonymous_admission": true,
+      "contract_status": "reconciled"
     },
     {
       "id": "exchangeGoogleCredential",
       "method": "POST",
-      "path": "/v1/auth/google",
+      "public_path": "/auth/google",
       "backend_path": "/v1/auth/google",
       "auth": "cookie",
       "cookies": [
         "attempt"
       ],
-      "anonymous_admission": true
+      "cookie_mode": "required",
+      "origin": true,
+      "csrf": "required",
+      "anonymous_admission": true,
+      "contract_status": "reconciled"
     },
     {
       "id": "legacyGoogleRegistrationCompatibility",
       "method": "POST",
-      "path": "/v1/auth/google/registrations",
+      "public_path": "/auth/google/registrations",
       "backend_path": "/v1/auth/google/registrations",
       "auth": "cookie",
       "cookies": [
         "attempt"
       ],
-      "anonymous_admission": true
+      "cookie_mode": "required",
+      "origin": true,
+      "csrf": "required",
+      "anonymous_admission": true,
+      "contract_status": "reconciled"
     },
     {
       "id": "requestInstitutionalEmailLink",
       "method": "POST",
-      "path": "/v1/auth/email/requests",
+      "public_path": "/auth/email/requests",
       "backend_path": "/v1/auth/email/requests",
       "auth": "cookie",
       "cookies": [
         "attempt"
       ],
-      "anonymous_admission": true
+      "cookie_mode": "required",
+      "origin": true,
+      "csrf": "required",
+      "anonymous_admission": true,
+      "contract_status": "reconciled"
     },
     {
       "id": "confirmInstitutionalEmailLink",
       "method": "POST",
-      "path": "/v1/auth/email/confirm",
+      "public_path": "/auth/email/confirm",
       "backend_path": "/v1/auth/email/confirm",
       "auth": "cookie",
       "cookies": [
         "attempt"
       ],
-      "anonymous_admission": true
+      "cookie_mode": "required",
+      "origin": true,
+      "csrf": "required",
+      "anonymous_admission": true,
+      "contract_status": "reconciled"
     },
     {
       "id": "getSessionState",
       "method": "GET",
-      "path": "/v1/auth/session",
+      "public_path": "/auth/session",
       "backend_path": "/v1/auth/session",
       "auth": "cookie",
       "cookies": [
         "refresh"
       ],
-      "anonymous_admission": false
+      "cookie_mode": "optional",
+      "origin": false,
+      "csrf": "none",
+      "anonymous_admission": false,
+      "contract_status": "reconciled"
     },
     {
       "id": "refreshSession",
       "method": "POST",
-      "path": "/v1/auth/refresh",
+      "public_path": "/auth/refresh",
       "backend_path": "/v1/auth/refresh",
       "auth": "cookie",
       "cookies": [
         "refresh"
       ],
-      "anonymous_admission": false
+      "cookie_mode": "required",
+      "origin": true,
+      "csrf": "required",
+      "anonymous_admission": false,
+      "contract_status": "reconciled"
     },
     {
       "id": "logoutSession",
       "method": "POST",
-      "path": "/v1/auth/logout",
+      "public_path": "/auth/logout",
       "backend_path": "/v1/auth/logout",
       "auth": "cookie",
       "cookies": [
         "refresh"
       ],
-      "anonymous_admission": false
+      "cookie_mode": "optional",
+      "origin": true,
+      "csrf": "if_cookie",
+      "anonymous_admission": false,
+      "contract_status": "reconciled"
     },
     {
       "id": "recordSessionActivity",
       "method": "POST",
-      "path": "/v1/auth/session/activity",
+      "public_path": "/auth/session/activity",
       "backend_path": "/v1/auth/session/activity",
       "auth": "jwt_cookie",
       "cookies": [
         "refresh"
       ],
-      "anonymous_admission": false
+      "cookie_mode": "required",
+      "origin": true,
+      "csrf": "required",
+      "anonymous_admission": false,
+      "contract_status": "reconciled"
     },
     {
       "id": "createMethodProofAttempt",
       "method": "POST",
-      "path": "/v1/auth/proofs/attempts",
+      "public_path": "/auth/proofs/attempts",
       "backend_path": "/v1/auth/proofs/attempts",
       "auth": "jwt_cookie",
       "cookies": [
         "refresh"
       ],
-      "anonymous_admission": false
+      "cookie_mode": "required",
+      "origin": true,
+      "csrf": "required",
+      "anonymous_admission": false,
+      "contract_status": "pending_ms_users_pr23"
     },
     {
       "id": "verifyGoogleMethodProof",
       "method": "POST",
-      "path": "/v1/auth/proofs/google",
+      "public_path": "/auth/proofs/google",
       "backend_path": "/v1/auth/proofs/google",
       "auth": "jwt_cookie",
       "cookies": [
         "refresh"
       ],
-      "anonymous_admission": false
+      "cookie_mode": "required",
+      "origin": true,
+      "csrf": "required",
+      "anonymous_admission": false,
+      "contract_status": "pending_ms_users_pr23"
     },
     {
       "id": "requestEmailMethodProof",
       "method": "POST",
-      "path": "/v1/auth/proofs/email/requests",
+      "public_path": "/auth/proofs/email/requests",
       "backend_path": "/v1/auth/proofs/email/requests",
       "auth": "jwt_cookie",
       "cookies": [
         "refresh"
       ],
-      "anonymous_admission": false
+      "cookie_mode": "required",
+      "origin": true,
+      "csrf": "required",
+      "anonymous_admission": false,
+      "contract_status": "pending_ms_users_pr23"
     },
     {
       "id": "verifyEmailMethodProof",
       "method": "POST",
-      "path": "/v1/auth/proofs/email/confirm",
+      "public_path": "/auth/proofs/email/confirm",
       "backend_path": "/v1/auth/proofs/email/confirm",
       "auth": "jwt_cookie",
       "cookies": [
         "refresh"
       ],
-      "anonymous_admission": false
+      "cookie_mode": "required",
+      "origin": true,
+      "csrf": "required",
+      "anonymous_admission": false,
+      "contract_status": "pending_ms_users_pr23"
     },
     {
       "id": "linkOwnAuthMethod",
       "method": "POST",
-      "path": "/v1/me/auth-methods",
+      "public_path": "/me/auth-methods",
       "backend_path": "/v1/me/auth-methods",
       "auth": "jwt_cookie",
       "cookies": [
         "refresh"
       ],
-      "anonymous_admission": false
+      "cookie_mode": "required",
+      "origin": true,
+      "csrf": "required",
+      "anonymous_admission": false,
+      "contract_status": "pending_ms_users_pr23"
     },
     {
       "id": "getOwnAuthMethods",
       "method": "GET",
-      "path": "/v1/me/auth-methods",
+      "public_path": "/me/auth-methods",
       "backend_path": "/v1/me/auth-methods",
       "auth": "jwt",
       "cookies": [],
-      "anonymous_admission": false
+      "cookie_mode": "none",
+      "origin": false,
+      "csrf": "none",
+      "anonymous_admission": false,
+      "contract_status": "reconciled"
     },
     {
       "id": "getOwnUserProfile",
       "method": "GET",
-      "path": "/v1/me/profile",
+      "public_path": "/me/profile",
       "backend_path": "/v1/me/profile",
       "auth": "jwt",
       "cookies": [],
-      "anonymous_admission": false
+      "cookie_mode": "none",
+      "origin": false,
+      "csrf": "none",
+      "anonymous_admission": false,
+      "contract_status": "reconciled"
     },
     {
       "id": "updateOwnUserProfile",
       "method": "PUT",
-      "path": "/v1/me/profile",
+      "public_path": "/me/profile",
       "backend_path": "/v1/me/profile",
       "auth": "jwt",
       "cookies": [],
-      "anonymous_admission": false
+      "cookie_mode": "none",
+      "origin": true,
+      "csrf": "none",
+      "anonymous_admission": false,
+      "contract_status": "reconciled"
     },
     {
       "id": "getUserProfile",
       "method": "GET",
-      "path": "/v1/usuarios/{userId}",
+      "public_path": "/usuarios/{userId}",
       "backend_path": "/v1/usuarios/{userId}",
       "auth": "jwt",
       "cookies": [],
-      "anonymous_admission": false
+      "cookie_mode": "none",
+      "origin": false,
+      "csrf": "none",
+      "anonymous_admission": false,
+      "contract_status": "reconciled"
     },
     {
       "id": "updateUserProfile",
       "method": "PUT",
-      "path": "/v1/usuarios/{userId}",
+      "public_path": "/usuarios/{userId}",
       "backend_path": "/v1/usuarios/{userId}",
       "auth": "jwt",
       "cookies": [],
-      "anonymous_admission": false
+      "cookie_mode": "none",
+      "origin": true,
+      "csrf": "none",
+      "anonymous_admission": false,
+      "contract_status": "reconciled"
     }
   ]
 }
