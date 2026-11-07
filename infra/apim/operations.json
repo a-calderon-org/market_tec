@@ -1,0 +1,231 @@
+{
+  "version": 1,
+  "backend": "ms-users",
+  "abuse_protection_verified": false,
+  "operations": [
+    {
+      "id": "getUsersHealth",
+      "method": "GET",
+      "path": "/health",
+      "backend_path": "/health",
+      "auth": "public",
+      "cookies": [],
+      "anonymous_admission": false
+    },
+    {
+      "id": "getPublicSigningKeys",
+      "method": "GET",
+      "path": "/.well-known/jwks.json",
+      "backend_path": "/.well-known/jwks.json",
+      "auth": "public",
+      "cookies": [],
+      "anonymous_admission": false
+    },
+    {
+      "id": "getIdentityMetadata",
+      "method": "GET",
+      "path": "/.well-known/markettec-identity",
+      "backend_path": "/.well-known/markettec-identity",
+      "auth": "public",
+      "cookies": [],
+      "anonymous_admission": false
+    },
+    {
+      "id": "createAuthenticationAttempt",
+      "method": "POST",
+      "path": "/v1/auth/attempts",
+      "backend_path": "/v1/auth/attempts",
+      "auth": "public",
+      "cookies": [],
+      "anonymous_admission": true
+    },
+    {
+      "id": "exchangeGoogleCredential",
+      "method": "POST",
+      "path": "/v1/auth/google",
+      "backend_path": "/v1/auth/google",
+      "auth": "cookie",
+      "cookies": [
+        "attempt"
+      ],
+      "anonymous_admission": true
+    },
+    {
+      "id": "legacyGoogleRegistrationCompatibility",
+      "method": "POST",
+      "path": "/v1/auth/google/registrations",
+      "backend_path": "/v1/auth/google/registrations",
+      "auth": "cookie",
+      "cookies": [
+        "attempt"
+      ],
+      "anonymous_admission": true
+    },
+    {
+      "id": "requestInstitutionalEmailLink",
+      "method": "POST",
+      "path": "/v1/auth/email/requests",
+      "backend_path": "/v1/auth/email/requests",
+      "auth": "cookie",
+      "cookies": [
+        "attempt"
+      ],
+      "anonymous_admission": true
+    },
+    {
+      "id": "confirmInstitutionalEmailLink",
+      "method": "POST",
+      "path": "/v1/auth/email/confirm",
+      "backend_path": "/v1/auth/email/confirm",
+      "auth": "cookie",
+      "cookies": [
+        "attempt"
+      ],
+      "anonymous_admission": true
+    },
+    {
+      "id": "getSessionState",
+      "method": "GET",
+      "path": "/v1/auth/session",
+      "backend_path": "/v1/auth/session",
+      "auth": "cookie",
+      "cookies": [
+        "refresh"
+      ],
+      "anonymous_admission": false
+    },
+    {
+      "id": "refreshSession",
+      "method": "POST",
+      "path": "/v1/auth/refresh",
+      "backend_path": "/v1/auth/refresh",
+      "auth": "cookie",
+      "cookies": [
+        "refresh"
+      ],
+      "anonymous_admission": false
+    },
+    {
+      "id": "logoutSession",
+      "method": "POST",
+      "path": "/v1/auth/logout",
+      "backend_path": "/v1/auth/logout",
+      "auth": "cookie",
+      "cookies": [
+        "refresh"
+      ],
+      "anonymous_admission": false
+    },
+    {
+      "id": "recordSessionActivity",
+      "method": "POST",
+      "path": "/v1/auth/session/activity",
+      "backend_path": "/v1/auth/session/activity",
+      "auth": "jwt_cookie",
+      "cookies": [
+        "refresh"
+      ],
+      "anonymous_admission": false
+    },
+    {
+      "id": "createMethodProofAttempt",
+      "method": "POST",
+      "path": "/v1/auth/proofs/attempts",
+      "backend_path": "/v1/auth/proofs/attempts",
+      "auth": "jwt_cookie",
+      "cookies": [
+        "refresh"
+      ],
+      "anonymous_admission": false
+    },
+    {
+      "id": "verifyGoogleMethodProof",
+      "method": "POST",
+      "path": "/v1/auth/proofs/google",
+      "backend_path": "/v1/auth/proofs/google",
+      "auth": "jwt_cookie",
+      "cookies": [
+        "refresh"
+      ],
+      "anonymous_admission": false
+    },
+    {
+      "id": "requestEmailMethodProof",
+      "method": "POST",
+      "path": "/v1/auth/proofs/email/requests",
+      "backend_path": "/v1/auth/proofs/email/requests",
+      "auth": "jwt_cookie",
+      "cookies": [
+        "refresh"
+      ],
+      "anonymous_admission": false
+    },
+    {
+      "id": "verifyEmailMethodProof",
+      "method": "POST",
+      "path": "/v1/auth/proofs/email/confirm",
+      "backend_path": "/v1/auth/proofs/email/confirm",
+      "auth": "jwt_cookie",
+      "cookies": [
+        "refresh"
+      ],
+      "anonymous_admission": false
+    },
+    {
+      "id": "linkOwnAuthMethod",
+      "method": "POST",
+      "path": "/v1/me/auth-methods",
+      "backend_path": "/v1/me/auth-methods",
+      "auth": "jwt_cookie",
+      "cookies": [
+        "refresh"
+      ],
+      "anonymous_admission": false
+    },
+    {
+      "id": "getOwnAuthMethods",
+      "method": "GET",
+      "path": "/v1/me/auth-methods",
+      "backend_path": "/v1/me/auth-methods",
+      "auth": "jwt",
+      "cookies": [],
+      "anonymous_admission": false
+    },
+    {
+      "id": "getOwnUserProfile",
+      "method": "GET",
+      "path": "/v1/me/profile",
+      "backend_path": "/v1/me/profile",
+      "auth": "jwt",
+      "cookies": [],
+      "anonymous_admission": false
+    },
+    {
+      "id": "updateOwnUserProfile",
+      "method": "PUT",
+      "path": "/v1/me/profile",
+      "backend_path": "/v1/me/profile",
+      "auth": "jwt",
+      "cookies": [],
+      "anonymous_admission": false
+    },
+    {
+      "id": "getUserProfile",
+      "method": "GET",
+      "path": "/v1/usuarios/{userId}",
+      "backend_path": "/v1/usuarios/{userId}",
+      "auth": "jwt",
+      "cookies": [],
+      "anonymous_admission": false
+    },
+    {
+      "id": "updateUserProfile",
+      "method": "PUT",
+      "path": "/v1/usuarios/{userId}",
+      "backend_path": "/v1/usuarios/{userId}",
+      "auth": "jwt",
+      "cookies": [],
+      "anonymous_admission": false
+    }
+  ]
+}
