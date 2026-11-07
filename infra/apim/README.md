@@ -1,27 +1,40 @@
 # APIM policies as code (MTEC-12)
 
-`operations.json` is editable data. `security_reference.py` is the reviewed security
-reference: the generator rejects any manifest whose auth class, cookies, Origin, CSRF,
-admission or contract status differ from it. Approvals in the manifest only count when
-their `evidence_sha256` was added to `APPROVED_EVIDENCE` by code review (empty today).
+Nothing here is validated by Azure, imported, or approved for deployment.
 
-Modes (`generate_policies.py --mode`):
+`operations.json` is editable data. `security_reference.py` is the reviewed security reference:
+the generator rejects any manifest whose auth class, cookies, Origin, CSRF, admission or contract
+status differ from it.
 
-* `analyze` writes `*.xml.txt` and `operations.analysis.json`; never publishable.
-* `package` writes `*.xml` and `operations.generated.json`, and refuses unless all of the
-  following exist.
+## Outputs (`generate_policies.py --mode`, into a new or empty `--output-dir`)
 
-## Exports still required before a package can be built
+| Mode | Files | Meaning |
+| --- | --- | --- |
+| `analyze` | `<id>.xml.txt`, `operations.analysis.json` | local review only |
+| `package` | `<id>.candidate.xml`, `operations.candidate.json` | candidate: passed **local** structural checks (`policy_schema.py`); `azure_validated` and `deployment_approved` stay `false` |
 
-| Input | What to export |
-| --- | --- |
-| `--upstream-global` | service-wide policy XML |
-| `--upstream-product` | policy XML of the product(s) containing the users API |
-| `--upstream-api` | policy XML at the users API scope |
-| `--jwks`, `--issuer`, `--audience` | reviewed public JWKS snapshot and exact issuer/audience |
+Runs write to a staging directory and rename it, so a failure leaves nothing and an old output
+directory is never reused or mixed. `package` refuses unless all three scope exports pass the local
+check and JWKS, issuer and audience are given.
 
-Exports must contain only known elements, no JWT/Google validation, no `include-fragment`,
-and one `<base />` per section at product and API scope (none at global scope).
-APIM named value `allowed-origins` (comma-separated exact origins) must exist at deploy time.
-Blocked operations are terminal 503 denials with no `<base />` and no backend section.
-APIM Consumption has no `rate-limit-by-key`; admission abuse protection is an external requirement.
+## Approvals
+
+`approvals.*` in the manifest point to a JSON document in `infra/apim/evidence/` and its SHA-256. The
+document must contain exactly `approval_type`, `backend_sha`, `openapi_contract_version`,
+`environment`, `apim_revision`, `review_id`, and match: the approval type, `backend-routes.json` sha,
+OpenAPI `info.version` and the manifest `target`. Anything else raises. The tool cannot prove who
+wrote a document: that needs GitHub required review / branch protection on `infra/apim/**` and an
+operator, which are **not** configured or checked here. Until then keep every approval `null`.
+
+## Exports and evidence still required (outside this repo)
+
+* Exported policy XML for global, every product that contains the users API, and the API scope
+  (`--upstream-global|product|api`). Inherited scopes may hold only `base`, `cors`, `trace` and
+  non-protected `set-header`; `forward-request` only in global backend. Anything that could alter
+  `Authorization`/cookies/identity or end the request early is rejected because its effect needs the
+  effective policy evaluated in Azure.
+* Operation-level policies currently on the API, effective-policy review, gateway compile/request
+  tests of every expression on the target tier (Consumption), and operator deployment approval.
+* Named value `allowed-origins`; reviewed JWKS, issuer, audience; `target` environment/APIM revision.
+* Abuse protection that works on Consumption (`rate-limit-by-key` is unavailable there) and B07
+  contract-reconciliation evidence.
