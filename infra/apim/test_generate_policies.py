@@ -15,7 +15,7 @@ from xml.etree import ElementTree as ET
 import generate_policies as gp
 from generate_policies import (PackageError, SPOOFABLE, analyze, build_package, check_upstream, validate,
                                verify_sources, write_output)
-from policy_schema import validate_policy
+from policy_schema import valid_https_origin, validate_policy
 
 HERE = Path(__file__).parent
 ISS, AUD = "https://users.example.com", "markettec-api"
@@ -283,10 +283,88 @@ class UpstreamHardeningTest(unittest.TestCase):
                 with self.assertRaises(ValueError, msg=value):
                     check_upstream(scope, self.put(xml, self.header("X-Served-By", value), scope))
 
-    def test_allowlisted_literal_headers_accepted_in_every_scope(self):
+    def test_set_header_is_denied_in_every_scope_and_section(self):
+        """No inherited header write/delete may weaken session-response protections (Cache-Control: no-store, HSTS, ...)."""
+        names = ("Cache-Control", "CACHE-CONTROL", "&#67;ache-Control", "Strict-Transport-Security", "X-Frame-Options",
+                 "X-Content-Type-Options", "X-Correlation-ID", "X-Served-By", "@(&quot;Cache-Control&quot;)", "Authorization")
+        actions = (("delete", ""), ("override", "<value>public, max-age=3600</value>"), ("override", "<value>no-store</value>"),
+                   ("skip", "<value>x</value>"), ("append", "<value>x</value>"))
         for scope, xml in self.each_scope():
-            for name in ("X-Served-By", "x-content-type-options", "Strict-Transport-Security", "Cache-Control", "X-Correlation-ID"):
-                check_upstream(scope, self.put(xml, self.header(name, "nosniff"), scope))
+            for section in ("inbound", "outbound", "on-error"):
+                if scope == "global" and section == "inbound":
+                    anchor = "<inbound>"
+                elif section == "inbound":
+                    anchor = "<inbound><base />"
+                elif scope == "global":
+                    anchor = f"<{section} />"
+                else:
+                    anchor = f"<{section}><base />"
+                for name in names:
+                    for action, value in actions:
+                        fragment = f'<set-header name="{name}" exists-action="{action}">{value}</set-header>'
+                        replacement = anchor + fragment if not anchor.endswith("/>") or "base" in anchor else f"<{section}>{fragment}</{section}>"
+                        broken = xml.replace(anchor, replacement, 1)
+                        self.assertNotEqual(xml, broken)
+                        with self.assertRaises(ValueError, msg=f"{scope}/{section}/{name}/{action}"):
+                            check_upstream(scope, broken)
+
+    def test_header_denial_explains_the_incompatibility(self):
+        with self.assertRaises(ValueError) as caught:
+            check_upstream("global", GLOBAL.replace("<outbound />", '<outbound><set-header name="Cache-Control" exists-action="delete" /></outbound>'))
+        self.assertIn("may not use <set-header>", str(caught.exception))
+        self.assertIn("Cache-Control", str(caught.exception))
+
+    def test_package_refuses_header_weakening_exports(self):
+        for scope, xml in (("global", GLOBAL.replace("<outbound />", '<outbound><set-header name="Cache-Control" exists-action="delete" /></outbound>')),
+                           ("api", SCOPED.replace("<outbound><base />", '<outbound><base /><set-header name="Strict-Transport-Security" exists-action="override"><value>max-age=0</value></set-header>'))):
+            with self.assertRaises(ValueError):
+                package(upstream=dict(UPSTREAM, **{scope: xml}))
+
+    def test_generated_responses_keep_no_store_untouched(self):
+        for xml in package()["policies"].values():
+            self.assertNotIn("Cache-Control", xml)  # this generator neither sets nor removes cache protections
+
+    def test_control_characters_rejected_after_xml_decoding(self):
+        origin = lambda text: GLOBAL.replace("https://app.example.com", text)
+        for raw in ("&#13;", "&#10;", "&#9;", "&#127;", "&#133;", "&#8232;", "&#8233;", "&#1;"):
+            for text in (f"https://app.example.com{raw}", f"https://app.example.com{raw}X-User-Id: test", f"{raw}https://app.example.com"):
+                with self.assertRaises(ValueError, msg=text):
+                    check_upstream("global", origin(text))
+        with self.assertRaises(ValueError):  # NUL cannot be expressed in XML 1.0 at all
+            check_upstream("global", origin("https://app.example.com&#0;"))
+        for bad in ("<allowed-methods><method>GET&#13;&#10;</method></allowed-methods>",
+                    "<allowed-headers><header>X-A&#10;B</header></allowed-headers>"):
+            with self.assertRaises(ValueError, msg=bad):
+                check_upstream("global", GLOBAL.replace("</allowed-origins>", "</allowed-origins>" + bad))
+        validate_policy(ET.fromstring("<policies><inbound><base /><return-response><set-status code=\"503\" reason=\"x\" />"
+                                      "<set-body>ok</set-body></return-response></inbound></policies>"), "own")
+        for raw in ("&#13;&#10;", "&#10;"):  # own-profile policies are held to the same rule
+            for xml in (f"<policies><inbound><base /><return-response><set-status code=\"503\" reason=\"x\" /><set-body>a{raw}b</set-body></return-response></inbound></policies>",
+                        f"<policies><inbound><base /><return-response><set-status code=\"503\" reason=\"x{raw}\" /></return-response></inbound></policies>"):
+                with self.assertRaises(ValueError):
+                    validate_policy(ET.fromstring(xml), "own")
+
+    def test_https_origin_port_boundaries_and_structure(self):
+        good = ["https://app.example.com", "https://app.example.com:1", "https://app.example.com:443",
+                "https://app.example.com:65535", "https://a-b.example.com", "https://localhost", "https://a1.b2.example.co.cr:8443"]
+        bad = ["https://app.example.com:65536", "https://app.example.com:99999", "https://app.example.com:0",
+               "https://app.example.com:-1", "https://app.example.com:", "https://app.example.com:08080",
+               "https://app.example.com:80a", "https://app.example.com:١٢٣", "https://user@app.example.com",
+               "https://user:pw@app.example.com", "https://app.example.com/", "https://app.example.com/path",
+               "https://app.example.com?x=1", "https://app.example.com#frag", "https://app.example.com:443/x",
+               "https://", "https://:443", "https://-bad.example.com", "https://bad-.example.com", "https://a..example.com",
+               "https://exa mple.com", "https://app.example.com ", " https://app.example.com", "http://app.example.com",
+               "HTTPS://app.example.com", "https://[::1]:443", "https://[::1]", "https://app_example.com",
+               "https://" + "a" * 64 + ".example.com", "https://" + ".".join(["a" * 60] * 5), "*.example.com",
+               "https://app.example.com\\@evil.example", "https://evil.example\\.app.example.com"]
+        for origin in good:
+            self.assertTrue(valid_https_origin(origin), origin)
+            check_upstream("global", GLOBAL.replace("https://app.example.com", origin))
+        for origin in bad:
+            self.assertFalse(valid_https_origin(origin), origin)
+            if "\\" not in origin and not origin.startswith((" ", "*")) and not origin.endswith(" ") and "&" not in origin and "<" not in origin:
+                with self.assertRaises(ValueError, msg=origin):
+                    check_upstream("global", GLOBAL.replace("https://app.example.com", origin))
 
     def test_trace_is_not_supported_anywhere(self):
         trace = '<trace source="s"><message>@(context.Request.Headers.GetValueOrDefault(&quot;Authorization&quot;,&quot;&quot;))</message></trace>'
@@ -360,9 +438,6 @@ class SchemaTest(unittest.TestCase):
     def test_valid_exports_accepted(self):
         for scope, xml in UPSTREAM.items():
             check_upstream(scope, xml)
-        safe = SCOPED.replace("<outbound><base />", '<outbound><base /><set-header name="X-Served-By" exists-action="override"><value>gw</value></set-header>'
-)
-        check_upstream("api", safe)
 
     def test_invalid_structures_rejected(self):
         bad = {

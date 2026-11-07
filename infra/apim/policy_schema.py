@@ -5,6 +5,8 @@ child order and attributes of the elements this project allows. Passing it does 
 accepts or approves the policy; only importing into a gateway can show that.
 """
 import re
+import unicodedata
+from urllib.parse import urlsplit
 from xml.etree import ElementTree as ET
 
 BOOL = {"true", "false"}
@@ -26,13 +28,12 @@ def _matches(check, value):
 
 
 TOKEN = re.compile(r"[A-Za-z][A-Za-z0-9-]{0,63}")
-HTTPS_ORIGIN = re.compile(r"https://[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?(:[0-9]{1,5})?")
+HOST_LABEL = re.compile(r"[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?")
 HTTP_METHOD = re.compile(r"GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS")
 NAME = re.compile(r"[A-Za-z0-9._-]{1,64}")
-# Literal response headers an inherited scope may set. Reviewed list; Authorization, cookies, identity
-# and anything dynamic are never on it.
-UPSTREAM_HEADER_ALLOWLIST = {"strict-transport-security", "x-content-type-options", "x-frame-options",
-                             "cache-control", "x-served-by", "x-correlation-id"}
+
+
+
 SPEC = {
     "base": {"attrs": {}, "seq": [], "text": "none"},
     "cors": {"attrs": {"allow-credentials": (False, BOOL), "terminate-unmatched-request": (False, BOOL)},
@@ -83,12 +84,41 @@ PROFILES = {
             "on-error": {"base", "set-header"}},
     # Upstream scopes are deliberately small: anything that could alter credentials, set identity or end
     # the request before the operation controls (choose, return-response, set-variable, ...) is not allowed.
-    "upstream": {"inbound": {"base", "cors", "set-header"}, "backend": {"base", "forward-request"},
-                 "outbound": {"base", "set-header"}, "on-error": {"base", "set-header"}},
+    # set-header is denied outright: any inherited header write or delete could weaken protections such as
+    # Cache-Control: no-store on authenticated responses, HSTS, X-Frame-Options or X-Content-Type-Options,
+    # and a name allowlist cannot prove a given name/action/value is safe.
+    "upstream": {"inbound": {"base", "cors"}, "backend": {"base", "forward-request"},
+                 "outbound": {"base"}, "on-error": {"base"}},
 }
 NESTED_EXCLUDED = {"base", "cors", "validate-jwt", "rewrite-uri"}
 SECTION_MAX_ONE = {"base", "cors", "forward-request", "validate-jwt", "rewrite-uri"}
 DYNAMIC = re.compile(r"@\s*[({]|\{\{|\}\}|^\s*@")
+
+
+def has_control_chars(value: str) -> bool:
+    """True for any control, line/paragraph separator or NUL in a value already decoded by the XML parser."""
+    return any(unicodedata.category(ch) in ("Cc", "Zl", "Zp") for ch in value)
+
+
+def valid_https_origin(origin: str) -> bool:
+    """Structured check: https, valid host, port 1..65535 (no leading zeros), and nothing else."""
+    if has_control_chars(origin) or origin != origin.strip() or not origin.startswith("https://") or len(origin) > 300:
+        return False
+    try:
+        parts = urlsplit(origin)
+        port = parts.port  # raises ValueError for non-numeric or > 65535
+        host = parts.hostname
+    except ValueError:
+        return False
+    if (parts.scheme != "https" or parts.username is not None or parts.password is not None or parts.path
+            or parts.query or parts.fragment or not host or "@" in parts.netloc or "[" in parts.netloc):
+        return False
+    if port is not None and not 1 <= port <= 65535:
+        return False
+    labels = host.split(".")
+    if len(host) > 253 or not all(HOST_LABEL.fullmatch(label) for label in labels):
+        return False
+    return parts.netloc == host + (f":{port}" if port is not None else "")  # rejects empty port, "08080", odd casing of nothing
 
 
 def _check_element(el: ET.Element, allowed: set, where: str) -> None:
@@ -100,6 +130,10 @@ def _check_element(el: ET.Element, allowed: set, where: str) -> None:
     for name in el.attrib:
         if name not in spec["attrs"]:
             raise ValueError(f"{where}: <{el.tag}> unknown attribute {name}")
+        if has_control_chars(el.attrib[name]):
+            raise ValueError(f"{where}: <{el.tag}> {name} contains control characters")
+    if spec["text"] != "none" and has_control_chars(el.text or ""):
+        raise ValueError(f"{where}: <{el.tag}> text contains control characters")
     for name, (required, check) in spec["attrs"].items():
         if required and name not in el.attrib:
             raise ValueError(f"{where}: <{el.tag}> missing attribute {name}")
@@ -148,10 +182,6 @@ def _check_upstream_content(root: ET.Element, where: str) -> None:
         for value in [element.text or "", *element.attrib.values()]:
             if DYNAMIC.search(value):
                 raise ValueError(f"{where}: <{element.tag}> contains an expression or named value")
-        if element.tag == "set-header":
-            name = element.attrib["name"]
-            if not TOKEN.fullmatch(name) or name.lower() not in UPSTREAM_HEADER_ALLOWLIST:
-                raise ValueError(f"{where}: inherited scope may only set allowlisted literal headers, not {name!r}")
         if element.tag == "cors":
             credentialed = element.attrib.get("allow-credentials") == "true"
             for origin in element.findall("./allowed-origins/origin"):
@@ -159,8 +189,8 @@ def _check_upstream_content(root: ET.Element, where: str) -> None:
                 if text == "*":
                     if credentialed:
                         raise ValueError(f"{where}: credentialed CORS needs explicit https origins")
-                elif not HTTPS_ORIGIN.fullmatch(text):
-                    raise ValueError(f"{where}: CORS origin must be a literal https origin or *")
+                elif not valid_https_origin(text):
+                    raise ValueError(f"{where}: CORS origin must be a literal https origin (host[:port] only) or *")
 
 
 def validate_policy(root: ET.Element, profile: str, scope: str = "own") -> None:
@@ -195,6 +225,10 @@ def validate_policy(root: ET.Element, profile: str, scope: str = "own") -> None:
         for child in section:
             if (child.tail or "").strip():
                 raise ValueError(f"{where}: stray text in <{section.tag}>")
+            if profile == "upstream" and child.tag == "set-header":
+                raise ValueError(f"{where}: inherited scopes may not use <set-header> (could delete or weaken "
+                                 "Cache-Control, HSTS, X-Frame-Options, X-Content-Type-Options or identity headers); "
+                                 "remove it from the exported policy or review it in Azure")
             _check_element(child, allowed, where)
     if profile == "upstream":
         _check_upstream_content(root, where)

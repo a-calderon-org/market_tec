@@ -31,10 +31,14 @@ operator, which are **not** configured or checked here. Until then keep every ap
 
 * Exported policy XML for global, every product that contains the users API, and the API scope
   (`--upstream-global|product|api`). Inherited scopes may hold only literal content: `base`, `cors`
-  (literal https origins; no named values, no `*` with credentials), `set-header` for the reviewed
-  literal names in `UPSTREAM_HEADER_ALLOWLIST`, and `forward-request` (global backend only). No
-  expressions, named values, `trace`, `choose`, `return-response` or `set-variable`: their effect on
-  credentials, identity or early termination needs the effective policy evaluated in Azure.
+  (literal https `host[:port]` origins, ports 1-65535, no credentials/paths/named values, no `*` with
+  credentials) and `forward-request` (global backend only). `set-header` is rejected in every inherited
+  section: a header write or delete there could remove `Cache-Control: no-store` from authenticated
+  responses or weaken HSTS, X-Frame-Options or X-Content-Type-Options, and a name allowlist cannot prove a
+  given action/value safe. Also rejected: expressions, named values, `trace`, `choose`, `return-response`,
+  `set-variable`, and control characters in any decoded value. **Operator review:** an export that uses any
+  of these is refused with an explanation; header policies must be moved to a reviewed operation-level
+  policy or evaluated as the effective policy in Azure before they can be considered.
 * Operation-level policies currently on the API, effective-policy review, gateway compile/request
   tests of every expression on the target tier (Consumption), and operator deployment approval.
 * Named value `allowed-origins`; reviewed JWKS, issuer, audience; `target` environment/APIM revision.
