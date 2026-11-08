@@ -1,5 +1,6 @@
 import {Component, computed, inject, OnInit, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { FEATURE_FLAGS } from '../../../core/feature-flags';
 import { UserPublication } from '../models/my-publications.model';
 import { PublicationService } from '../services/publication.service';
 
@@ -25,6 +26,8 @@ type PublicationSortOption =
 export class MyPublications implements OnInit {
   private readonly publicationService =
     inject(PublicationService);
+
+  private readonly authCoreV2 = inject(FEATURE_FLAGS).authCoreV2;
 
   private readonly currentUserId = 'USR-001';
 
@@ -181,6 +184,16 @@ export class MyPublications implements OnInit {
   loadPublications(): void {
     this.loading.set(true);
     this.error.set(false);
+
+    if (this.authCoreV2) {
+      // PENDIENTE (Catalog, contrato no aprobado): no existe un contrato que acepte
+      // el principal interno. Con authCoreV2 no se consulta con 'USR-001' ni se
+      // inventa otro id; la pantalla queda sin datos hasta aprobar ese contrato.
+      this.allPublications.set([]);
+      this.error.set(true);
+      this.loading.set(false);
+      return;
+    }
 
     this.publicationService
       .getUserPublications(

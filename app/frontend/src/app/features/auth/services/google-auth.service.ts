@@ -2,12 +2,16 @@ import { Injectable, inject, linkedSignal } from '@angular/core';
 import { environment } from '../../../../environments/environment';
 import { AuthTokenService } from '../../../core/auth/auth-token.service';
 import type { GoogleTokenClaims } from '../../../core/auth/auth-token.service';
+import type { AuthenticatedUser, GoogleLoginAttempt } from '../../../core/auth/v2/auth-contract';
+import { AuthSessionService } from '../../../core/auth/v2/auth-session.service';
+import { FEATURE_FLAGS } from '../../../core/feature-flags';
 
 interface GoogleIdentity {
   initialize(options: {
     client_id: string;
     callback: (response: { credential: string }) => void;
     use_fedcm_for_button?: boolean;
+    nonce?: string;
   }): void;
   renderButton(element: HTMLElement, options: Record<string, string | number>): void;
   disableAutoSelect(): void;
@@ -25,8 +29,31 @@ export type GoogleButtonTheme = 'outline' | 'outline_dark';
 
 @Injectable({ providedIn: 'root' })
 export class GoogleAuthService {
-  private readonly authToken = inject(AuthTokenService);
-  readonly user = linkedSignal<AuthUser | null>(() => this.toUser(this.authToken.claims()));
+  private readonly flags = inject(FEATURE_FLAGS);
+  /** Flujo legado: solo existe con authCoreV2=false (no se instancia con el flag activo). */
+  private readonly authToken = this.flags.authCoreV2 ? null : inject(AuthTokenService);
+  /** Núcleo v2: sesión interna en memoria. Solo existe con authCoreV2=true. */
+  private readonly session = this.flags.authCoreV2 ? inject(AuthSessionService) : null;
+  private googleAttempt: GoogleLoginAttempt | null = null;
+
+  readonly user = linkedSignal<AuthUser | null>(() =>
+    this.session
+      ? this.fromInternalUser(this.session.user())
+      : this.toUser(this.legacy.claims())
+  );
+
+  private get legacy(): AuthTokenService {
+    if (!this.authToken) throw new Error('El flujo legado no está disponible con authCoreV2.');
+
+    return this.authToken;
+  }
+
+  /** La identidad es el userId interno y opaco; nunca el sub de Google ni el correo. */
+  private fromInternalUser(user: AuthenticatedUser | null): AuthUser | null {
+    return user
+      ? { id: user.userId, email: user.email, name: user.nombre, picture: user.fotoPerfil }
+      : null;
+  }
 
   private toUser(claims: GoogleTokenClaims | null): AuthUser | null {
     if (!claims?.sub || !claims.email) return null;
@@ -56,10 +83,15 @@ export class GoogleAuthService {
     }
     if (!element.isConnected) return;
     const identity = window.google.accounts.id;
+    // v2: el intento debe existir antes de initialize porque su nonce se pasa aquí.
+    const attempt = this.session ? await this.session.startGoogleAttempt() : null;
+    if (!element.isConnected) return;
+    this.googleAttempt = attempt;
     identity.initialize({
       client_id: environment.googleClientId,
       callback: response => { if (element.isConnected) callback(response.credential); },
-      use_fedcm_for_button: true
+      use_fedcm_for_button: true,
+      ...(attempt ? { nonce: attempt.nonce } : {})
     });
     element.replaceChildren();
     identity.renderButton(element, {
@@ -78,23 +110,43 @@ export class GoogleAuthService {
   }
 
   async signIn(credential: string): Promise<void> {
-    this.authToken.setToken(credential);
+    if (this.session) {
+      // El ID Token de Google es transitorio: se intercambia una vez y se descarta.
+      const attempt = this.googleAttempt;
+      this.googleAttempt = null;
+
+      if (!attempt) {
+        throw new Error('El intento de acceso con Google expiró. Inténtalo nuevamente.');
+      }
+
+      await this.session.signInWithGoogle(credential, attempt);
+      return;
+    }
+
+    this.legacy.setToken(credential);
 
     if (!this.user()) {
-      this.authToken.clearToken();
+      this.legacy.clearToken();
       throw new Error('Google no entregó una identidad válida. Inténtalo nuevamente.');
     }
   }
 
   async restoreSession(): Promise<boolean> {
-    const user = this.toUser(this.authToken.getClaims());
+    if (this.session) return this.session.restoreSession();
+
+    const user = this.toUser(this.legacy.getClaims());
     this.user.set(user);
 
     return user !== null;
   }
 
   async logout(): Promise<void> {
-    this.authToken.clearToken();
+    if (this.session) {
+      await this.session.logout();
+    } else {
+      this.legacy.clearToken();
+    }
+
     window.google?.accounts.id.disableAutoSelect();
   }
 }
