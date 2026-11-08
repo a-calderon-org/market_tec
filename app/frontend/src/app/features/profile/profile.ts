@@ -1,6 +1,8 @@
 import { Component, computed, EventEmitter, inject, OnInit, Output, signal } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
+import { FEATURE_FLAGS } from '../../core/feature-flags';
+import { GoogleAuthService } from '../auth/services/google-auth.service';
 import { UpdateUser, User } from './models/user.model';
 import { UserService } from './services/user.service';
 
@@ -21,8 +23,18 @@ export class Profile implements OnInit {
   private readonly userService =
     inject(UserService);
 
-  readonly currentUserId =
-    'USR-001';
+  private readonly authCoreV2 =
+    inject(FEATURE_FLAGS).authCoreV2;
+
+  /**
+   * authCoreV2=false conserva el identificador fijo heredado. Con el flag
+   * activo se usa el userId interno de la sesión; nunca el sub de Google, el
+   * correo ni 'USR-001'. Sin sesión no se consulta nada.
+   */
+  readonly currentUserId: string | null =
+    this.authCoreV2
+      ? (inject(GoogleAuthService).user()?.id ?? null)
+      : 'USR-001';
 
   readonly user =
     signal<User | null>(
@@ -146,6 +158,13 @@ export class Profile implements OnInit {
     this.error.set(false);
     this.imageFailed.set(false);
 
+    if (this.currentUserId === null) {
+      this.user.set(null);
+      this.error.set(true);
+      this.loading.set(false);
+      return;
+    }
+
     this.userService
       .getUser(
         this.currentUserId
@@ -206,7 +225,8 @@ export class Profile implements OnInit {
 
     if (
       this.profileForm.invalid ||
-      this.saving()
+      this.saving() ||
+      this.currentUserId === null
     ) {
       this.profileForm
         .markAllAsTouched();

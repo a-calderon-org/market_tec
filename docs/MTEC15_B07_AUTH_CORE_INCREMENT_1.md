@@ -1,6 +1,6 @@
 # MTEC-15 / B07 — Incremento 1: núcleo de autenticación Angular ↔ ms-users
 
-**Fecha:** 2026-11-07. **Estado:** plan propuesto; ni el flujo completo ni B07 están aprobados, y nada de lo descrito está implementado.
+**Fecha:** 2026-11-07. **Estado:** plan propuesto; ni el flujo completo ni B07 están aprobados. Verificado en el código local (sin confirmar ni desplegar): Angular implementa el núcleo (store en memoria, coordinador D-07, interceptor D-11) tras `authCoreV2=false` y solo contra un mock provisional en `app/frontend/src/app/core/auth/v2/`; no existe adaptador HTTP real, ni integración con ms-users, ni pruebas multi-tab en navegador.
 
 - **Política aprobada (MTEC-40, 2026-11-07):** D-07 como política de diseño del refresh entre pestañas y de la respuesta perdida, y el núcleo conservador de D-11: ninguna petición de negocio se reintenta automáticamente tras un `401`, incluidos los `GET` y todas las mutaciones. Texto canónico en [ADR-004](../context/decisions/ADR-004-seguridad-autenticacion.md#decisiones-d-07-y-d-11-de-mtec-40--2026-11-07).
 - **Implementación pendiente:** Angular, coordinación entre pestañas, pruebas (incluidas las de Web Locks en los navegadores soportados) y conformidades de Angular, ms-users y seguridad.
@@ -36,7 +36,7 @@ Cada paso lleva el id de su decisión en el [registro de decisiones](MTEC15_B07_
 
 `AuthResponse.user.userId` (y `SessionResponse.user.userId` tras recargar) es la única fuente (D-08). Cambios:
 - `GoogleAuthService.user` deja de derivarse del Google `sub`; su `id` pasa a ser el `userId` interno.
-- (Seguimiento Jira: MTEC-10; no se modificó Jira.) `profile.ts:25` y `my-publications.ts:29` dejan de usar `'USR-001'`. Perfil: `GET/PUT /v1/me/profile`, sin id en la ruta.
+- (Seguimiento Jira: MTEC-10; no se modificó Jira.) `profile.ts:25` y `my-publications.ts:29` dejan de usar `'USR-001'`. Perfil: `GET/PUT /v1/me/profile`, sin id en la ruta. Estado del código local: `UserService` conserva `/usuarios/{id}` (con el `userId` codificado como un solo segmento con `encodeURIComponent`); la reconciliación definitiva de la ruta con `/me/profile` corresponde a B07 y no se sustituye de forma unilateral. Con `authCoreV2=true` y solo el mock, las operaciones de negocio fallan cerradas sin emitir HTTP.
 - "Mis publicaciones" no tiene contrato de Catalog que acepte el principal. Mientras no exista, la pantalla queda bloqueada tras el flag; no se inventa un id.
 
 ## 4. Cookies HttpOnly, Origin y CSRF
