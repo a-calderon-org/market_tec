@@ -14,6 +14,8 @@ La SPA no apunta automáticamente a `app/backend`. Todas las peticiones feature 
 | `GET /usuarios/{id}/publicaciones` | id string | `PaginatedResponse<UserPublication>` | Mis publicaciones |
 | `GET /usuarios/{id}` | id string | `User` | Perfil |
 | `PUT /usuarios/{id}` | `UpdateUser` | `UpdateUserResponse` | Perfil |
+| `GET /v1/me/profile` (solo `authCoreV2` + adaptador `http`) | — (JWT interno) | `UserProfileV1` → `User` | Perfil |
+| `PUT /v1/me/profile` (solo `authCoreV2` + adaptador `http`) | `UpdateUser` (3 campos) | `UpdateUserResponseV1` → `UpdateUserResponse` | Perfil |
 | `GET /chats` | — | `PaginatedResponse<Chat>` | Mensajería |
 | `POST /chats/{id}/mensajes` | `{ texto }` | cuerpo ignorado (`void`) | Mensajería |
 
@@ -35,3 +37,4 @@ Para destinos cuyo `URL.origin` coincide exactamente con `apiBaseUrl` y cuyo pat
 
 La forma de las interfaces está **verificada solo en consumidores y mocks de pruebas**. No se ejecutó contra APIM y no puede afirmarse compatibilidad dinámica. El servidor local no registra esas rutas, pero README lo presenta como reservado y declara APIM mocks como arquitectura actual de Fase I; no se considera por sí solo un defecto de integración High.
 
+Con `authCoreV2` y el adaptador `http`, la autenticación (`/v1/auth/attempts`, `/v1/auth/google`, `/v1/auth/google/registrations`, `/v1/auth/session`, `/v1/auth/refresh`, `/v1/auth/logout`) usa `HttpBackend` con `withCredentials` y nunca lleva bearer. Conciliación por operación en [`docs/MTEC10_AUTH_V2_HTTP_INTEROPERABILITY.md`](../../docs/MTEC10_AUTH_V2_HTTP_INTEROPERABILITY.md).
