@@ -25,6 +25,7 @@ import {
   TIMEOUT_ERROR_CODE,
 } from './auth-contract';
 import { AUTH_V2_HTTP_API_BASE, AUTH_V2_HTTP_TIMEOUT_MS } from './auth-v2-config';
+import { SESSION_LOCK_NAME, SessionLock } from './session-lock';
 
 /** Marca de cuerpo inutilizable devuelta por los validadores. */
 const INVALID = Symbol('invalid');
@@ -57,6 +58,7 @@ export class HttpAuthApiAdapter extends AuthApiPort {
   private readonly http = new HttpClient(inject(HttpBackend));
   private readonly baseUrl: string;
   private readonly timeoutMs = inject(AUTH_V2_HTTP_TIMEOUT_MS);
+  private readonly lock = inject(SessionLock);
 
   constructor() {
     super();
@@ -117,7 +119,24 @@ export class HttpAuthApiAdapter extends AuthApiPort {
     );
   }
 
-  logout(csrfToken: string | null, signal?: AbortSignal): Promise<void> {
+  async logout(csrfToken: string | null, signal?: AbortSignal, sessionId?: string): Promise<void> {
+    if (!sessionId) return;
+
+    const result = await this.lock.run(SESSION_LOCK_NAME, async () => {
+      // El CSRF de memoria puede corresponder a una generación anterior de la cookie.
+      const current = await this.getSession(signal);
+      if (current.session.sessionId === sessionId) {
+        await this.postLogout(current.csrfToken, signal);
+      }
+    }, signal);
+
+    // Sin Web Locks no se rota. El servidor solo acepta el par cookie/CSRF exacto.
+    if (result.kind === 'unavailable' && csrfToken) {
+      await this.postLogout(csrfToken, signal);
+    }
+  }
+
+  private postLogout(csrfToken: string, signal?: AbortSignal): Promise<void> {
     return this.send(
       'POST',
       '/auth/logout',

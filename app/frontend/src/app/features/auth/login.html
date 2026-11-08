@@ -252,7 +252,7 @@
     </div>
 
     <div class="google-access" [attr.aria-busy]="googleLoading() || submitting()">
-      <div #googleButton class="google-button" [hidden]="submitting()"></div>
+      <div #googleButton class="google-button" [hidden]="submitting() || (authCoreV2 && googleLoading())"></div>
       @if (googleLoading()) {
         <p class="google-login-note" role="status">Cargando Google...</p>
       }
@@ -264,7 +264,7 @@
           Reintentar conexión con Google
         </button>
       }
-      @if (authCoreV2 && !submitting()) {
+      @if (authCoreV2 && !googleLoading() && !submitting()) {
         @if (googlePurpose() === 'login') {
           <button type="button" class="institutional-button" (click)="setGooglePurpose('register')">
             ¿Primera vez en MarketTEC? Crear cuenta con Google

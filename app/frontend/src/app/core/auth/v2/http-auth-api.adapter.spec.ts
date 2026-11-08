@@ -278,6 +278,39 @@ describe('HttpAuthApiAdapter + núcleo v2 contra ms-users (HttpTestingController
       expect(stored).not.toContain(GOOGLE_ID_TOKEN);
     });
 
+    it('ignora el callback de GIS de un intento sustituido al cambiar a registro', async () => {
+      const initialize = vi.fn<(options: { callback: (response: { credential: string }) => void }) => void>();
+      window.google = {
+        accounts: {
+          id: {
+            initialize,
+            renderButton: (el) => el.appendChild(document.createElement('div')),
+            disableAutoSelect: vi.fn(),
+          },
+        },
+      };
+      const google = TestBed.inject(GoogleAuthService);
+      const element = document.createElement('div');
+      document.body.appendChild(element);
+      const onCredential = vi.fn();
+
+      try {
+        const login = google.renderButton(element, onCredential);
+        httpTesting.expectOne(url('/v1/auth/attempts')).flush(attemptResponse());
+        await login;
+        const register = google.renderButton(element, onCredential, 'outline', 'register');
+        httpTesting.expectOne(url('/v1/auth/attempts')).flush(attemptResponse('register'));
+        await register;
+
+        initialize.mock.calls[0][0].callback({ credential: 'obsolete-google-credential' });
+        expect(onCredential).not.toHaveBeenCalled();
+        initialize.mock.calls[1][0].callback({ credential: GOOGLE_ID_TOKEN });
+        expect(onCredential).toHaveBeenCalledExactlyOnceWith(GOOGLE_ID_TOKEN);
+      } finally {
+        element.remove();
+      }
+    });
+
     it('purpose=register intercambia en /v1/auth/google/registrations; 503 se informa como no disponible', async () => {
       const port = TestBed.inject(AuthApiPort);
 
@@ -422,7 +455,7 @@ describe('HttpAuthApiAdapter + núcleo v2 contra ms-users (HttpTestingController
       expect(session.status()).toBe('active');
     });
 
-    it('logout: POST {scope:current} con CSRF vigente; limpia la sesión y no se restaura con un resultado tardío', async () => {
+    it('logout usa el CSRF rotado en otra pestaña y descarta una restauración en vuelo', async () => {
       await signIn();
       const session = TestBed.inject(AuthSessionService);
       const store = TestBed.inject(AuthSessionStore);
@@ -435,10 +468,16 @@ describe('HttpAuthApiAdapter + núcleo v2 contra ms-users (HttpTestingController
 
       const loggingOut = session.logout();
       await settle();
+      httpTesting.expectOne(url('/v1/auth/session')).flush({
+        session: snapshot(),
+        user: javaUser(),
+        csrfToken: ROTATED_CSRF,
+      });
+      await settle();
       const logout = httpTesting.expectOne(url('/v1/auth/logout'));
       expectCookieRequest(logout, 'POST');
       expect(logout.request.body).toEqual({ scope: 'current' });
-      expect(logout.request.headers.get('X-CSRF-Token')).toBe(SESSION_CSRF);
+      expect(logout.request.headers.get('X-CSRF-Token')).toBe(ROTATED_CSRF);
       logout.flush(null, { status: 204, statusText: 'No Content' });
       await loggingOut;
 
@@ -448,6 +487,23 @@ describe('HttpAuthApiAdapter + núcleo v2 contra ms-users (HttpTestingController
       expect(session.user()).toBeNull();
       expect(await session.getAccessToken()).toBeNull();
       httpTesting.expectNone(url('/v1/auth/refresh'));
+    });
+
+    it('logout no revoca la sesión de otro login que sustituyó la cookie', async () => {
+      await signIn();
+      const session = TestBed.inject(AuthSessionService);
+      const loggingOut = session.logout();
+      await settle();
+
+      httpTesting.expectOne(url('/v1/auth/session')).flush({
+        session: { ...snapshot(), sessionId: 'sess-2' },
+        user: javaUser(OTHER_USER_ID),
+        csrfToken: ROTATED_CSRF,
+      });
+
+      await loggingOut;
+      httpTesting.expectNone(url('/v1/auth/logout'));
+      expect(session.status()).toBe('closed');
     });
 
     it('D-11: un 401 de negocio no reejecuta la petición ni reutiliza el JWT rechazado', async () => {
@@ -574,10 +630,44 @@ describe('HttpAuthApiAdapter + núcleo v2 contra ms-users (HttpTestingController
 
       void TestBed.inject(AuthSessionService).logout();
       await settle();
+      httpTesting.expectOne(url('/v1/auth/session')).flush({
+        session: snapshot(),
+        user: javaUser(),
+        csrfToken: SESSION_CSRF,
+      });
+      await settle();
       httpTesting.expectOne(url('/v1/auth/logout')).flush(null, { status: 204, statusText: '' });
 
       pending.flush(profileV1());
       await expect(result).rejects.toEqual(new AuthRequiredError('cancelled'));
+    });
+
+    it.each([
+      [OTHER_USER_ID, 'sess-2'],
+      [USER_ID, 'sess-2'],
+    ])('no usa la cookie de %s / %s para editar el perfil de la sesión anterior', async (userId, sessionId) => {
+      await signIn();
+      TestBed.inject(AuthSessionStore).dropAccessToken(INTERNAL_JWT);
+      const result = firstValueFrom(TestBed.inject(UserService).updateMyProfile({
+        nombreUsuario: 'cuenta-a',
+        nombre: 'Nombre de A',
+        apellidos: '',
+      })).catch((error: unknown) => error);
+      await settle();
+      httpTesting.expectOne(url('/v1/auth/session')).flush({
+        session: { ...snapshot(), sessionId },
+        user: javaUser(userId),
+        csrfToken: ROTATED_CSRF,
+      });
+      await settle();
+
+      httpTesting.expectNone(url('/v1/auth/refresh'));
+      httpTesting.expectNone(url('/v1/me/profile'));
+      await expect(result).resolves.toBeInstanceOf(AuthRequiredError);
+      const session = TestBed.inject(AuthSessionService);
+      expect(session.user()).toBeNull();
+      await expect(session.restoreSession()).resolves.toBe(false);
+      httpTesting.expectNone(url('/v1/auth/session'));
     });
 
     it('una respuesta de otro usuario se rechaza', async () => {

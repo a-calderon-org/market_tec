@@ -118,6 +118,7 @@ export class GoogleAuthService {
     if (!environment.googleClientId) {
       throw new Error('Falta configurar el Client ID de Google.');
     }
+    this.googleAttempt = null;
     const deadline = Date.now() + 10000;
     while (!window.google?.accounts?.id) {
       if (Date.now() > deadline) {
@@ -129,7 +130,6 @@ export class GoogleAuthService {
     const identity = window.google.accounts.id;
     // v2: el intento debe existir antes de initialize porque su nonce (emitido por
     // ms-users) se pasa aquí. Un intento previo no consumido queda descartado.
-    this.googleAttempt = null;
     let attempt: GoogleLoginAttempt | null = null;
     if (this.session) {
       try {
@@ -142,7 +142,11 @@ export class GoogleAuthService {
     this.googleAttempt = attempt;
     identity.initialize({
       client_id: environment.googleClientId,
-      callback: response => { if (element.isConnected) callback(response.credential); },
+      callback: response => {
+        if (element.isConnected && (!this.session || this.googleAttempt === attempt)) {
+          callback(response.credential);
+        }
+      },
       use_fedcm_for_button: true,
       ...(attempt ? { nonce: attempt.nonce } : {})
     });
@@ -195,6 +199,7 @@ export class GoogleAuthService {
 
   async logout(): Promise<void> {
     if (this.session) {
+      this.googleAttempt = null;
       await this.session.logout();
     } else {
       this.legacy.clearToken();

@@ -21,6 +21,7 @@ export class Login implements AfterViewInit {
   private readonly googleAuth = inject(GoogleAuthService);
   private readonly themeService = inject(ThemeService);
   private googleButtonReady = false;
+  private renderingGoogleButton = false;
 
   private readonly googleButtonThemeEffect = effect(() => {
     const theme = this.themeService.theme();
@@ -39,7 +40,7 @@ export class Login implements AfterViewInit {
 
   /** Cambia entre «Ingresar» y «Crear cuenta»; pide un intento nuevo a ms-users. */
   setGooglePurpose(purpose: GoogleAttemptPurpose): void {
-    if (!this.authCoreV2 || this.submitting() || this.googlePurpose() === purpose) return;
+    if (!this.authCoreV2 || this.googleLoading() || this.submitting() || this.googlePurpose() === purpose) return;
     this.googlePurpose.set(purpose);
     void this.loadGoogleButton();
   }
@@ -57,6 +58,8 @@ export class Login implements AfterViewInit {
     theme: 'light' | 'dark',
     resetFeedback: boolean
   ): Promise<void> {
+    if (this.authCoreV2 && (this.renderingGoogleButton || this.submitting())) return;
+    this.renderingGoogleButton = true;
     this.googleLoading.set(true);
     this.googleLoadError.set(false);
     if (resetFeedback) this.error.set(false);
@@ -69,6 +72,7 @@ export class Login implements AfterViewInit {
       this.error.set(true);
       this.errorMessage.set(error instanceof Error ? error.message : 'No se pudo cargar Google.');
     } finally {
+      this.renderingGoogleButton = false;
       this.googleLoading.set(false);
     }
   }

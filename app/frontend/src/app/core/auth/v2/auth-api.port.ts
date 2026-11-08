@@ -33,6 +33,6 @@ export abstract class AuthApiPort {
   /** `POST /v1/auth/refresh` con `{mode:"rotate"}` y el CSRF vigente. */
   abstract refresh(csrfToken: string, signal?: AbortSignal): Promise<AuthResponse>;
 
-  /** `POST /v1/auth/logout` con `{scope:"current"}`. */
-  abstract logout(csrfToken: string | null, signal?: AbortSignal): Promise<void>;
+  /** Logout de la sesión local indicada. HTTP obtiene el CSRF vigente dentro del lock. */
+  abstract logout(csrfToken: string | null, signal?: AbortSignal, sessionId?: string): Promise<void>;
 }

@@ -7,7 +7,7 @@
 - **Backend observado:** `a-calderon-org/ms-users-market-tec` `main@08ccf056c975f6ec5d918c4cf76143fb04def7b2`. Se leyeron `GoogleAuthController`, `SessionBootstrapController`, `SessionRefreshController`, `SessionLogoutController`, `UserProfileController`, `ApiErrors`, `BearerRequests`, `ProtectedApiCorsFilter`, `NotFoundController`, `ProfileDetails` y `application.yml`.
 - **Contrato comparado:** `contracts/openapi/users.json` `0.3.0-draft` (sin cambios en este incremento).
 - **Cliente:** `app/frontend/src/app/core/auth/v2/http-auth-api.adapter.ts`, `features/profile/services/user.service.ts` y `features/profile/models/user-profile-v1.ts`.
-- **Evidencia:** `http-auth-api.adapter.spec.ts` (HttpTestingController, 39 casos). Las formas de request y response replican los records Java.
+- **Evidencia:** `http-auth-api.adapter.spec.ts` (HttpTestingController). Las formas de request y response replican los records Java.
 - **Etiquetas:** **Verificado** = leído en Java y cubierto por una prueba Angular. **No verificado** = requiere navegador real o un despliegue que todavía no existe.
 
 ## Reglas comunes observadas en Java (Verificado)
@@ -43,7 +43,7 @@
 - **Códigos:** 400 `INVALID_REQUEST`, 401 `AUTH_PROOF_INVALID` (prueba inválida, conflicto de identidad o usuario de dominio inválido), 403 `CSRF_INVALID`/`ORIGIN_DENIED`, 409 `ATTEMPT_CONSUMED`, 410 `ATTEMPT_EXPIRED`, 503 (registro deshabilitado).
 - **Angular:**
   - Elige la ruta según el `purpose` del intento: `register` usa `/registrations`.
-  - Intercambia el credential una sola vez. Un segundo callback de GIS no emite petición.
+  - Intercambia el credential una sola vez. Ignora callbacks de GIS de intentos sustituidos o consumidos.
   - Sin reintentos.
   - Navega solo si la sesión se aplicó.
   - Un 401 de login no se convierte en registro: la UI muestra un mensaje genérico con la acción "Crear cuenta con Google".
@@ -67,7 +67,7 @@
 - **Angular:**
   - Envía un POST por demanda, dentro del lock.
   - Ante un error, timeout o respuesta perdida, solo reconcilia con `GET /session` y nunca envía un segundo POST.
-  - Las demandas concurrentes comparten la misma operación.
+  - Las demandas concurrentes comparten la misma operación. Si la cookie corresponde a otro usuario o a otra sesión, invalida la generación local y exige autenticación explícita.
 
 ### 5. Logout — `POST /v1/auth/logout` (Verificado)
 
@@ -78,7 +78,7 @@
 - **Angular:**
   - Cierra primero la sesión local: limpia el JWT, el CSRF y el usuario, y aborta las peticiones de sesión en vuelo.
   - Avisa a las demás pestañas por `BroadcastChannel`.
-  - Después envía el POST con el CSRF que tenía. Un fallo remoto no reabre la sesión.
+  - Con Web Locks, consulta `GET /v1/auth/session` y envía el POST con el CSRF actual solo si la cookie sigue apuntando a la sesión que se cerró. Sin Web Locks intenta el POST con el CSRF local. Un fallo remoto conserva el cierre local y puede dejar activa la cookie.
 
 ### 6. Leer perfil propio — `GET /v1/me/profile` (Verificado)
 
