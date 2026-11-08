@@ -280,7 +280,7 @@
           "call": "getSessionState",
           "note": "reconcile only; do not chain another POST",
           "onStatus": {
-            "200": "another tab won; keep the session open and take the new csrfToken for a later demand",
+            "200": "the presented cookie is still valid at this instant and the response carries the currently valid csrfToken; it does not show that another tab refreshed, that a rotation happened, or that Angular holds a new access JWT. Do not chain another refresh POST; a later new demand for a token is decided inside the critical section",
             "401": "reauthenticate"
           }
         }

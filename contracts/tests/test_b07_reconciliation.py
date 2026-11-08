@@ -180,8 +180,12 @@ class B07ReconciliationTest(unittest.TestCase):
     def test_google_exchange_cases_carry_coherent_preconditions(self):
         """Each Google exchange case must be reachable in the order Java checks things."""
         order = self.observed["javaCheckOrder"]
-        self.assertLess(order.index("attempt cookie + X-CSRF-Token (else 403 CSRF_INVALID)"),
-                        order.index("persisted attempt: missing->401, consumed->409 ATTEMPT_CONSUMED, expired->410 ATTEMPT_EXPIRED"))
+        self.assertEqual(7, len(order))
+        markers = ["CSRF_INVALID", "load persisted attempt", "consumed", "expired", "browser-binding hash",
+                   "Google proof", "resolve identity"]
+        for position, marker in enumerate(markers):
+            self.assertIn(marker, order[position], f"step {position + 1}")
+        self.assertIn("different value", self.observed["attemptBindingHashRule"])
         self.assertIn("static-inspection", self.observed["evidence"])
         cases = [c for c in self.observed["cases"] if c["operationId"] == "exchangeGoogleCredential"]
         self.assertEqual(
@@ -201,6 +205,9 @@ class B07ReconciliationTest(unittest.TestCase):
                 self.assertRegex(body["attemptId"], r"^[0-9a-f]{32}$")
                 self.assertEqual(body["attemptId"], pre["persistedAttempt"]["attemptId"])
                 expected_csrf = hashlib.sha256(("mtec-attempt-csrf:" + secret).encode("ascii")).hexdigest()
+                expected_hash = hashlib.sha256(secret.encode("ascii")).hexdigest()
+                self.assertEqual(expected_hash, pre["persistedAttempt"]["browserSecretHash"])
+                self.assertNotEqual(expected_hash, expected_csrf)
                 status = case["response"]["status"]
                 if status == 403:
                     self.assertNotEqual(expected_csrf, headers.get("X-CSRF-Token"))
@@ -386,3 +393,32 @@ class B07ReconciliationTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class B07RegressionTextTest(unittest.TestCase):
+    """Text guards for the pending D-07 / D-11 proposals."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.plan = PLAN_DOC.read_text(encoding="utf-8")
+        cls.flow = load(PROPOSED_PATH)
+
+    def test_plan_does_not_prescribe_generic_retry_after_401(self):
+        banned = [r"un reintento tras 401", r"reintent\w+ (autom[aá]tic\w+ )?(de )?(cualquier|toda)s? (petici[oó]n|solicitud)",
+                  r"se rota una vez", r"repetir (autom[aá]ticamente )?(la petici[oó]n|cualquier)"]
+        for pattern in banned:
+            self.assertNotRegex(self.plan, re.compile(pattern, re.I), pattern)
+        self.assertIn("D-11, decisión pendiente", self.plan)
+        for verb in ("POST", "PUT"):
+            for line in self.plan.splitlines():
+                if re.search(rf"\b{verb}\b", line) and re.search(r"reintent|repet|replay", line, re.I):
+                    self.assertRegex(line, r"(?i)exclu|nunca|no |sin ", line)
+
+    def test_session_200_is_not_evidence_of_a_won_rotation(self):
+        text = json.dumps(self.flow["flows"]["loserTab"], ensure_ascii=False).lower()
+        for phrase in ("another tab won", "won the rotation", "otra pestaña ganó", "rotation succeeded"):
+            self.assertNotIn(phrase, text)
+        ok = self.flow["flows"]["loserTab"]["steps"][1]["onStatus"]["200"]
+        self.assertIn("does not show that another tab refreshed", ok)
+        self.assertIn("Do not chain another refresh POST", ok)
+        self.assertEqual([], [s for s in self.flow["flows"]["loserTab"]["steps"] if s.get("call") == "refreshSession"])
