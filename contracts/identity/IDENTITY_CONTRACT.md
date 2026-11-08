@@ -17,13 +17,23 @@ especifica métodos, rutas, headers, cuerpos, esquemas, respuestas y errores. El
 [informe de revisión](../../docs/MTEC15_AUTH_CONTRACT_REVIEW.md) contiene evidencia,
 comparación histórica. La [revisión candidata B07](../../docs/MTEC15_AUTH_CONTRACT_RELEASE_REVIEW.md) recoge compatibilidad, QA y bloqueos vigentes, sin constituir otro contrato.
 
-**Verificado en `ms-users/main@3f776f6`:** `GET /health` es la única operación
-marcada `implemented` en este contrato. El servicio ya expone adaptadores parciales
-de Google, sesión, refresh `mode=rotate` y logout `scope=current`; ninguna de esas
-operaciones acredita todavía la interfaz completa candidata y conservan
-`x-implementation-status: proposed`. También expone
-`POST /v1/auth/google/registrations`, cuyo registro inmediato 200 AuthResponse es la compatibilidad vigente. El estado global es
-`draft-pending-team-approval`. **No determinado:** configuración efectiva Azure/APIM.
+**Estado contractual frente a código observado.** En este contrato solo
+`GET /health` figura `implemented`; las demás operaciones conservan
+`x-implementation-status: proposed` porque ninguna acredita todavía la interfaz
+completa candidata ni la conformidad B07. Eso **no** significa que `ms-users`
+solo tenga `/health`: en `ms-users/main@20898978d7f49c38e21b49187250bdd1821c370f`
+(lectura estática del 2026-11-07) existen adaptadores HTTP para las 22 rutas de
+este OpenAPI; las 21 distintas de `/health` están detrás de flags apagados por
+defecto y, las de navegador, de una topología HTTPS verificada. Incluyen intentos y Google (con el alias `POST /v1/auth/google/registrations`,
+cuyo registro inmediato 200 AuthResponse es la compatibilidad vigente), sesión,
+refresh `mode=rotate`, logout `scope=current`, perfil, JWKS y metadata. Hay además
+código para Magic Link, pruebas y vínculos, que el contrato mantiene fuera del
+comportamiento aprobado (rutas de correo en 503; B02 y B04 abiertos), y
+`session/activity`, que rechaza siempre (B03). Qué difiere de este OpenAPI está
+en la [matriz de conciliación](../../docs/MTEC15_B07_RECONCILIATION_MATRIX.md) y
+las decisiones pendientes en el [registro](../../docs/MTEC15_B07_DECISION_REGISTER.md).
+El estado global es `draft-pending-team-approval`. **No determinado:**
+configuración efectiva Azure/APIM.
 
 ### Núcleo aceptado y detalles propuestos
 

@@ -1,0 +1,1627 @@
+{
+  "$comment": "MTEC-15/B07 reconciliation matrix. OBSERVED columns were read from ms-users@20898978d7f49c38e21b49187250bdd1821c370f and MarketTec@afb423bb73e43fd033f67dbc354728960e8a071c. PROPOSED columns are recommendations, not approvals. Nothing here marks B07 approved, records a team conformity or authorizes a behavior change.",
+  "matrixVersion": "1",
+  "status": "draft-not-approved",
+  "b07Approved": false,
+  "conformities": [],
+  "sources": {
+    "marketTecCommit": "afb423bb73e43fd033f67dbc354728960e8a071c",
+    "msUsersCommit": "20898978d7f49c38e21b49187250bdd1821c370f",
+    "openapiVersion": "0.3.0-draft"
+  },
+  "legend": {
+    "javaState": {
+      "gated": "Route exists in Java but is registered only when its feature flags and verified-topology settings are on (all default off).",
+      "gated-refuses": "Route exists behind flags but, by design, always refuses (blocked by a pending decision).",
+      "always-on": "Registered without feature flag (still profile-bound to sql-*).",
+      "metadata-gated": "Registered only when users.internal-jwt.enabled=true."
+    },
+    "kind": {
+      "doc-only": "Fix documentation/OpenAPI text or fixtures; no runtime change.",
+      "behavior": "Changes Java or Angular runtime behavior; needs the named decision before coding.",
+      "needs-authorization": "Touches a security decision reserved to the responsible owner."
+    },
+    "priority": {
+      "P0": "Blocks the coordinated core increment (Google to logout).",
+      "P1": "Needed for the core increment to behave correctly in the browser.",
+      "P2": "Needed before general exposure.",
+      "P3": "Cosmetic or deferrable."
+    }
+  },
+  "decisions": [
+    "D-01",
+    "D-02",
+    "D-03",
+    "D-04",
+    "D-05",
+    "D-06",
+    "D-07",
+    "D-08",
+    "D-09",
+    "D-10",
+    "D-11",
+    "D-12",
+    "D-13",
+    "D-14"
+  ],
+  "operations": [
+    {
+      "operationId": "getUsersHealth",
+      "method": "GET",
+      "path": "/health",
+      "group": "foundation",
+      "javaState": "always-on",
+      "flags": [],
+      "requestJava": "none",
+      "requestOpenapi": "none",
+      "responseJava": "200 HealthResponse",
+      "responseOpenapi": "200 HealthResponse",
+      "transport": {
+        "cookies": [],
+        "jwt": false,
+        "origin": false,
+        "csrf": false
+      },
+      "httpJava": [
+        "200"
+      ],
+      "httpOpenapi": [
+        "200"
+      ],
+      "envelope": "n/a",
+      "apim": {
+        "auth": "public",
+        "cookieMode": "none",
+        "csrf": "none",
+        "contractStatus": "reconciled"
+      },
+      "angular": "none",
+      "divergences": [],
+      "decision": null,
+      "acceptance": [
+        "AT-HEALTH-1"
+      ]
+    },
+    {
+      "operationId": "createAuthenticationAttempt",
+      "method": "POST",
+      "path": "/v1/auth/attempts",
+      "group": "core-auth",
+      "javaState": "gated",
+      "flags": [
+        "users.google.http.enabled",
+        "users.google.http.same-site-verified",
+        "users.google.http.allowed-origins",
+        "users.google.http.public-api-origin",
+        "users.google.registration.enabled (register only)"
+      ],
+      "requestJava": "{method:'google', purpose?:'login'|'register'}; unknown fields rejected; Origin allow-listed; X-MTEC-Client: web; purpose omitted defaults to login",
+      "requestOpenapi": "{method, purpose} both required; method enum AuthMethod; register only with google",
+      "responseJava": "200 {attemptId(32 lowercase hex), method, purpose, expiresAt, csrfToken, nonce}; Set-Cookie __Host-mtec-attempt HttpOnly Secure Path=/ SameSite=Lax Max-Age=300",
+      "responseOpenapi": "200 AttemptResponse; purpose enum also lists reauthenticate/link; nonce optional; SameSite pending B06",
+      "transport": {
+        "cookies": [
+          "attempt (set)"
+        ],
+        "jwt": false,
+        "origin": true,
+        "csrf": false
+      },
+      "httpJava": [
+        "200",
+        "400",
+        "403",
+        "503"
+      ],
+      "httpOpenapi": [
+        "200",
+        "400",
+        "403",
+        "409",
+        "429",
+        "503"
+      ],
+      "envelope": "ErrorEnvelope details=[]",
+      "apim": {
+        "auth": "public",
+        "cookieMode": "none",
+        "csrf": "none",
+        "contractStatus": "reconciled"
+      },
+      "angular": "absent: login.ts uses one GIS callback; no attempt, no nonce",
+      "divergences": [
+        {
+          "id": "M-01",
+          "kind": "behavior",
+          "priority": "P1",
+          "decision": "D-09",
+          "summary": "Java accepts a missing purpose (defaults to login); OpenAPI requires it. Angular must always send purpose; tightening Java is a behavior change."
+        },
+        {
+          "id": "M-02",
+          "kind": "doc-only",
+          "priority": "P3",
+          "decision": null,
+          "summary": "attemptId is documented as opaque (max 128); Java emits and accepts only 32 lowercase hex. Narrower acceptance is compatible for clients that echo the issued value."
+        },
+        {
+          "id": "M-03",
+          "kind": "needs-authorization",
+          "priority": "P0",
+          "decision": "D-04",
+          "summary": "SameSite=Lax and Path=/ are hard-coded in Java but SameSite/hosts are still pending B06 and no real hosts are verified. Implemented, not approved."
+        },
+        {
+          "id": "M-04",
+          "kind": "behavior",
+          "priority": "P1",
+          "decision": "D-06",
+          "summary": "purpose=register answers 503 AUTH_TEMPORARILY_UNAVAILABLE unless users.google.registration.enabled=true (default false). Angular must treat it as 'registration unavailable', not as a login failure."
+        },
+        {
+          "id": "M-05",
+          "kind": "behavior",
+          "priority": "P2",
+          "decision": "D-09",
+          "summary": "Missing or wrong X-MTEC-Client gives 400 INVALID_REQUEST here but 403 FORBIDDEN on session/refresh/logout. Pick one mapping."
+        }
+      ],
+      "decision": "D-09",
+      "acceptance": [
+        "AT-ATTEMPT-1",
+        "AT-ATTEMPT-2",
+        "AT-ATTEMPT-3"
+      ]
+    },
+    {
+      "operationId": "exchangeGoogleCredential",
+      "method": "POST",
+      "path": "/v1/auth/google",
+      "group": "core-auth",
+      "javaState": "gated",
+      "flags": [
+        "users.google.http.enabled",
+        "users.google.login-enabled",
+        "users.google.enabled",
+        "users.internal-jwt.enabled",
+        "users.google.http.same-site-verified"
+      ],
+      "requestJava": "{attemptId(32 hex), credential(<=16384 chars)}; cookie __Host-mtec-attempt (64 hex) + X-CSRF-Token = sha256('mtec-attempt-csrf:'+secret); a register attempt is routed to the registration service when registration is enabled",
+      "requestOpenapi": "GoogleAuthRequest {credential, attemptId}; Origin, X-MTEC-Client, X-CSRF-Token",
+      "responseJava": "200 AuthResponse {token, tokenType:'Bearer', expiresAt, user{userId,email,nombre,fotoPerfil}, session{11 fields}, csrfToken}; Set-Cookie attempt cleared, __Host-mtec-refresh set (Max-Age = seconds to session deadline)",
+      "responseOpenapi": "200 AuthResponse (same shape); fotoPerfil optional in OpenAPI, always emitted by Java",
+      "transport": {
+        "cookies": [
+          "attempt (read, then cleared)",
+          "refresh (set)"
+        ],
+        "jwt": false,
+        "origin": true,
+        "csrf": true
+      },
+      "httpJava": [
+        "200",
+        "400",
+        "401",
+        "403",
+        "409",
+        "410",
+        "503"
+      ],
+      "httpOpenapi": [
+        "200",
+        "400",
+        "401",
+        "403",
+        "409",
+        "410",
+        "429",
+        "503"
+      ],
+      "envelope": "ErrorEnvelope details=[]",
+      "apim": {
+        "auth": "cookie",
+        "cookieMode": "required",
+        "csrf": "required",
+        "contractStatus": "reconciled"
+      },
+      "angular": "absent: GoogleAuthService.signIn stores the Google credential as the session token",
+      "divergences": [
+        {
+          "id": "M-06",
+          "kind": "behavior",
+          "priority": "P0",
+          "decision": "D-06",
+          "summary": "A login with an unknown Google identity returns 401 AUTH_PROOF_INVALID. OpenAPI documents REGISTRATION_REQUIRED, which Java never emits, so Angular cannot tell 'not registered' from 'bad proof'."
+        },
+        {
+          "id": "M-07",
+          "kind": "behavior",
+          "priority": "P0",
+          "decision": "D-06",
+          "summary": "The 2026-11-04 DECISION_LOG entry approves immediate Google registration with 200 AuthResponse. The older mandatory-link proposal is superseded. Java registers immediately only when users.google.registration.enabled=true and the attempt was created with purpose=register."
+        },
+        {
+          "id": "M-08",
+          "kind": "doc-only",
+          "priority": "P2",
+          "decision": null,
+          "summary": "Java sets WWW-Authenticate: Bearer on every 401 of this route, including cookie/proof failures. Document it so Angular does not read it as 'send a bearer'."
+        },
+        {
+          "id": "M-09",
+          "kind": "doc-only",
+          "priority": "P3",
+          "decision": null,
+          "summary": "429 RATE_LIMITED is documented but never emitted by Java. Rate limiting is expected at APIM (apim abuse_protection approval is null)."
+        }
+      ],
+      "decision": "D-06",
+      "acceptance": [
+        "AT-GOOGLE-1",
+        "AT-GOOGLE-2",
+        "AT-GOOGLE-3",
+        "AT-GOOGLE-4"
+      ]
+    },
+    {
+      "operationId": "legacyGoogleRegistrationCompatibility",
+      "method": "POST",
+      "path": "/v1/auth/google/registrations",
+      "group": "core-auth",
+      "javaState": "gated",
+      "flags": [
+        "users.google.http.enabled",
+        "users.google.registration.enabled"
+      ],
+      "requestJava": "same body and proofs as /v1/auth/google",
+      "requestOpenapi": "GoogleRegistrationRequest",
+      "responseJava": "200 AuthResponse; 503 AUTH_TEMPORARILY_UNAVAILABLE when registration is disabled",
+      "responseOpenapi": "200 AuthResponse (compatibility alias)",
+      "transport": {
+        "cookies": [
+          "attempt (read, then cleared)",
+          "refresh (set)"
+        ],
+        "jwt": false,
+        "origin": true,
+        "csrf": true
+      },
+      "httpJava": [
+        "200",
+        "400",
+        "401",
+        "403",
+        "409",
+        "410",
+        "503"
+      ],
+      "httpOpenapi": [
+        "200",
+        "400",
+        "401",
+        "403",
+        "409",
+        "410",
+        "429",
+        "503"
+      ],
+      "envelope": "ErrorEnvelope details=[]",
+      "apim": {
+        "auth": "cookie",
+        "cookieMode": "required",
+        "csrf": "required",
+        "contractStatus": "reconciled"
+      },
+      "angular": "absent",
+      "divergences": [
+        {
+          "id": "M-10",
+          "kind": "doc-only",
+          "priority": "P2",
+          "decision": "D-06",
+          "summary": "Alias kept for migration. Angular should call /v1/auth/google with a register attempt and not depend on the alias."
+        }
+      ],
+      "decision": "D-06",
+      "acceptance": [
+        "AT-GOOGLE-3"
+      ]
+    },
+    {
+      "operationId": "getSessionState",
+      "method": "GET",
+      "path": "/v1/auth/session",
+      "group": "core-auth",
+      "javaState": "gated",
+      "flags": [
+        "users.session.http.enabled",
+        "users.session.http.https-topology-verified",
+        "users.session.http.allowed-origins",
+        "users.session.http.public-api-origin"
+      ],
+      "requestJava": "Origin required (single, allow-listed); X-MTEC-Client: web; refresh cookie (64 hex); request must be secure",
+      "requestOpenapi": "Origin optional for some same-origin GET; X-MTEC-Client; refresh cookie",
+      "responseJava": "200 SessionResponse {session, user, csrfToken}; no JWT, no rotation",
+      "responseOpenapi": "200 SessionResponse",
+      "transport": {
+        "cookies": [
+          "refresh (read)"
+        ],
+        "jwt": false,
+        "origin": true,
+        "csrf": false
+      },
+      "httpJava": [
+        "200",
+        "401",
+        "403"
+      ],
+      "httpOpenapi": [
+        "200",
+        "401",
+        "403",
+        "429",
+        "503"
+      ],
+      "envelope": "ErrorEnvelope details=[]",
+      "apim": {
+        "auth": "cookie",
+        "cookieMode": "optional",
+        "csrf": "none",
+        "contractStatus": "reconciled"
+      },
+      "angular": "absent: authGuard.restoreSession decodes a Google token from sessionStorage",
+      "divergences": [
+        {
+          "id": "M-11",
+          "kind": "behavior",
+          "priority": "P1",
+          "decision": "D-09",
+          "summary": "Java requires Origin on this GET; OpenAPI says GET may omit it. A cross-origin fetch always sends Origin, so Angular is unaffected, but the contract text and Java disagree."
+        },
+        {
+          "id": "M-12",
+          "kind": "doc-only",
+          "priority": "P1",
+          "decision": "D-09",
+          "summary": "APIM manifest marks the refresh cookie 'optional' for this route; Java rejects a missing cookie with 401 REFRESH_INVALID. APIM must treat the cookie as required."
+        },
+        {
+          "id": "M-13",
+          "kind": "needs-authorization",
+          "priority": "P1",
+          "decision": "D-07",
+          "summary": "csrfToken returned here is the synchronizer for the current refresh generation. Another tab that rotated first invalidates a stale CSRF held by this tab. Tab protocol is not approved."
+        }
+      ],
+      "decision": "D-07",
+      "acceptance": [
+        "AT-SESSION-1",
+        "AT-SESSION-2"
+      ]
+    },
+    {
+      "operationId": "refreshSession",
+      "method": "POST",
+      "path": "/v1/auth/refresh",
+      "group": "core-auth",
+      "javaState": "gated",
+      "flags": [
+        "users.session.refresh.enabled",
+        "users.session.http.* (verified topology)",
+        "users.internal-jwt.enabled"
+      ],
+      "requestJava": "body exactly {mode:'rotate'}; refresh cookie (64 hex) + X-CSRF-Token (64 hex); Origin; X-MTEC-Client: web",
+      "requestOpenapi": "RefreshRequest {mode: rotate|continue}",
+      "responseJava": "200 AuthResponse; new refresh cookie; mode=continue answers 400 INVALID_REQUEST",
+      "responseOpenapi": "200 AuthResponse",
+      "transport": {
+        "cookies": [
+          "refresh (read, rotated)"
+        ],
+        "jwt": false,
+        "origin": true,
+        "csrf": true
+      },
+      "httpJava": [
+        "200",
+        "400",
+        "401",
+        "403"
+      ],
+      "httpOpenapi": [
+        "200",
+        "400",
+        "401",
+        "403",
+        "429",
+        "503"
+      ],
+      "envelope": "ErrorEnvelope details=[]",
+      "apim": {
+        "auth": "cookie",
+        "cookieMode": "required",
+        "csrf": "required",
+        "contractStatus": "reconciled"
+      },
+      "angular": "absent",
+      "divergences": [
+        {
+          "id": "M-14",
+          "kind": "doc-only",
+          "priority": "P1",
+          "decision": "D-05",
+          "summary": "Policy C is implemented: a consumed, invalid or mismatched proof yields 401 REFRESH_INVALID and a replay alone does not revoke the winner. Keep it. Missing or malformed CSRF also yields 401 REFRESH_INVALID, not 403 CSRF_INVALID."
+        },
+        {
+          "id": "M-15",
+          "kind": "behavior",
+          "priority": "P2",
+          "decision": "D-10",
+          "summary": "mode=continue is documented but not implemented (400). Angular must not call it."
+        },
+        {
+          "id": "M-16",
+          "kind": "needs-authorization",
+          "priority": "P1",
+          "decision": "D-07",
+          "summary": "Two tabs and lost responses: a loser tab holding a stale CSRF gets REFRESH_INVALID, which must not close the winner's session. Protocol is a recommendation only."
+        }
+      ],
+      "decision": "D-07",
+      "acceptance": [
+        "AT-REFRESH-1",
+        "AT-REFRESH-2",
+        "AT-REFRESH-3",
+        "AT-REFRESH-4"
+      ]
+    },
+    {
+      "operationId": "logoutSession",
+      "method": "POST",
+      "path": "/v1/auth/logout",
+      "group": "core-auth",
+      "javaState": "gated",
+      "flags": [
+        "users.session.logout.enabled",
+        "users.session.http.* (verified topology)"
+      ],
+      "requestJava": "body exactly {scope:'current'}; Origin; single X-MTEC-Client: web; CSRF header required only when the refresh cookie is present",
+      "requestOpenapi": "LogoutRequest {scope: current|all, reauthenticationProofId?}",
+      "responseJava": "204 and refresh cookie cleared (Max-Age=0), including when the cookie was absent; scope=all answers 400",
+      "responseOpenapi": "204",
+      "transport": {
+        "cookies": [
+          "refresh (read, cleared)"
+        ],
+        "jwt": false,
+        "origin": true,
+        "csrf": true
+      },
+      "httpJava": [
+        "204",
+        "400",
+        "401",
+        "403"
+      ],
+      "httpOpenapi": [
+        "204",
+        "400",
+        "401",
+        "403",
+        "429",
+        "503"
+      ],
+      "envelope": "ErrorEnvelope details=[]",
+      "apim": {
+        "auth": "cookie",
+        "cookieMode": "optional",
+        "csrf": "if_cookie",
+        "contractStatus": "reconciled"
+      },
+      "angular": "absent: GoogleAuthService.logout clears sessionStorage only",
+      "divergences": [
+        {
+          "id": "M-17",
+          "kind": "doc-only",
+          "priority": "P1",
+          "decision": "D-12",
+          "summary": "A 204 proves revocation in ms-users only. Already-issued access JWTs stay valid up to their exp (<=240 s nominal; residual <=300 s is documented, not demonstrated). Angular UI must not promise instant global logout."
+        },
+        {
+          "id": "M-18",
+          "kind": "behavior",
+          "priority": "P2",
+          "decision": "D-10",
+          "summary": "scope=all is not implemented (400) and depends on B04."
+        }
+      ],
+      "decision": "D-12",
+      "acceptance": [
+        "AT-LOGOUT-1",
+        "AT-LOGOUT-2"
+      ]
+    },
+    {
+      "operationId": "getOwnUserProfile",
+      "method": "GET",
+      "path": "/v1/me/profile",
+      "group": "profile",
+      "javaState": "gated",
+      "flags": [
+        "users.api.http.enabled",
+        "users.internal-jwt.enabled"
+      ],
+      "requestJava": "Authorization: Bearer <internal JWT>; exactly one header",
+      "requestOpenapi": "bearer or APIM key declared in security",
+      "responseJava": "200 UserProfileV1 {id, nombreUsuario, nombre, apellidos, correo, fotoPerfil, fechaRegistro(ISO), createdAt(epoch), verificado, estado:'activo'}",
+      "responseOpenapi": "200 UserProfileV1 (same fields)",
+      "transport": {
+        "cookies": [],
+        "jwt": true,
+        "origin": false,
+        "csrf": false
+      },
+      "httpJava": [
+        "200",
+        "401",
+        "403",
+        "404",
+        "503"
+      ],
+      "httpOpenapi": [
+        "200",
+        "400",
+        "401",
+        "403",
+        "404",
+        "409",
+        "429",
+        "503"
+      ],
+      "envelope": "ErrorEnvelope details=[]",
+      "apim": {
+        "auth": "jwt",
+        "cookieMode": "none",
+        "csrf": "none",
+        "contractStatus": "reconciled"
+      },
+      "angular": "profile/user.service.ts calls /usuarios/{id}; profile.ts falls back to the hard-coded id USR-001",
+      "divergences": [
+        {
+          "id": "M-19",
+          "kind": "doc-only",
+          "priority": "P1",
+          "decision": "D-11",
+          "summary": "Missing, expired or malformed access token answers 401 AUTH_REQUIRED. AUTH_REQUIRED is not in the OpenAPI error-code enum, and ACCESS_TOKEN_EXPIRED is never emitted, so expiry cannot be distinguished server-side."
+        },
+        {
+          "id": "M-20",
+          "kind": "doc-only",
+          "priority": "P2",
+          "decision": "D-11",
+          "summary": "Java also emits USER_NOT_FOUND, USER_DEACTIVATED, CONCURRENT_MODIFICATION, INTERNAL_ERROR, ROUTE_NOT_FOUND and METHOD_NOT_ALLOWED; none is in the OpenAPI enum."
+        }
+      ],
+      "decision": "D-11",
+      "acceptance": [
+        "AT-PROFILE-1",
+        "AT-PROFILE-2"
+      ]
+    },
+    {
+      "operationId": "updateOwnUserProfile",
+      "method": "PUT",
+      "path": "/v1/me/profile",
+      "group": "profile",
+      "javaState": "gated",
+      "flags": [
+        "users.api.http.enabled",
+        "users.internal-jwt.enabled"
+      ],
+      "requestJava": "Bearer JWT; body exactly {nombreUsuario, nombre, apellidos} all strings; no CSRF header required",
+      "requestOpenapi": "UpdateUserRequest (same three fields)",
+      "responseJava": "200 UpdateUserResponseV1 incl. message 'Perfil actualizado'",
+      "responseOpenapi": "200 UpdateUserResponseV1",
+      "transport": {
+        "cookies": [],
+        "jwt": true,
+        "origin": false,
+        "csrf": false
+      },
+      "httpJava": [
+        "200",
+        "400",
+        "401",
+        "403",
+        "404",
+        "409",
+        "503"
+      ],
+      "httpOpenapi": [
+        "200",
+        "400",
+        "401",
+        "403",
+        "404",
+        "409",
+        "429",
+        "503"
+      ],
+      "envelope": "ErrorEnvelope details=[]",
+      "apim": {
+        "auth": "jwt",
+        "cookieMode": "none",
+        "csrf": "none",
+        "contractStatus": "reconciled"
+      },
+      "angular": "user.service.ts PUT /usuarios/{id}",
+      "divergences": [],
+      "decision": null,
+      "acceptance": [
+        "AT-PROFILE-3"
+      ]
+    },
+    {
+      "operationId": "getUserProfile",
+      "method": "GET",
+      "path": "/v1/usuarios/{userId}",
+      "group": "profile",
+      "javaState": "gated",
+      "flags": [
+        "users.api.http.enabled",
+        "users.internal-jwt.enabled"
+      ],
+      "requestJava": "Bearer JWT; path id must equal token sub, else 403 FORBIDDEN; malformed id 400",
+      "requestOpenapi": "owner only",
+      "responseJava": "200 UserProfileV1",
+      "responseOpenapi": "200 UserProfileV1",
+      "transport": {
+        "cookies": [],
+        "jwt": true,
+        "origin": false,
+        "csrf": false
+      },
+      "httpJava": [
+        "200",
+        "400",
+        "401",
+        "403",
+        "404",
+        "503"
+      ],
+      "httpOpenapi": [
+        "200",
+        "400",
+        "401",
+        "403",
+        "404",
+        "409",
+        "429",
+        "503"
+      ],
+      "envelope": "ErrorEnvelope details=[]",
+      "apim": {
+        "auth": "jwt",
+        "cookieMode": "none",
+        "csrf": "none",
+        "contractStatus": "reconciled"
+      },
+      "angular": "current Angular consumer; id comes from Google sub or USR-001",
+      "divergences": [
+        {
+          "id": "M-21",
+          "kind": "behavior",
+          "priority": "P0",
+          "decision": "D-08",
+          "summary": "Angular builds this path from the Google sub or the literal USR-001; with an owner-only route every call except the owner's own id is a 403. userId must come from AuthResponse.user.userId."
+        }
+      ],
+      "decision": "D-08",
+      "acceptance": [
+        "AT-PROFILE-4",
+        "AT-ANGULAR-USERID-1"
+      ]
+    },
+    {
+      "operationId": "updateUserProfile",
+      "method": "PUT",
+      "path": "/v1/usuarios/{userId}",
+      "group": "profile",
+      "javaState": "gated",
+      "flags": [
+        "users.api.http.enabled",
+        "users.internal-jwt.enabled"
+      ],
+      "requestJava": "Bearer JWT; path id equals sub; same three-field body",
+      "requestOpenapi": "owner only; UpdateUserRequest",
+      "responseJava": "200 UpdateUserResponseV1",
+      "responseOpenapi": "200 UpdateUserResponseV1",
+      "transport": {
+        "cookies": [],
+        "jwt": true,
+        "origin": false,
+        "csrf": false
+      },
+      "httpJava": [
+        "200",
+        "400",
+        "401",
+        "403",
+        "404",
+        "409",
+        "503"
+      ],
+      "httpOpenapi": [
+        "200",
+        "400",
+        "401",
+        "403",
+        "404",
+        "409",
+        "429",
+        "503"
+      ],
+      "envelope": "ErrorEnvelope details=[]",
+      "apim": {
+        "auth": "jwt",
+        "cookieMode": "none",
+        "csrf": "none",
+        "contractStatus": "reconciled"
+      },
+      "angular": "user.service.ts",
+      "divergences": [],
+      "decision": "D-08",
+      "acceptance": [
+        "AT-PROFILE-4"
+      ]
+    },
+    {
+      "operationId": "getPublicSigningKeys",
+      "method": "GET",
+      "path": "/.well-known/jwks.json",
+      "group": "metadata",
+      "javaState": "metadata-gated",
+      "flags": [
+        "users.internal-jwt.enabled"
+      ],
+      "requestJava": "none",
+      "requestOpenapi": "none",
+      "responseJava": "200 JWKS, Cache-Control public max-age=30",
+      "responseOpenapi": "200 Jwks; cache TTL still to be agreed",
+      "transport": {
+        "cookies": [],
+        "jwt": false,
+        "origin": false,
+        "csrf": false
+      },
+      "httpJava": [
+        "200"
+      ],
+      "httpOpenapi": [
+        "200",
+        "429",
+        "503"
+      ],
+      "envelope": "n/a",
+      "apim": {
+        "auth": "public",
+        "cookieMode": "none",
+        "csrf": "none",
+        "contractStatus": "reconciled"
+      },
+      "angular": "none",
+      "divergences": [
+        {
+          "id": "M-22",
+          "kind": "needs-authorization",
+          "priority": "P2",
+          "decision": "D-13",
+          "summary": "Java hard-codes max-age=30. JWKS freshness, rotation and propagation figures are B05 items that are not approved."
+        }
+      ],
+      "decision": "D-13",
+      "acceptance": [
+        "AT-JWKS-1"
+      ]
+    },
+    {
+      "operationId": "getIdentityMetadata",
+      "method": "GET",
+      "path": "/.well-known/markettec-identity",
+      "group": "metadata",
+      "javaState": "metadata-gated",
+      "flags": [
+        "users.internal-jwt.enabled"
+      ],
+      "requestJava": "none",
+      "requestOpenapi": "none",
+      "responseJava": "200 {issuer, jwks_uri, audiences[], access_token_algorithms:['RS256'], access_token_type:'at+jwt', contract_version:'0.3.0-draft'}",
+      "responseOpenapi": "200 IdentityMetadata",
+      "transport": {
+        "cookies": [],
+        "jwt": false,
+        "origin": false,
+        "csrf": false
+      },
+      "httpJava": [
+        "200"
+      ],
+      "httpOpenapi": [
+        "200",
+        "429",
+        "503"
+      ],
+      "envelope": "n/a",
+      "apim": {
+        "auth": "public",
+        "cookieMode": "none",
+        "csrf": "none",
+        "contractStatus": "reconciled"
+      },
+      "angular": "none",
+      "divergences": [
+        {
+          "id": "M-23",
+          "kind": "needs-authorization",
+          "priority": "P2",
+          "decision": "D-13",
+          "summary": "Concrete issuer/audience values per environment are not approved."
+        }
+      ],
+      "decision": "D-13",
+      "acceptance": [
+        "AT-JWKS-2"
+      ]
+    },
+    {
+      "operationId": "requestInstitutionalEmailLink",
+      "method": "POST",
+      "path": "/v1/auth/email/requests",
+      "group": "magic-link",
+      "javaState": "gated",
+      "flags": [
+        "users.google.http.enabled",
+        "users.email.enabled"
+      ],
+      "requestJava": "{email}; with users.email.enabled=false the service answers 503 AUTH_TEMPORARILY_UNAVAILABLE; with it true Java sends a link and answers 202 with csrfToken and sets the attempt cookie",
+      "requestOpenapi": "EmailRequest; contract and DECISION_LOG state both email routes answer 503 for now",
+      "responseJava": "202 {status:'accepted', csrfToken} when enabled; 503 otherwise",
+      "responseOpenapi": "503 only",
+      "transport": {
+        "cookies": [
+          "attempt (set when enabled)"
+        ],
+        "jwt": false,
+        "origin": true,
+        "csrf": false
+      },
+      "httpJava": [
+        "202",
+        "400",
+        "403",
+        "503"
+      ],
+      "httpOpenapi": [
+        "503"
+      ],
+      "envelope": "ErrorEnvelope details=[]",
+      "apim": {
+        "auth": "public",
+        "cookieMode": "none",
+        "csrf": "none",
+        "contractStatus": "reconciled"
+      },
+      "angular": "login.service.ts is a password form restricted to institutional domains",
+      "divergences": [
+        {
+          "id": "M-24",
+          "kind": "needs-authorization",
+          "priority": "P0",
+          "decision": "D-02",
+          "summary": "Java implements Magic Link behind users.email.enabled while the approved decision says Magic Link is not implemented and must answer 503. The flag must stay off and no environment may enable it before B02 is approved."
+        },
+        {
+          "id": "M-25",
+          "kind": "doc-only",
+          "priority": "P2",
+          "decision": "D-02",
+          "summary": "Java returns 400 INSTITUTIONAL_EMAIL_REQUIRED for a non-institutional domain, which is not in the OpenAPI enum and reveals eligibility, contrary to the contract text."
+        }
+      ],
+      "decision": "D-02",
+      "acceptance": [
+        "AT-EMAIL-OFF-1"
+      ]
+    },
+    {
+      "operationId": "confirmInstitutionalEmailLink",
+      "method": "POST",
+      "path": "/v1/auth/email/confirm",
+      "group": "magic-link",
+      "javaState": "gated",
+      "flags": [
+        "users.google.http.enabled",
+        "users.email.enabled"
+      ],
+      "requestJava": "{attemptId(32 hex), token(64 hex)}; attempt cookie + X-CSRF-Token",
+      "requestOpenapi": "EmailConfirmationRequest; 503 only",
+      "responseJava": "200 AuthResponse when enabled; 503 otherwise",
+      "responseOpenapi": "503 only",
+      "transport": {
+        "cookies": [
+          "attempt (read, cleared)",
+          "refresh (set)"
+        ],
+        "jwt": false,
+        "origin": true,
+        "csrf": true
+      },
+      "httpJava": [
+        "200",
+        "400",
+        "401",
+        "403",
+        "503"
+      ],
+      "httpOpenapi": [
+        "503"
+      ],
+      "envelope": "ErrorEnvelope details=[]",
+      "apim": {
+        "auth": "cookie",
+        "cookieMode": "required",
+        "csrf": "required",
+        "contractStatus": "reconciled"
+      },
+      "angular": "none",
+      "divergences": [
+        {
+          "id": "M-26",
+          "kind": "needs-authorization",
+          "priority": "P0",
+          "decision": "D-02",
+          "summary": "Same as M-24: a session-issuing route exists in Java behind a flag the contract says must not be on."
+        }
+      ],
+      "decision": "D-02",
+      "acceptance": [
+        "AT-EMAIL-OFF-1"
+      ]
+    },
+    {
+      "operationId": "recordSessionActivity",
+      "method": "POST",
+      "path": "/v1/auth/session/activity",
+      "group": "blocked",
+      "javaState": "gated-refuses",
+      "flags": [
+        "users.api.http.enabled"
+      ],
+      "requestJava": "JWT + CSRF verified, body ignored",
+      "requestOpenapi": "ActivityRequest {interactionId, kind}",
+      "responseJava": "403 ACTIVITY_EVIDENCE_REQUIRED, always; deadlines never change",
+      "responseOpenapi": "200 snapshot; 409 ACTIVITY_NOT_ACCEPTED",
+      "transport": {
+        "cookies": [],
+        "jwt": true,
+        "origin": false,
+        "csrf": true
+      },
+      "httpJava": [
+        "403"
+      ],
+      "httpOpenapi": [
+        "200",
+        "400",
+        "401",
+        "403",
+        "409",
+        "429",
+        "503"
+      ],
+      "envelope": "ErrorEnvelope details=[]",
+      "apim": {
+        "auth": "jwt_cookie",
+        "cookieMode": "required",
+        "csrf": "required",
+        "contractStatus": "reconciled"
+      },
+      "angular": "none",
+      "divergences": [
+        {
+          "id": "M-27",
+          "kind": "doc-only",
+          "priority": "P1",
+          "decision": "D-03",
+          "summary": "B03 is unresolved. The endpoint refuses by design; document it as blocked, never as operational. ACTIVITY_EVIDENCE_REQUIRED is not in the OpenAPI enum."
+        }
+      ],
+      "decision": "D-03",
+      "acceptance": [
+        "AT-BLOCKED-1"
+      ]
+    },
+    {
+      "operationId": "createMethodProofAttempt",
+      "method": "POST",
+      "path": "/v1/auth/proofs/attempts",
+      "group": "blocked",
+      "javaState": "gated",
+      "flags": [
+        "users.api.http.enabled"
+      ],
+      "requestJava": "{method:'google'|'institutional_email', operation, target}; JWT + CSRF",
+      "requestOpenapi": "ProofAttemptRequest {method, purpose: reauthenticate|link, authMethodId?}",
+      "responseJava": "200 {attemptId, method, operation, target, nonce, expiresAt}",
+      "responseOpenapi": "200 AttemptResponse {attemptId, method, purpose, expiresAt, csrfToken, nonce?}",
+      "transport": {
+        "cookies": [],
+        "jwt": true,
+        "origin": false,
+        "csrf": true
+      },
+      "httpJava": [
+        "200",
+        "400",
+        "401",
+        "403",
+        "503"
+      ],
+      "httpOpenapi": [
+        "200",
+        "400",
+        "401",
+        "403",
+        "409",
+        "410",
+        "429",
+        "503"
+      ],
+      "envelope": "ErrorEnvelope details=[]",
+      "apim": {
+        "auth": "jwt_cookie",
+        "cookieMode": "required",
+        "csrf": "required",
+        "contractStatus": "pending_ms_users_pr23"
+      },
+      "angular": "none",
+      "divergences": [
+        {
+          "id": "M-28",
+          "kind": "needs-authorization",
+          "priority": "P2",
+          "decision": "D-14",
+          "summary": "Request and response shapes differ from OpenAPI (operation/target vs purpose/authMethodId; csrfToken missing). B04 defines recent proofs, so neither side is authoritative."
+        },
+        {
+          "id": "M-34",
+          "kind": "doc-only",
+          "priority": "P3",
+          "decision": "D-14",
+          "summary": "Java uses method value 'institutional_email' (underscore); OpenAPI AuthMethod uses 'institutional-email' (hyphen). Pick one spelling before any client is generated."
+        }
+      ],
+      "decision": "D-14",
+      "acceptance": [
+        "AT-BLOCKED-2"
+      ]
+    },
+    {
+      "operationId": "verifyGoogleMethodProof",
+      "method": "POST",
+      "path": "/v1/auth/proofs/google",
+      "group": "blocked",
+      "javaState": "gated",
+      "flags": [
+        "users.api.http.enabled"
+      ],
+      "requestJava": "{attemptId, credential}; JWT + CSRF",
+      "requestOpenapi": "credential + attemptId",
+      "responseJava": "200 {verified:true}",
+      "responseOpenapi": "200 ProofGrant {proofId, purpose, method, verifiedAt, expiresAt}",
+      "transport": {
+        "cookies": [],
+        "jwt": true,
+        "origin": false,
+        "csrf": true
+      },
+      "httpJava": [
+        "200",
+        "400",
+        "401",
+        "403",
+        "409",
+        "410",
+        "503"
+      ],
+      "httpOpenapi": [
+        "200",
+        "400",
+        "401",
+        "403",
+        "409",
+        "410",
+        "429",
+        "503"
+      ],
+      "envelope": "ErrorEnvelope details=[]",
+      "apim": {
+        "auth": "jwt_cookie",
+        "cookieMode": "required",
+        "csrf": "required",
+        "contractStatus": "pending_ms_users_pr23"
+      },
+      "angular": "none",
+      "divergences": [
+        {
+          "id": "M-29",
+          "kind": "needs-authorization",
+          "priority": "P2",
+          "decision": "D-14",
+          "summary": "Java returns {verified:true}; OpenAPI returns a consumable ProofGrant. B04 (recency, purpose, method, consumption) is not approved."
+        }
+      ],
+      "decision": "D-14",
+      "acceptance": [
+        "AT-BLOCKED-2"
+      ]
+    },
+    {
+      "operationId": "requestEmailMethodProof",
+      "method": "POST",
+      "path": "/v1/auth/proofs/email/requests",
+      "group": "blocked",
+      "javaState": "gated",
+      "flags": [
+        "users.api.http.enabled",
+        "users.email.enabled"
+      ],
+      "requestJava": "{attemptId}; JWT + CSRF; 503 when email proof unavailable",
+      "requestOpenapi": "email proof request",
+      "responseJava": "202 {status:'accepted'}",
+      "responseOpenapi": "202",
+      "transport": {
+        "cookies": [],
+        "jwt": true,
+        "origin": false,
+        "csrf": true
+      },
+      "httpJava": [
+        "202",
+        "400",
+        "401",
+        "403",
+        "503"
+      ],
+      "httpOpenapi": [
+        "202",
+        "400",
+        "401",
+        "403",
+        "409",
+        "410",
+        "429",
+        "503"
+      ],
+      "envelope": "ErrorEnvelope details=[]",
+      "apim": {
+        "auth": "jwt_cookie",
+        "cookieMode": "required",
+        "csrf": "required",
+        "contractStatus": "pending_ms_users_pr23"
+      },
+      "angular": "none",
+      "divergences": [
+        {
+          "id": "M-30",
+          "kind": "needs-authorization",
+          "priority": "P2",
+          "decision": "D-14",
+          "summary": "Depends on B04; keep email disabled."
+        }
+      ],
+      "decision": "D-14",
+      "acceptance": [
+        "AT-BLOCKED-2"
+      ]
+    },
+    {
+      "operationId": "verifyEmailMethodProof",
+      "method": "POST",
+      "path": "/v1/auth/proofs/email/confirm",
+      "group": "blocked",
+      "javaState": "gated",
+      "flags": [
+        "users.api.http.enabled",
+        "users.email.enabled"
+      ],
+      "requestJava": "{attemptId, secret(64 hex)}; JWT + CSRF",
+      "requestOpenapi": "email proof confirmation",
+      "responseJava": "200 {verified:true}",
+      "responseOpenapi": "200 ProofGrant",
+      "transport": {
+        "cookies": [],
+        "jwt": true,
+        "origin": false,
+        "csrf": true
+      },
+      "httpJava": [
+        "200",
+        "400",
+        "401",
+        "403",
+        "409",
+        "410",
+        "503"
+      ],
+      "httpOpenapi": [
+        "200",
+        "400",
+        "401",
+        "403",
+        "409",
+        "410",
+        "429",
+        "503"
+      ],
+      "envelope": "ErrorEnvelope details=[]",
+      "apim": {
+        "auth": "jwt_cookie",
+        "cookieMode": "required",
+        "csrf": "required",
+        "contractStatus": "pending_ms_users_pr23"
+      },
+      "angular": "none",
+      "divergences": [
+        {
+          "id": "M-31",
+          "kind": "needs-authorization",
+          "priority": "P2",
+          "decision": "D-14",
+          "summary": "Same as M-29 for the email method."
+        }
+      ],
+      "decision": "D-14",
+      "acceptance": [
+        "AT-BLOCKED-2"
+      ]
+    },
+    {
+      "operationId": "getOwnAuthMethods",
+      "method": "GET",
+      "path": "/v1/me/auth-methods",
+      "group": "blocked",
+      "javaState": "gated",
+      "flags": [
+        "users.api.http.enabled"
+      ],
+      "requestJava": "Bearer JWT",
+      "requestOpenapi": "bearer",
+      "responseJava": "200 {methods:[{provider, email, status}]}",
+      "responseOpenapi": "200 MethodsResponse {userId, methods:[{authMethodId, method}]}",
+      "transport": {
+        "cookies": [],
+        "jwt": true,
+        "origin": false,
+        "csrf": false
+      },
+      "httpJava": [
+        "200",
+        "401",
+        "503"
+      ],
+      "httpOpenapi": [
+        "200",
+        "401",
+        "403",
+        "429",
+        "503"
+      ],
+      "envelope": "ErrorEnvelope details=[]",
+      "apim": {
+        "auth": "jwt",
+        "cookieMode": "none",
+        "csrf": "none",
+        "contractStatus": "reconciled"
+      },
+      "angular": "none",
+      "divergences": [
+        {
+          "id": "M-32",
+          "kind": "behavior",
+          "priority": "P2",
+          "decision": "D-14",
+          "summary": "Response shape differs (provider/email/status vs authMethodId/method; no userId). APIM marks it 'reconciled' even though the shapes differ; that label is a local manifest flag, not conformity."
+        }
+      ],
+      "decision": "D-14",
+      "acceptance": [
+        "AT-BLOCKED-2"
+      ]
+    },
+    {
+      "operationId": "linkOwnAuthMethod",
+      "method": "POST",
+      "path": "/v1/me/auth-methods",
+      "group": "blocked",
+      "javaState": "gated-refuses",
+      "flags": [
+        "users.api.http.enabled",
+        "users.auth-methods.linking.enabled (default false)"
+      ],
+      "requestJava": "{provider, currentAttemptId, newAttemptId, credential?}; answers 503 while linking is disabled",
+      "requestOpenapi": "LinkMethodsRequest {reauthenticationProofId, newMethodProofId}",
+      "responseJava": "201 method object when enabled; 503 AUTH_TEMPORARILY_UNAVAILABLE by default",
+      "responseOpenapi": "200",
+      "transport": {
+        "cookies": [],
+        "jwt": true,
+        "origin": false,
+        "csrf": true
+      },
+      "httpJava": [
+        "201",
+        "400",
+        "401",
+        "403",
+        "409",
+        "503"
+      ],
+      "httpOpenapi": [
+        "200",
+        "400",
+        "401",
+        "403",
+        "409",
+        "410",
+        "429",
+        "503"
+      ],
+      "envelope": "ErrorEnvelope details=[]",
+      "apim": {
+        "auth": "jwt_cookie",
+        "cookieMode": "required",
+        "csrf": "required",
+        "contractStatus": "pending_ms_users_pr23"
+      },
+      "angular": "none",
+      "divergences": [
+        {
+          "id": "M-33",
+          "kind": "needs-authorization",
+          "priority": "P2",
+          "decision": "D-14",
+          "summary": "Request body, success status (201 vs 200) and semantics differ. The flag must stay off until B04 is approved."
+        }
+      ],
+      "decision": "D-14",
+      "acceptance": [
+        "AT-BLOCKED-2"
+      ]
+    }
+  ],
+  "angularDivergences": [
+    {
+      "id": "A-01",
+      "priority": "P0",
+      "kind": "behavior",
+      "decision": "D-01",
+      "summary": "Google ID Token stored as the session token and sent as bearer to every API call."
+    },
+    {
+      "id": "A-02",
+      "priority": "P0",
+      "kind": "behavior",
+      "decision": "D-08",
+      "summary": "Google sub used as user id; 'USR-001' hard-coded in profile.ts:25 and my-publications.ts:29."
+    },
+    {
+      "id": "A-03",
+      "priority": "P0",
+      "kind": "needs-authorization",
+      "decision": "D-01",
+      "summary": "sessionStorage key google_token (auth-token.service.ts) holds the credential; the approved profile forbids web storage for access/CSRF."
+    },
+    {
+      "id": "A-04",
+      "priority": "P1",
+      "kind": "behavior",
+      "decision": "D-04",
+      "summary": "ApiClientService sets no withCredentials; refresh and attempt cookies are never sent."
+    },
+    {
+      "id": "A-05",
+      "priority": "P1",
+      "kind": "behavior",
+      "decision": "D-07",
+      "summary": "No refresh, no 401 retry guard, no tab coordination, no logout call."
+    },
+    {
+      "id": "A-06",
+      "priority": "P1",
+      "kind": "behavior",
+      "decision": "D-06",
+      "summary": "Single GIS callback; no separate login and register actions and no nonce."
+    },
+    {
+      "id": "A-07",
+      "priority": "P1",
+      "kind": "behavior",
+      "decision": "D-11",
+      "summary": "Error handling reads error.message; the envelope is error.error.error.message with a code that is never mapped."
+    },
+    {
+      "id": "A-08",
+      "priority": "P2",
+      "kind": "behavior",
+      "decision": "D-09",
+      "summary": "Request paths omit the /v1 prefix (/usuarios/{id}); APIM manifest also uses public paths without /v1. The mapping is not verified against a real APIM."
+    },
+    {
+      "id": "A-09",
+      "priority": "P2",
+      "kind": "doc-only",
+      "decision": null,
+      "summary": "login.service.ts still models a password form for institutional email; unrelated to the Google core."
+    }
+  ],
+  "acceptanceCatalog": {
+    "AT-HEALTH-1": {
+      "description": "GET /health returns 200 HealthResponse.",
+      "level": "java+contract",
+      "status": "observed",
+      "javaTest": "HealthControllerTest"
+    },
+    "AT-ATTEMPT-1": {
+      "description": "A login attempt returns 200 AttemptResponse and sets __Host-mtec-attempt HttpOnly Secure Path=/ without Domain.",
+      "level": "java+contract",
+      "status": "observed",
+      "javaTest": "GoogleAuthControllerTest"
+    },
+    "AT-ATTEMPT-2": {
+      "description": "Observed: omitted purpose is accepted as login. Proposed: purpose is required (D-09).",
+      "level": "java",
+      "status": "observed-and-proposed",
+      "javaTest": "GoogleAuthControllerTest"
+    },
+    "AT-ATTEMPT-3": {
+      "description": "purpose=register with registration disabled returns 503 AUTH_TEMPORARILY_UNAVAILABLE.",
+      "level": "java",
+      "status": "observed",
+      "javaTest": "GoogleAuthControllerTest"
+    },
+    "AT-GOOGLE-1": {
+      "description": "A valid exchange returns AuthResponse with session.serverTime < expiresAt <= session.expiresAt and expiresAt - serverTime <= 240.",
+      "level": "contract",
+      "status": "observed",
+      "javaTest": "GoogleAuthControllerTest"
+    },
+    "AT-GOOGLE-2": {
+      "description": "Wrong CSRF gives 403 CSRF_INVALID; disallowed or missing Origin gives 403 ORIGIN_DENIED.",
+      "level": "java",
+      "status": "observed",
+      "javaTest": "GoogleAuthControllerTest"
+    },
+    "AT-GOOGLE-3": {
+      "description": "Registration with the flag on returns the same AuthResponse; a consumed attempt gives 409 ATTEMPT_CONSUMED and an expired one 410 ATTEMPT_EXPIRED.",
+      "level": "java",
+      "status": "observed",
+      "javaTest": "GoogleAuthControllerTest"
+    },
+    "AT-GOOGLE-4": {
+      "description": "Observed: unknown identity at login gives 401 AUTH_PROOF_INVALID. Proposed (D-06): REGISTRATION_REQUIRED after a valid proof.",
+      "level": "java",
+      "status": "observed-and-proposed",
+      "javaTest": "GoogleLoginServiceTest"
+    },
+    "AT-SESSION-1": {
+      "description": "GET /v1/auth/session returns SessionResponse with no token and no Set-Cookie rotation.",
+      "level": "java+contract",
+      "status": "observed",
+      "javaTest": "SessionBootstrapControllerTest"
+    },
+    "AT-SESSION-2": {
+      "description": "Missing or malformed refresh cookie gives 401 REFRESH_INVALID.",
+      "level": "java",
+      "status": "observed",
+      "javaTest": "SessionBootstrapControllerTest"
+    },
+    "AT-REFRESH-1": {
+      "description": "mode=rotate returns AuthResponse and a new refresh cookie.",
+      "level": "java+contract",
+      "status": "observed",
+      "javaTest": "SessionRefreshControllerTest"
+    },
+    "AT-REFRESH-2": {
+      "description": "A consumed, invalid or mismatched proof gives 401 REFRESH_INVALID with no JWT, no CSRF and no Set-Cookie (policy C).",
+      "level": "java",
+      "status": "observed",
+      "javaTest": "SessionRefreshControllerTest"
+    },
+    "AT-REFRESH-3": {
+      "description": "mode=continue gives 400 INVALID_REQUEST until D-10.",
+      "level": "java",
+      "status": "observed",
+      "javaTest": "SessionRefreshControllerTest"
+    },
+    "AT-REFRESH-4": {
+      "description": "A replay does not revoke the winning generation (policy C).",
+      "level": "java",
+      "status": "observed",
+      "javaTest": "SessionRefreshControllerTest"
+    },
+    "AT-LOGOUT-1": {
+      "description": "scope=current gives 204 and clears the cookie, including with no cookie.",
+      "level": "java",
+      "status": "observed",
+      "javaTest": "SessionLogoutControllerTest"
+    },
+    "AT-LOGOUT-2": {
+      "description": "scope=all gives 400 until D-14.",
+      "level": "java",
+      "status": "observed",
+      "javaTest": "SessionLogoutControllerTest"
+    },
+    "AT-PROFILE-1": {
+      "description": "GET /v1/me/profile returns UserProfileV1 for the token subject.",
+      "level": "java+contract",
+      "status": "observed",
+      "javaTest": "UserProfileControllerTest"
+    },
+    "AT-PROFILE-2": {
+      "description": "Missing, expired or malformed bearer gives 401 (code AUTH_REQUIRED today).",
+      "level": "java",
+      "status": "observed",
+      "javaTest": "UserProfileControllerTest"
+    },
+    "AT-PROFILE-3": {
+      "description": "PUT /v1/me/profile accepts exactly the three fields and returns UpdateUserResponseV1.",
+      "level": "java+contract",
+      "status": "observed",
+      "javaTest": "UserProfileControllerTest"
+    },
+    "AT-PROFILE-4": {
+      "description": "/v1/usuarios/{userId} with an id different from sub gives 403 FORBIDDEN.",
+      "level": "java",
+      "status": "observed",
+      "javaTest": "UserProfileControllerTest"
+    },
+    "AT-JWKS-1": {
+      "description": "JWKS is public, carries only public RSA keys and unique kid.",
+      "level": "java",
+      "status": "observed",
+      "javaTest": "IdentityMetadataControllerTest"
+    },
+    "AT-JWKS-2": {
+      "description": "Metadata validates against IdentityMetadata.",
+      "level": "java+contract",
+      "status": "observed",
+      "javaTest": "IdentityMetadataControllerTest"
+    },
+    "AT-EMAIL-OFF-1": {
+      "description": "With users.email.enabled=false both email routes answer 503 AUTH_TEMPORARILY_UNAVAILABLE.",
+      "level": "java",
+      "status": "observed",
+      "javaTest": "EmailAuthControllerTest"
+    },
+    "AT-BLOCKED-1": {
+      "description": "POST /v1/auth/session/activity answers 403 ACTIVITY_EVIDENCE_REQUIRED and changes no deadline.",
+      "level": "java",
+      "status": "observed",
+      "javaTest": "AuthApiControllerTest"
+    },
+    "AT-BLOCKED-2": {
+      "description": "Proof and method-linking routes stay unavailable or unchanged while B04 is open.",
+      "level": "java",
+      "status": "observed",
+      "javaTest": "AuthApiControllerTest"
+    },
+    "AT-ANGULAR-USERID-1": {
+      "description": "Angular never sends Google sub or USR-001 as a user id; the id comes from AuthResponse.user.userId.",
+      "level": "angular",
+      "status": "proposed"
+    }
+  }
+}

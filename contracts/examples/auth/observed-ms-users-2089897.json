@@ -1,0 +1,172 @@
+{
+  "$comment": "OBSERVED behavior, read from ms-users@20898978d7f49c38e21b49187250bdd1821c370f controllers (adapters/in/web). Not a conformance statement, not an approval, and not a recording of a running service: bodies use synthetic placeholders. 'validatesAgainstOpenapi' is asserted by contracts/tests/test_b07_reconciliation.py in both directions, so a case that currently diverges fails the suite when the OpenAPI changes and the fixture must be updated.",
+  "kind": "observed",
+  "source": {
+    "repository": "a-calderon-org/ms-users-market-tec",
+    "commit": "20898978d7f49c38e21b49187250bdd1821c370f",
+    "files": [
+      "GoogleAuthController.java", "SessionBootstrapController.java", "SessionRefreshController.java",
+      "SessionLogoutController.java", "UserProfileController.java", "AuthApiController.java",
+      "EmailAuthController.java", "IdentityMetadataController.java", "ApiErrors.java"
+    ]
+  },
+  "cases": [
+    {
+      "id": "obs-attempt-login-200", "operationId": "createAuthenticationAttempt",
+      "request": {"headers": {"Origin": "https://app.example.invalid", "X-MTEC-Client": "web", "Content-Type": "application/json"}, "body": {"method": "google", "purpose": "login"}},
+      "response": {"status": 200, "headers": {"Cache-Control": "no-store", "Set-Cookie": "__Host-mtec-attempt=<64 hex>; Path=/; Max-Age=300; Secure; HttpOnly; SameSite=Lax"},
+        "body": {"attemptId": "0123456789abcdef0123456789abcdef", "method": "google", "purpose": "login", "expiresAt": 1790000300, "csrfToken": "csrf-placeholder", "nonce": "nonce-placeholder"}},
+      "schema": "AttemptResponse", "validatesAgainstOpenapi": true, "divergenceIds": ["M-02", "M-03"]
+    },
+    {
+      "id": "obs-attempt-register-disabled-503", "operationId": "createAuthenticationAttempt",
+      "request": {"headers": {"Origin": "https://app.example.invalid", "X-MTEC-Client": "web", "Content-Type": "application/json"}, "body": {"method": "google", "purpose": "register"}},
+      "response": {"status": 503, "headers": {"Cache-Control": "no-store"},
+        "body": {"error": {"code": "AUTH_TEMPORARILY_UNAVAILABLE", "message": "No se pudo completar la operación.", "details": [], "correlationId": "corr-placeholder", "timestamp": 1790000000}}},
+      "schema": "AuthErrorEnvelope", "validatesAgainstOpenapi": true, "divergenceIds": ["M-04"]
+    },
+    {
+      "id": "obs-attempt-missing-purpose-200", "operationId": "createAuthenticationAttempt",
+      "request": {"headers": {"Origin": "https://app.example.invalid", "X-MTEC-Client": "web", "Content-Type": "application/json"}, "body": {"method": "google"}},
+      "response": {"status": 200, "body": {"attemptId": "0123456789abcdef0123456789abcdef", "method": "google", "purpose": "login", "expiresAt": 1790000300, "csrfToken": "csrf-placeholder", "nonce": "nonce-placeholder"}},
+      "schema": "AttemptResponse", "validatesAgainstOpenapi": true, "requestValidatesAgainstOpenapi": false, "requestSchema": "LoginAttemptRequest", "divergenceIds": ["M-01"]
+    },
+    {
+      "id": "obs-google-exchange-200", "operationId": "exchangeGoogleCredential",
+      "request": {"headers": {"Origin": "https://app.example.invalid", "X-MTEC-Client": "web", "X-CSRF-Token": "<sha256 hex of attempt secret>", "Cookie": "__Host-mtec-attempt=<64 hex>"},
+        "body": {"attemptId": "0123456789abcdef0123456789abcdef", "credential": "google-id-token-placeholder"}},
+      "response": {"status": 200, "headers": {"Cache-Control": "no-store", "Set-Cookie": ["__Host-mtec-attempt=; Max-Age=0", "__Host-mtec-refresh=<64 hex>; Path=/; Secure; HttpOnly; SameSite=Lax"]},
+        "body": {"token": "internal-jwt-placeholder", "tokenType": "Bearer", "expiresAt": 1790000240,
+          "user": {"userId": "usr_abc123", "email": "usuario@estudiantec.cr", "nombre": "Ana López", "fotoPerfil": "https://example.invalid/avatar.png"},
+          "session": {"sessionId": "session-placeholder", "status": "active", "serverTime": 1790000000, "authenticatedAt": 1790000000, "renewedAt": 1790000000, "lastActivityAt": 1790000000, "windowExpiresAt": 1790003600, "inactivityExpiresAt": 1790001800, "absoluteExpiresAt": 1790028800, "expiresAt": 1790001800, "warningAt": 1790001500},
+          "csrfToken": "csrf-placeholder"}},
+      "schema": "AuthResponse", "validatesAgainstOpenapi": true, "divergenceIds": []
+    },
+    {
+      "id": "obs-google-csrf-invalid-403", "operationId": "exchangeGoogleCredential",
+      "request": {"headers": {"Origin": "https://app.example.invalid", "X-MTEC-Client": "web", "X-CSRF-Token": "wrong"}, "body": {"attemptId": "0123456789abcdef0123456789abcdef", "credential": "google-id-token-placeholder"}},
+      "response": {"status": 403, "body": {"error": {"code": "CSRF_INVALID", "message": "No se pudo completar la operación.", "details": [], "correlationId": "corr-placeholder", "timestamp": 1790000000}}},
+      "schema": "AuthErrorEnvelope", "validatesAgainstOpenapi": true, "divergenceIds": []
+    },
+    {
+      "id": "obs-google-unknown-identity-401", "operationId": "exchangeGoogleCredential",
+      "request": {"headers": {"Origin": "https://app.example.invalid", "X-MTEC-Client": "web"}, "body": {"attemptId": "0123456789abcdef0123456789abcdef", "credential": "google-id-token-placeholder"}},
+      "response": {"status": 401, "headers": {"WWW-Authenticate": "Bearer"},
+        "body": {"error": {"code": "AUTH_PROOF_INVALID", "message": "No se pudo completar la operación.", "details": [], "correlationId": "corr-placeholder", "timestamp": 1790000000}}},
+      "schema": "AuthErrorEnvelope", "validatesAgainstOpenapi": true, "divergenceIds": ["M-06", "M-08"]
+    },
+    {
+      "id": "obs-google-attempt-consumed-409", "operationId": "exchangeGoogleCredential",
+      "request": {"headers": {"Origin": "https://app.example.invalid", "X-MTEC-Client": "web"}, "body": {"attemptId": "0123456789abcdef0123456789abcdef", "credential": "google-id-token-placeholder"}},
+      "response": {"status": 409, "body": {"error": {"code": "ATTEMPT_CONSUMED", "message": "No se pudo completar la operación.", "details": [], "correlationId": "corr-placeholder", "timestamp": 1790000000}}},
+      "schema": "AuthErrorEnvelope", "validatesAgainstOpenapi": true, "divergenceIds": []
+    },
+    {
+      "id": "obs-google-attempt-expired-410", "operationId": "exchangeGoogleCredential",
+      "request": {"headers": {"Origin": "https://app.example.invalid", "X-MTEC-Client": "web"}, "body": {"attemptId": "0123456789abcdef0123456789abcdef", "credential": "google-id-token-placeholder"}},
+      "response": {"status": 410, "body": {"error": {"code": "ATTEMPT_EXPIRED", "message": "No se pudo completar la operación.", "details": [], "correlationId": "corr-placeholder", "timestamp": 1790000000}}},
+      "schema": "AuthErrorEnvelope", "validatesAgainstOpenapi": true, "divergenceIds": []
+    },
+    {
+      "id": "obs-session-bootstrap-200", "operationId": "getSessionState",
+      "request": {"headers": {"Origin": "https://app.example.invalid", "X-MTEC-Client": "web", "Cookie": "__Host-mtec-refresh=<64 hex>"}},
+      "response": {"status": 200,
+        "body": {"session": {"sessionId": "session-placeholder", "status": "active", "serverTime": 1790000100, "authenticatedAt": 1790000000, "renewedAt": 1790000000, "lastActivityAt": 1790000000, "windowExpiresAt": 1790003600, "inactivityExpiresAt": 1790001800, "absoluteExpiresAt": 1790028800, "expiresAt": 1790001800, "warningAt": 1790001500},
+          "user": {"userId": "usr_abc123", "email": "usuario@estudiantec.cr", "nombre": "Ana López", "fotoPerfil": "https://example.invalid/avatar.png"},
+          "csrfToken": "csrf-placeholder"}},
+      "schema": "SessionResponse", "validatesAgainstOpenapi": true, "divergenceIds": []
+    },
+    {
+      "id": "obs-session-no-cookie-401", "operationId": "getSessionState",
+      "request": {"headers": {"Origin": "https://app.example.invalid", "X-MTEC-Client": "web"}},
+      "response": {"status": 401, "body": {"error": {"code": "REFRESH_INVALID", "message": "No se pudo completar la operación.", "details": [], "correlationId": "corr-placeholder", "timestamp": 1790000000}}},
+      "schema": "AuthErrorEnvelope", "validatesAgainstOpenapi": true, "divergenceIds": ["M-12"]
+    },
+    {
+      "id": "obs-refresh-rotate-200", "operationId": "refreshSession",
+      "request": {"headers": {"Origin": "https://app.example.invalid", "X-MTEC-Client": "web", "X-CSRF-Token": "<64 hex>", "Cookie": "__Host-mtec-refresh=<64 hex>"}, "body": {"mode": "rotate"}},
+      "response": {"status": 200, "headers": {"Set-Cookie": "__Host-mtec-refresh=<new 64 hex>; Path=/; Secure; HttpOnly; SameSite=Lax"},
+        "body": {"token": "internal-jwt-placeholder", "tokenType": "Bearer", "expiresAt": 1790000340,
+          "user": {"userId": "usr_abc123", "email": "usuario@estudiantec.cr", "nombre": "Ana López", "fotoPerfil": "https://example.invalid/avatar.png"},
+          "session": {"sessionId": "session-placeholder", "status": "active", "serverTime": 1790000100, "authenticatedAt": 1790000000, "renewedAt": 1790000000, "lastActivityAt": 1790000000, "windowExpiresAt": 1790003600, "inactivityExpiresAt": 1790001800, "absoluteExpiresAt": 1790028800, "expiresAt": 1790001800, "warningAt": 1790001500},
+          "csrfToken": "csrf-placeholder-2"}},
+      "schema": "AuthResponse", "validatesAgainstOpenapi": true, "divergenceIds": []
+    },
+    {
+      "id": "obs-refresh-consumed-401", "operationId": "refreshSession",
+      "request": {"headers": {"Origin": "https://app.example.invalid", "X-MTEC-Client": "web", "X-CSRF-Token": "<64 hex>", "Cookie": "__Host-mtec-refresh=<consumed 64 hex>"}, "body": {"mode": "rotate"}},
+      "response": {"status": 401, "body": {"error": {"code": "REFRESH_INVALID", "message": "No se pudo completar la operación.", "details": [], "correlationId": "corr-placeholder", "timestamp": 1790000000}}, "noSetCookie": true, "noToken": true},
+      "schema": "AuthErrorEnvelope", "validatesAgainstOpenapi": true, "divergenceIds": ["M-14"]
+    },
+    {
+      "id": "obs-refresh-continue-400", "operationId": "refreshSession",
+      "request": {"headers": {"Origin": "https://app.example.invalid", "X-MTEC-Client": "web"}, "body": {"mode": "continue"}},
+      "response": {"status": 400, "body": {"error": {"code": "INVALID_REQUEST", "message": "No se pudo completar la operación.", "details": [], "correlationId": "corr-placeholder", "timestamp": 1790000000}}},
+      "schema": "AuthErrorEnvelope", "validatesAgainstOpenapi": true, "requestValidatesAgainstOpenapi": true, "requestSchema": "RefreshRequest", "divergenceIds": ["M-15"]
+    },
+    {
+      "id": "obs-logout-current-204", "operationId": "logoutSession",
+      "request": {"headers": {"Origin": "https://app.example.invalid", "X-MTEC-Client": "web", "X-CSRF-Token": "<64 hex>", "Cookie": "__Host-mtec-refresh=<64 hex>"}, "body": {"scope": "current"}},
+      "response": {"status": 204, "headers": {"Set-Cookie": "__Host-mtec-refresh=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Lax"}},
+      "schema": null, "validatesAgainstOpenapi": true, "divergenceIds": ["M-17"]
+    },
+    {
+      "id": "obs-logout-all-400", "operationId": "logoutSession",
+      "request": {"headers": {"Origin": "https://app.example.invalid", "X-MTEC-Client": "web"}, "body": {"scope": "all"}},
+      "response": {"status": 400, "body": {"error": {"code": "INVALID_REQUEST", "message": "No se pudo completar la operación.", "details": [], "correlationId": "corr-placeholder", "timestamp": 1790000000}}},
+      "schema": "AuthErrorEnvelope", "validatesAgainstOpenapi": true, "requestValidatesAgainstOpenapi": false, "requestSchema": "LogoutRequest", "divergenceIds": ["M-18"]
+    },
+    {
+      "id": "obs-profile-own-200", "operationId": "getOwnUserProfile",
+      "request": {"headers": {"Authorization": "Bearer internal-jwt-placeholder"}},
+      "response": {"status": 200, "headers": {"Cache-Control": "no-store"},
+        "body": {"id": "usr_abc123", "nombreUsuario": "ana", "nombre": "Ana", "apellidos": "López", "correo": "usuario@estudiantec.cr", "fotoPerfil": "https://example.invalid/avatar.png", "fechaRegistro": "2026-11-01T12:00:00Z", "createdAt": 1793534400, "verificado": true, "estado": "activo"}},
+      "schema": "UserProfileV1", "validatesAgainstOpenapi": true, "divergenceIds": []
+    },
+    {
+      "id": "obs-profile-other-user-403", "operationId": "getUserProfile",
+      "request": {"headers": {"Authorization": "Bearer internal-jwt-placeholder"}, "path": "/v1/usuarios/usr_other"},
+      "response": {"status": 403, "body": {"error": {"code": "FORBIDDEN", "message": "No se pudo completar la operación.", "details": [], "correlationId": "corr-placeholder", "timestamp": 1790000000}}},
+      "schema": "AuthErrorEnvelope", "validatesAgainstOpenapi": true, "divergenceIds": []
+    },
+    {
+      "id": "obs-profile-no-bearer-401", "operationId": "getOwnUserProfile",
+      "request": {"headers": {}},
+      "response": {"status": 401, "headers": {"WWW-Authenticate": "Bearer"}, "body": {"error": {"code": "AUTH_REQUIRED", "message": "No se pudo completar la operación.", "details": [], "correlationId": "corr-placeholder", "timestamp": 1790000000}}},
+      "schema": "AuthErrorEnvelope", "validatesAgainstOpenapi": false, "outOfEnumCodes": ["AUTH_REQUIRED"], "divergenceIds": ["M-19"]
+    },
+    {
+      "id": "obs-profile-not-found-404", "operationId": "getOwnUserProfile",
+      "request": {"headers": {"Authorization": "Bearer internal-jwt-placeholder"}},
+      "response": {"status": 404, "body": {"error": {"code": "USER_NOT_FOUND", "message": "No se pudo completar la operación.", "details": [], "correlationId": "corr-placeholder", "timestamp": 1790000000}}},
+      "schema": "AuthErrorEnvelope", "validatesAgainstOpenapi": false, "outOfEnumCodes": ["USER_NOT_FOUND"], "divergenceIds": ["M-20"]
+    },
+    {
+      "id": "obs-activity-403", "operationId": "recordSessionActivity",
+      "request": {"headers": {"Authorization": "Bearer internal-jwt-placeholder", "X-CSRF-Token": "<64 hex>"}},
+      "response": {"status": 403, "body": {"error": {"code": "ACTIVITY_EVIDENCE_REQUIRED", "message": "No se pudo completar la operación.", "details": [], "correlationId": "corr-placeholder", "timestamp": 1790000000}}},
+      "schema": "AuthErrorEnvelope", "validatesAgainstOpenapi": false, "outOfEnumCodes": ["ACTIVITY_EVIDENCE_REQUIRED"], "divergenceIds": ["M-27"]
+    },
+    {
+      "id": "obs-email-request-domain-400", "operationId": "requestInstitutionalEmailLink",
+      "request": {"headers": {"Origin": "https://app.example.invalid", "X-MTEC-Client": "web"}, "body": {"email": "alguien@example.invalid"}},
+      "response": {"status": 400, "body": {"error": {"code": "INSTITUTIONAL_EMAIL_REQUIRED", "message": "No se pudo completar la operación.", "details": [], "correlationId": "corr-placeholder", "timestamp": 1790000000}}},
+      "schema": "AuthErrorEnvelope", "validatesAgainstOpenapi": false, "statusDeclaredInOpenapi": false, "outOfEnumCodes": ["INSTITUTIONAL_EMAIL_REQUIRED"], "divergenceIds": ["M-25"], "onlyWhenFlag": "users.email.enabled=true"
+    },
+    {
+      "id": "obs-proof-google-200", "operationId": "verifyGoogleMethodProof",
+      "request": {"headers": {"Authorization": "Bearer internal-jwt-placeholder", "X-CSRF-Token": "<64 hex>"}, "body": {"attemptId": "0123456789abcdef0123456789abcdef", "credential": "google-id-token-placeholder"}},
+      "response": {"status": 200, "body": {"verified": true}},
+      "schema": "ProofGrant", "validatesAgainstOpenapi": false, "divergenceIds": ["M-29"]
+    },
+    {
+      "id": "obs-identity-metadata-200", "operationId": "getIdentityMetadata",
+      "request": {"headers": {}},
+      "response": {"status": 200, "headers": {"Cache-Control": "public, max-age=30"},
+        "body": {"issuer": "https://issuer.example.invalid", "jwks_uri": "https://issuer.example.invalid/.well-known/jwks.json", "audiences": ["markettec-api"], "access_token_algorithms": ["RS256"], "access_token_type": "at+jwt", "contract_version": "0.3.0-draft"}},
+      "schema": "IdentityMetadata", "validatesAgainstOpenapi": true, "divergenceIds": ["M-23"]
+    }
+  ],
+  "javaErrorCodesNotInOpenapiEnum": ["AUTH_REQUIRED", "USER_NOT_FOUND", "USER_DEACTIVATED", "CONCURRENT_MODIFICATION", "ACTIVITY_EVIDENCE_REQUIRED", "INSTITUTIONAL_EMAIL_REQUIRED", "INTERNAL_ERROR", "ROUTE_NOT_FOUND", "METHOD_NOT_ALLOWED"],
+  "openapiErrorCodesNeverEmittedByJava": ["UNAUTHORIZED", "ACCESS_TOKEN_EXPIRED", "SESSION_EXPIRED", "SESSION_REVOKED", "ELIGIBILITY_DENIED", "REAUTHENTICATION_REQUIRED", "REGISTRATION_REQUIRED", "ACTIVITY_NOT_ACCEPTED", "RESOURCE_NOT_FOUND", "RATE_LIMITED"]
+}
