@@ -266,29 +266,38 @@ describe('authCoreV2=true (mock provisional)', () => {
   });
 
   describe('rutas migradas sin cambiar contratos pendientes', () => {
-    it('Perfil consulta con el userId interno de la sesión (no con USR-001)', async () => {
+    it('Perfil consulta el perfil propio derivado del JWT (sin userId ni USR-001 en la ruta)', async () => {
       const userService = {
-        getUser: vi.fn().mockReturnValue(of(profileUser)),
+        getUser: vi.fn(),
         updateUser: vi.fn(),
+        getMyProfile: vi.fn().mockReturnValue(of(profileUser)),
+        updateMyProfile: vi.fn(),
       };
       TestBed.overrideProvider(UserService, { useValue: userService });
       await renderAndSignIn(TestBed.inject(GoogleAuthService));
 
-      TestBed.createComponent(Profile).detectChanges();
+      const fixture = TestBed.createComponent(Profile);
+      fixture.detectChanges();
 
-      expect(userService.getUser).toHaveBeenCalledTimes(1);
-      expect(userService.getUser).toHaveBeenCalledWith(MOCK_USER.userId);
-      expect(userService.getUser).not.toHaveBeenCalledWith('USR-001');
+      expect(fixture.componentInstance.currentUserId).toBe(MOCK_USER.userId);
+      expect(userService.getMyProfile).toHaveBeenCalledTimes(1);
+      expect(userService.getUser).not.toHaveBeenCalled();
     });
 
     it('Perfil sin sesión no consulta nada y muestra el error', () => {
-      const userService = { getUser: vi.fn(), updateUser: vi.fn() };
+      const userService = {
+        getUser: vi.fn(),
+        updateUser: vi.fn(),
+        getMyProfile: vi.fn(),
+        updateMyProfile: vi.fn(),
+      };
       TestBed.overrideProvider(UserService, { useValue: userService });
 
       const fixture = TestBed.createComponent(Profile);
       fixture.detectChanges();
 
       expect(userService.getUser).not.toHaveBeenCalled();
+      expect(userService.getMyProfile).not.toHaveBeenCalled();
       expect(fixture.componentInstance.error()).toBe(true);
       expect(fixture.componentInstance.loading()).toBe(false);
     });

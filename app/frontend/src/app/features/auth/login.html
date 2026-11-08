@@ -264,6 +264,18 @@
           Reintentar conexión con Google
         </button>
       }
+      @if (authCoreV2 && !submitting()) {
+        @if (googlePurpose() === 'login') {
+          <button type="button" class="institutional-button" (click)="setGooglePurpose('register')">
+            ¿Primera vez en MarketTEC? Crear cuenta con Google
+          </button>
+        } @else {
+          <p class="google-login-note">Estás creando una cuenta nueva con tu correo institucional.</p>
+          <button type="button" class="institutional-button" (click)="setGooglePurpose('login')">
+            Ya tengo cuenta: ingresar con Google
+          </button>
+        }
+      }
     </div>
 
     <footer class="login-footer">

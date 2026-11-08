@@ -2,7 +2,13 @@ import { Injectable, inject, linkedSignal } from '@angular/core';
 import { environment } from '../../../../environments/environment';
 import { AuthTokenService } from '../../../core/auth/auth-token.service';
 import type { GoogleTokenClaims } from '../../../core/auth/auth-token.service';
-import type { AuthenticatedUser, GoogleLoginAttempt } from '../../../core/auth/v2/auth-contract';
+import {
+  AuthApiError,
+  AuthRequiredError,
+  type AuthenticatedUser,
+  type GoogleAttemptPurpose,
+  type GoogleLoginAttempt,
+} from '../../../core/auth/v2/auth-contract';
 import { AuthSessionService } from '../../../core/auth/v2/auth-session.service';
 import { FEATURE_FLAGS } from '../../../core/feature-flags';
 
@@ -26,6 +32,43 @@ export interface AuthUser {
   picture?: string;
 }
 export type GoogleButtonTheme = 'outline' | 'outline_dark';
+
+/**
+ * Mensaje para la UI a partir de un fallo del núcleo v2. Solo usa el status y el
+ * `error.code` que Java emite; no deduce si la cuenta existe (D-06 pendiente).
+ */
+export function describeGoogleAuthFailure(error: unknown, purpose: GoogleAttemptPurpose): string {
+  if (error instanceof AuthRequiredError) {
+    return 'El intento de acceso con Google expiró o se canceló. Inténtalo nuevamente.';
+  }
+
+  if (!(error instanceof AuthApiError)) {
+    return 'No fue posible ingresar a MarketTec.';
+  }
+
+  switch (error.status) {
+    case 0:
+      return 'No se pudo conectar con el servidor de acceso. Revisa tu conexión e inténtalo nuevamente.';
+    case 404:
+    case 503:
+      return purpose === 'register'
+        ? 'La creación de cuentas con Google no está disponible en este momento.'
+        : 'El acceso con Google no está disponible en este momento.';
+    case 401:
+      return purpose === 'register'
+        ? 'Google no pudo verificar tu cuenta institucional para crear la cuenta.'
+        : 'No se pudo iniciar sesión con esa cuenta de Google. Si aún no tienes cuenta en MarketTEC, usa «Crear cuenta con Google».';
+    case 403:
+      return 'El servidor de acceso rechazó la solicitud desde este sitio.';
+    case 409:
+    case 410:
+      return 'El intento de acceso con Google expiró. Inténtalo nuevamente.';
+    case 429:
+      return 'Demasiados intentos. Espera un momento e inténtalo nuevamente.';
+    default:
+      return 'No fue posible ingresar a MarketTec.';
+  }
+}
 
 @Injectable({ providedIn: 'root' })
 export class GoogleAuthService {
@@ -69,7 +112,8 @@ export class GoogleAuthService {
   async renderButton(
     element: HTMLElement,
     callback: (credential: string) => void,
-    theme: GoogleButtonTheme = 'outline'
+    theme: GoogleButtonTheme = 'outline',
+    purpose: GoogleAttemptPurpose = 'login'
   ): Promise<void> {
     if (!environment.googleClientId) {
       throw new Error('Falta configurar el Client ID de Google.');
@@ -83,8 +127,17 @@ export class GoogleAuthService {
     }
     if (!element.isConnected) return;
     const identity = window.google.accounts.id;
-    // v2: el intento debe existir antes de initialize porque su nonce se pasa aquí.
-    const attempt = this.session ? await this.session.startGoogleAttempt() : null;
+    // v2: el intento debe existir antes de initialize porque su nonce (emitido por
+    // ms-users) se pasa aquí. Un intento previo no consumido queda descartado.
+    this.googleAttempt = null;
+    let attempt: GoogleLoginAttempt | null = null;
+    if (this.session) {
+      try {
+        attempt = await this.session.startGoogleAttempt(purpose);
+      } catch (error) {
+        throw new Error(describeGoogleAuthFailure(error, purpose));
+      }
+    }
     if (!element.isConnected) return;
     this.googleAttempt = attempt;
     identity.initialize({
