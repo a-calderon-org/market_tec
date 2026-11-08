@@ -4,6 +4,8 @@
 
 **Cómo leerla.** *Request/Response Java* se leyó en los controladores de `adapters/in/web`, no se ejecutó. *OpenAPI* es el borrador. Una divergencia es **doc-only** (se corrige texto o fixture), **behavior** (cambia Java o Angular; necesita la decisión citada) o **needs-authorization** (toca una decisión de seguridad reservada al responsable). Ningún cambio de comportamiento se aplica en este incremento. El informe de auditoría de Codex no estaba disponible como archivo; las filas se rehicieron desde los archivos fuente.
 
+**Estado de las decisiones D-07 y D-11 (actualización 2026-11-07, MTEC-40).** El responsable del proyecto aprobó D-07 como política de diseño (refresh entre pestañas y respuesta perdida) y D-11 solo en su política inicial: ninguna petición de negocio se reintenta automáticamente tras un `401`, incluidos `GET` y todas las mutaciones. D-11 queda **aprobada parcialmente**: las divergencias de códigos de error (M-19, M-20), la señal `ACCESS_TOKEN_EXPIRED`, los DTO públicos, la semántica OpenAPI, los reintentos futuros por operación y el mapeo de errores de Angular (A-07) siguen abiertos. Aprobar una política no resuelve ninguna divergencia: las 34 de operaciones y las 9 de Angular siguen abiertas hasta su implementación, prueba y conformidad, y B07 no está aprobado. El estado legible por máquina está en `decisionStatus` del JSON fuente.
+
 ## 1. Resumen
 
 | Operación | Ruta | Estado en Java | Códigos Java | Códigos OpenAPI | APIM (auth / cookie / CSRF) | Divergencias | Decisión |
@@ -123,7 +125,7 @@
 - **Divergencias:**
   - **M-11** · P1 · behavior · decisión D-09: Java requires Origin on this GET; OpenAPI says GET may omit it. A cross-origin fetch always sends Origin, so Angular is unaffected, but the contract text and Java disagree.
   - **M-12** · P1 · doc-only · decisión D-09: APIM manifest marks the refresh cookie 'optional' for this route; Java rejects a missing cookie with 401 REFRESH_INVALID. APIM must treat the cookie as required.
-  - **M-13** · P1 · needs-authorization · decisión D-07: csrfToken returned here is the synchronizer for the current refresh generation. Another tab that rotated first invalidates a stale CSRF held by this tab. Tab protocol is not approved.
+  - **M-13** · P1 · needs-authorization · decisión D-07: csrfToken returned here is the synchronizer for the current refresh generation. Another tab that rotated first invalidates a stale CSRF held by this tab. D-07 was approved on 2026-11-07 as a design policy (the CSRF is obtained inside the Web Locks critical section); the divergence stays open until Angular implements it and the browser tests and conformities exist.
 - **Decisión contractual necesaria:** D-07
 - **Pruebas de aceptación:** AT-SESSION-1, AT-SESSION-2
 
@@ -141,7 +143,7 @@
 - **Divergencias:**
   - **M-14** · P1 · doc-only · decisión D-05: Policy C is implemented: a consumed, invalid or mismatched proof yields 401 REFRESH_INVALID and a replay alone does not revoke the winner. Keep it. Missing or malformed CSRF also yields 401 REFRESH_INVALID, not 403 CSRF_INVALID.
   - **M-15** · P2 · behavior · decisión D-10: mode=continue is documented but not implemented (400). Angular must not call it.
-  - **M-16** · P1 · needs-authorization · decisión D-07: Two tabs and lost responses: a loser tab holding a stale CSRF gets REFRESH_INVALID, which must not close the winner's session. Protocol is a recommendation only.
+  - **M-16** · P1 · needs-authorization · decisión D-07: Two tabs and lost responses: a loser tab holding a stale CSRF gets REFRESH_INVALID, which must not close the winner's session. D-07 was approved on 2026-11-07 as a design policy (Web Locks, one refresh POST per demand, GET /session only reconciles, no chained POST, secure reauthentication without guaranteed mutual exclusion); implementation, browser tests and conformities remain pending.
 - **Decisión contractual necesaria:** D-07
 - **Pruebas de aceptación:** AT-REFRESH-1, AT-REFRESH-2, AT-REFRESH-3, AT-REFRESH-4
 
@@ -177,8 +179,8 @@
 - **APIM (`infra/apim/operations.json`):** auth `jwt`, cookie `none`, CSRF `none`, estado local `reconciled` (etiqueta del manifiesto, no aprobación; `approvals.*` = null)
 - **Consumidor Angular:** profile/user.service.ts calls /usuarios/{id}; profile.ts falls back to the hard-coded id USR-001
 - **Divergencias:**
-  - **M-19** · P1 · doc-only · decisión D-11: Missing, expired or malformed access token answers 401 AUTH_REQUIRED. AUTH_REQUIRED is not in the OpenAPI error-code enum, and ACCESS_TOKEN_EXPIRED is never emitted, so expiry cannot be distinguished server-side.
-  - **M-20** · P2 · doc-only · decisión D-11: Java also emits USER_NOT_FOUND, USER_DEACTIVATED, CONCURRENT_MODIFICATION, INTERNAL_ERROR, ROUTE_NOT_FOUND and METHOD_NOT_ALLOWED; none is in the OpenAPI enum.
+  - **M-19** · P1 · doc-only · decisión D-11: Missing, expired or malformed access token answers 401 AUTH_REQUIRED. AUTH_REQUIRED is not in the OpenAPI error-code enum, and ACCESS_TOKEN_EXPIRED is never emitted, so expiry cannot be distinguished server-side. The 2026-11-07 D-11 approval covers only the no-automatic-replay-after-401 policy; the error catalog and the ACCESS_TOKEN_EXPIRED signal remain pending.
+  - **M-20** · P2 · doc-only · decisión D-11: Java also emits USER_NOT_FOUND, USER_DEACTIVATED, CONCURRENT_MODIFICATION, INTERNAL_ERROR, ROUTE_NOT_FOUND and METHOD_NOT_ALLOWED; none is in the OpenAPI enum. Still pending under D-11: the 2026-11-07 approval does not add these codes to the catalog.
 - **Decisión contractual necesaria:** D-11
 - **Pruebas de aceptación:** AT-PROFILE-1, AT-PROFILE-2
 
@@ -424,9 +426,9 @@
 | A-02 | P0 | behavior | D-08 | Google sub used as user id; 'USR-001' hard-coded in profile.ts:25 and my-publications.ts:29. |
 | A-03 | P0 | needs-authorization | D-01 | sessionStorage key google_token (auth-token.service.ts) holds the credential; the approved profile forbids web storage for access/CSRF. |
 | A-04 | P1 | behavior | D-04 | ApiClientService sets no withCredentials; refresh and attempt cookies are never sent. |
-| A-05 | P1 | behavior | D-07 | No refresh, no 401 retry guard, no tab coordination, no logout call. |
+| A-05 | P1 | behavior | D-07 | No refresh, no 401 retry guard, no tab coordination, no logout call. D-07 policy and the D-11 no-replay policy were approved on 2026-11-07; Angular implementation is pending and this divergence stays open. |
 | A-06 | P1 | behavior | D-06 | Single GIS callback; no separate login and register actions and no nonce. |
-| A-07 | P1 | behavior | D-11 | Error handling reads error.message; the envelope is error.error.error.message with a code that is never mapped. |
+| A-07 | P1 | behavior | D-11 | Error handling reads error.message; the envelope is error.error.error.message with a code that is never mapped. The D-11 error catalog is still pending; the 2026-11-07 approval covers only the no-automatic-replay-after-401 policy. |
 | A-08 | P2 | behavior | D-09 | Request paths omit the /v1 prefix (/usuarios/{id}); APIM manifest also uses public paths without /v1. The mapping is not verified against a real APIM. |
 | A-09 | P2 | doc-only | — | login.service.ts still models a password form for institutional email; unrelated to the Google core. |
 
@@ -451,18 +453,18 @@
 | Id | Dónde | Tipo | Decisión | Resumen |
 |---|---|---|---|---|
 | A-04 | Angular | behavior | D-04 | ApiClientService sets no withCredentials; refresh and attempt cookies are never sent. |
-| A-05 | Angular | behavior | D-07 | No refresh, no 401 retry guard, no tab coordination, no logout call. |
+| A-05 | Angular | behavior | D-07 | No refresh, no 401 retry guard, no tab coordination, no logout call. D-07 policy and the D-11 no-replay policy were approved on 2026-11-07; Angular implementation is pending and this divergence stays open. |
 | A-06 | Angular | behavior | D-06 | Single GIS callback; no separate login and register actions and no nonce. |
-| A-07 | Angular | behavior | D-11 | Error handling reads error.message; the envelope is error.error.error.message with a code that is never mapped. |
+| A-07 | Angular | behavior | D-11 | Error handling reads error.message; the envelope is error.error.error.message with a code that is never mapped. The D-11 error catalog is still pending; the 2026-11-07 approval covers only the no-automatic-replay-after-401 policy. |
 | M-01 | createAuthenticationAttempt | behavior | D-09 | Java accepts a missing purpose (defaults to login); OpenAPI requires it. Angular must always send purpose; tightening Java is a behavior change. |
 | M-04 | createAuthenticationAttempt | behavior | D-06 | purpose=register answers 503 AUTH_TEMPORARILY_UNAVAILABLE unless users.google.registration.enabled=true (default false). Angular must treat it as 'registration unavailable', not as a login failure. |
 | M-11 | getSessionState | behavior | D-09 | Java requires Origin on this GET; OpenAPI says GET may omit it. A cross-origin fetch always sends Origin, so Angular is unaffected, but the contract text and Java disagree. |
 | M-12 | getSessionState | doc-only | D-09 | APIM manifest marks the refresh cookie 'optional' for this route; Java rejects a missing cookie with 401 REFRESH_INVALID. APIM must treat the cookie as required. |
-| M-13 | getSessionState | needs-authorization | D-07 | csrfToken returned here is the synchronizer for the current refresh generation. Another tab that rotated first invalidates a stale CSRF held by this tab. Tab protocol is not approved. |
+| M-13 | getSessionState | needs-authorization | D-07 | csrfToken returned here is the synchronizer for the current refresh generation. Another tab that rotated first invalidates a stale CSRF held by this tab. D-07 was approved on 2026-11-07 as a design policy (the CSRF is obtained inside the Web Locks critical section); the divergence stays open until Angular implements it and the browser tests and conformities exist. |
 | M-14 | refreshSession | doc-only | D-05 | Policy C is implemented: a consumed, invalid or mismatched proof yields 401 REFRESH_INVALID and a replay alone does not revoke the winner. Keep it. Missing or malformed CSRF also yields 401 REFRESH_INVALID, not 403 CSRF_INVALID. |
-| M-16 | refreshSession | needs-authorization | D-07 | Two tabs and lost responses: a loser tab holding a stale CSRF gets REFRESH_INVALID, which must not close the winner's session. Protocol is a recommendation only. |
+| M-16 | refreshSession | needs-authorization | D-07 | Two tabs and lost responses: a loser tab holding a stale CSRF gets REFRESH_INVALID, which must not close the winner's session. D-07 was approved on 2026-11-07 as a design policy (Web Locks, one refresh POST per demand, GET /session only reconciles, no chained POST, secure reauthentication without guaranteed mutual exclusion); implementation, browser tests and conformities remain pending. |
 | M-17 | logoutSession | doc-only | D-12 | A 204 proves revocation in ms-users only. Already-issued access JWTs stay valid up to their exp (<=240 s nominal; residual <=300 s is documented, not demonstrated). Angular UI must not promise instant global logout. |
-| M-19 | getOwnUserProfile | doc-only | D-11 | Missing, expired or malformed access token answers 401 AUTH_REQUIRED. AUTH_REQUIRED is not in the OpenAPI error-code enum, and ACCESS_TOKEN_EXPIRED is never emitted, so expiry cannot be distinguished server-side. |
+| M-19 | getOwnUserProfile | doc-only | D-11 | Missing, expired or malformed access token answers 401 AUTH_REQUIRED. AUTH_REQUIRED is not in the OpenAPI error-code enum, and ACCESS_TOKEN_EXPIRED is never emitted, so expiry cannot be distinguished server-side. The 2026-11-07 D-11 approval covers only the no-automatic-replay-after-401 policy; the error catalog and the ACCESS_TOKEN_EXPIRED signal remain pending. |
 | M-27 | recordSessionActivity | doc-only | D-03 | B03 is unresolved. The endpoint refuses by design; document it as blocked, never as operational. ACTIVITY_EVIDENCE_REQUIRED is not in the OpenAPI enum. |
 
 ### P2 — antes de una exposición general
@@ -476,7 +478,7 @@
 | M-10 | legacyGoogleRegistrationCompatibility | doc-only | D-06 | Alias kept for migration. Angular should call /v1/auth/google with a register attempt and not depend on the alias. |
 | M-15 | refreshSession | behavior | D-10 | mode=continue is documented but not implemented (400). Angular must not call it. |
 | M-18 | logoutSession | behavior | D-10 | scope=all is not implemented (400) and depends on B04. |
-| M-20 | getOwnUserProfile | doc-only | D-11 | Java also emits USER_NOT_FOUND, USER_DEACTIVATED, CONCURRENT_MODIFICATION, INTERNAL_ERROR, ROUTE_NOT_FOUND and METHOD_NOT_ALLOWED; none is in the OpenAPI enum. |
+| M-20 | getOwnUserProfile | doc-only | D-11 | Java also emits USER_NOT_FOUND, USER_DEACTIVATED, CONCURRENT_MODIFICATION, INTERNAL_ERROR, ROUTE_NOT_FOUND and METHOD_NOT_ALLOWED; none is in the OpenAPI enum. Still pending under D-11: the 2026-11-07 approval does not add these codes to the catalog. |
 | M-22 | getPublicSigningKeys | needs-authorization | D-13 | Java hard-codes max-age=30. JWKS freshness, rotation and propagation figures are B05 items that are not approved. |
 | M-23 | getIdentityMetadata | needs-authorization | D-13 | Concrete issuer/audience values per environment are not approved. |
 | M-25 | requestInstitutionalEmailLink | doc-only | D-02 | Java returns 400 INSTITUTIONAL_EMAIL_REQUIRED for a non-institutional domain, which is not in the OpenAPI enum and reveals eligibility, contrary to the contract text. |
@@ -539,5 +541,6 @@ Inventario: M-01 a M-34 (34 divergencias de operaciones) y A-01 a A-09 (9 del co
 ## 6. Lo que esta matriz no afirma
 
 - No registra conformidad de ms-users, Angular, APIM, seguridad, ms-catalog ni ms-notifications, ni aprueba B07.
+- No marca como resuelta ninguna divergencia por haberse aprobado D-07 o la política inicial de D-11: esas aprobaciones fijan política de diseño, no implementación ni conformidad.
 - No prueba comportamiento en ejecución: no se levantó ms-users, APIM ni un navegador.
 - No cubre Catalog ni Notifications más allá de lo ya anotado en la [revisión B07 local](MTEC15_B07_LOCAL_INTEROPERABILITY_REVIEW.md).

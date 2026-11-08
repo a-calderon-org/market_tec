@@ -6,7 +6,8 @@ ampliado el 2026-10-31 con ADR-004. Revisión técnica y aceptación delimitada 
 2026-11-01: el responsable del proyecto aprueba la arquitectura base de ADR-004;
 la conciliación posterior incorpora los límites de sesión 60 min/30 min/8 h
 ratificados ese día. La consolidación del 2026-11-02 incorpora las aprobaciones delimitadas
-B01–B06 de MTEC-40; la política C de replay se aprobó el 2026-11-04.
+B01–B06 de MTEC-40; la política C de replay se aprobó el 2026-11-04. Las decisiones
+D-07 y D-11 de MTEC-40 se aprobaron en alcance de diseño el 2026-11-07.
 La decisión posterior de registro Google inmediato con ID Token válido y correo
 verificado sustituye la exigencia histórica de enlace en MTEC-15 el 2026-11-04.
 Parámetros, demostraciones y conformidades siguen pendientes.
@@ -56,6 +57,18 @@ la decisión no acredita implementación ni autoriza despliegue.
 **Justificación y riesgos aceptados:** se evitan revocaciones incorrectas por carreras o respuestas perdidas, aceptando menor contención automática que B. Un atacante que gane la primera rotación con cookie robada puede conservar la nueva generación hasta expiración o revocación efectiva; el replay no identifica al actor legítimo. Una respuesta perdida después del commit puede exigir reautenticación. Revocar refresh no invalida JWT ya emitidos. El CSRF recuperable mediante `/v1/auth/session` con cookie válida y controles HTTP no es segunda prueba criptográfica independiente. La pauta de revocación por reuse de RFC 9700 para OAuth rotatorio es más estricta; C no acredita conformidad con ella.
 
 **Dependencias:** auditoría estructurada y procedimiento de incidente/revocación en ms-users, pruebas de concurrencia entre instancias, serialización y recuperación segura en Angular, verificación de APIM/App Service y presupuesto real de exposición JWT ≤300 s. La candidata del [PR #25](https://github.com/a-calderon-org/market_tec/pull/25) alinea OpenAPI e identidad con esta política; su aprobación MTEC-15/B07 y las conformidades de consumidores siguen pendientes. **Esta aprobación no autoriza despliegue ni demuestra que todos los controles estén implementados.** MTEC-40 continúa In Progress; las demás decisiones pendientes de autenticación conservan su estado.
+
+## Decisiones D-07 y D-11 — 2026-11-07
+
+**Estado: Approved en alcance de diseño. Responsable: responsable del proyecto. Alcance: MarketTec v1.** [MTEC-40](https://allanaron06122005.atlassian.net/browse/MTEC-40) registra la decisión expresa del 2026-11-07. El texto canónico está en [ADR-004, decisiones D-07 y D-11](ADR-004-seguridad-autenticacion.md#decisiones-d-07-y-d-11-de-mtec-40--2026-11-07). La política C del 2026-11-04 permanece intacta.
+
+**D-07 (refresh entre pestañas y respuesta perdida):** serialización entre pestañas con Web Locks; sección crítica con `GET /v1/auth/session`, un único `POST /v1/auth/refresh` por demanda y aplicación del resultado; CSRF obtenido dentro del lock; `BroadcastChannel` solo para señales, nunca como mutex ni transporte de credenciales; tras `401 REFRESH_INVALID`, timeout o respuesta perdida, `GET /v1/auth/session` solo reconcilia estado y no se encadena otro `POST`; un `200` de ese `GET` prueba la validez actual de la cookie, no una rotación ni un access JWT; el logout impide restauraciones tardías; sin exclusión mutua demostrada, degradación segura a reautenticación.
+
+**D-11 (política inicial tras 401):** ninguna petición de negocio puede reintentarse automáticamente tras un `401` en MarketTec v1, incluidas las lecturas `GET` y todas las mutaciones. El cliente maneja el error y la recuperación de sesión sin repetir silenciosamente la solicitud fallida.
+
+**Siguen pendientes, sin aprobación por implicación:** nuevos códigos de error Java, `ACCESS_TOKEN_EXPIRED`, nuevos DTO públicos, cambios de semántica OpenAPI y reintentos futuros por operación.
+
+**Límites:** la aprobación fija política de diseño. No es conformidad técnica de Angular, ms-users ni seguridad; no prueba Web Locks en los navegadores soportados, concurrencia SQL, pérdida de respuesta ni cookies/CORS reales; no es aprobación contractual B07 ni autoriza despliegue. MTEC-40 y MTEC-15 continúan In Progress.
 
 ## ADRs de Fase II
 
@@ -114,9 +127,12 @@ acredita humanidad. B05/B06 aprueban RS256/RSA-2048, kid en JOSE, JWKS público,
 cero leeway positivo, access/CSRF en memoria, refresh en cookie segura host-only,
 CSRF/CORS explícitos y serialización entre pestañas sin gracia general. La
 política C posterior, aprobada el 2026-11-04, rige el replay como se registra
-arriba. Topología, auditoría operativa, revocación por incidente, protocolo
-final, pruebas y conformidades siguen pendientes; aviso de 300 s antes del
-deadline de sesión es candidato, no decisión cerrada. Fuente canónica:
+arriba. La política de diseño D-07 (refresh entre pestañas y respuesta perdida)
+se aprobó el 2026-11-07; siguen pendientes su implementación, pruebas,
+compatibilidad de navegadores y conformidades técnicas. Topología, auditoría
+operativa, revocación por incidente y las pruebas y conformidades de los demás
+controles siguen pendientes; aviso de 300 s antes del deadline de sesión es
+candidato, no decisión cerrada. Fuente canónica:
 [ADR-004 §3.4](ADR-004-seguridad-autenticacion.md#34-expiración-renovación-revocación-y-replay)
 y P10/P15/P23.
 
