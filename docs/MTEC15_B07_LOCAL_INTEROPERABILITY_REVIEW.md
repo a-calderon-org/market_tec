@@ -1,5 +1,7 @@
 # MTEC-15 / B07 — Revisión local de interoperabilidad
 
+> **Nota de vigencia (2026-11-07).** Esta revisión describe la base `05d84be` del 2026-11-03, en la que la fundación local de ms-users solo exponía `/health`. En `ms-users@20898978d7f49c38e21b49187250bdd1821c370f` ya existen adaptadores HTTP para las 22 rutas del OpenAPI; las 21 distintas de `/health` están detrás de flags apagados. La conciliación vigente está en la [matriz](MTEC15_B07_RECONCILIATION_MATRIX.md) y el [registro de decisiones](MTEC15_B07_DECISION_REGISTER.md). El texto siguiente se conserva como registro histórico; sus conclusiones sobre Angular, APIM y conformidades siguen vigentes.
+
 **Fecha:** 2026-11-03 (America/Costa_Rica). **Estado:** auditoría técnica local; contratos `Draft`, B07 pendiente. **Destinatarios:** responsables de Angular, ms-users, ms-catalog, ms-notifications, APIM y seguridad. **Base revisada:** `feat/mtec15-auth-contract-consolidation@05d84bede908cb14484f99a66bd1ea131bd8c0d1`, worktree limpio al inicio.
 
 ## Alcance, método y límites
