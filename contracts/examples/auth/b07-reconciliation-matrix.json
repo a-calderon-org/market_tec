@@ -30,6 +30,31 @@
     "editorialNote": "kind and priority are editorial triage labels. They are not an exhaustive security-impact classification and do not replace a security review.",
     "evidence": "Java columns come from static inspection of the controllers, not from an integrated HTTP run."
   },
+  "decisionStatus": {
+    "D-07": {
+      "status": "design-policy-approved",
+      "approvedOn": "2026-11-07",
+      "approvedScope": "cross-tab refresh serialization and lost-response reconciliation as a design policy (MTEC-40)",
+      "doesNotResolve": [
+        "operation and Angular divergences that cite D-07: they stay open until implemented, tested and accepted",
+        "Angular, ms-users and security conformities",
+        "B07 contract approval"
+      ]
+    },
+    "D-11": {
+      "status": "partially-approved",
+      "approvedOn": "2026-11-07",
+      "approvedScope": "initial policy: no automatic replay of any business request after a 401 (GET and all mutations)",
+      "stillOpen": [
+        "Java error codes missing from the OpenAPI enum (M-19, M-20)",
+        "ACCESS_TOKEN_EXPIRED signal",
+        "new public DTOs",
+        "OpenAPI semantics",
+        "future per-operation retries",
+        "Angular error parsing and mapping (A-07)"
+      ]
+    }
+  },
   "decisions": [
     "D-01",
     "D-02",
@@ -412,7 +437,7 @@
           "kind": "needs-authorization",
           "priority": "P1",
           "decision": "D-07",
-          "summary": "csrfToken returned here is the synchronizer for the current refresh generation. Another tab that rotated first invalidates a stale CSRF held by this tab. Tab protocol is not approved."
+          "summary": "csrfToken returned here is the synchronizer for the current refresh generation. Another tab that rotated first invalidates a stale CSRF held by this tab. D-07 was approved on 2026-11-07 as a design policy (the CSRF is obtained inside the Web Locks critical section); the divergence stays open until Angular implements it and the browser tests and conformities exist."
         }
       ],
       "decision": "D-07",
@@ -492,7 +517,7 @@
           "kind": "needs-authorization",
           "priority": "P1",
           "decision": "D-07",
-          "summary": "Two tabs and lost responses: a loser tab holding a stale CSRF gets REFRESH_INVALID, which must not close the winner's session. Protocol is a recommendation only."
+          "summary": "Two tabs and lost responses: a loser tab holding a stale CSRF gets REFRESH_INVALID, which must not close the winner's session. D-07 was approved on 2026-11-07 as a design policy (Web Locks, one refresh POST per demand, GET /session only reconciles, no chained POST, secure reauthentication without guaranteed mutual exclusion); implementation, browser tests and conformities remain pending."
         }
       ],
       "decision": "D-07",
@@ -635,14 +660,14 @@
           "kind": "doc-only",
           "priority": "P1",
           "decision": "D-11",
-          "summary": "Missing, expired or malformed access token answers 401 AUTH_REQUIRED. AUTH_REQUIRED is not in the OpenAPI error-code enum, and ACCESS_TOKEN_EXPIRED is never emitted, so expiry cannot be distinguished server-side."
+          "summary": "Missing, expired or malformed access token answers 401 AUTH_REQUIRED. AUTH_REQUIRED is not in the OpenAPI error-code enum, and ACCESS_TOKEN_EXPIRED is never emitted, so expiry cannot be distinguished server-side. The 2026-11-07 D-11 approval covers only the no-automatic-replay-after-401 policy; the error catalog and the ACCESS_TOKEN_EXPIRED signal remain pending."
         },
         {
           "id": "M-20",
           "kind": "doc-only",
           "priority": "P2",
           "decision": "D-11",
-          "summary": "Java also emits USER_NOT_FOUND, USER_DEACTIVATED, CONCURRENT_MODIFICATION, INTERNAL_ERROR, ROUTE_NOT_FOUND and METHOD_NOT_ALLOWED; none is in the OpenAPI enum."
+          "summary": "Java also emits USER_NOT_FOUND, USER_DEACTIVATED, CONCURRENT_MODIFICATION, INTERNAL_ERROR, ROUTE_NOT_FOUND and METHOD_NOT_ALLOWED; none is in the OpenAPI enum. Still pending under D-11: the 2026-11-07 approval does not add these codes to the catalog."
         }
       ],
       "decision": "D-11",
@@ -1573,7 +1598,7 @@
       "priority": "P1",
       "kind": "behavior",
       "decision": "D-07",
-      "summary": "No refresh, no 401 retry guard, no tab coordination, no logout call."
+      "summary": "No refresh, no 401 retry guard, no tab coordination, no logout call. D-07 policy and the D-11 no-replay policy were approved on 2026-11-07; Angular implementation is pending and this divergence stays open."
     },
     {
       "id": "A-06",
@@ -1587,7 +1612,7 @@
       "priority": "P1",
       "kind": "behavior",
       "decision": "D-11",
-      "summary": "Error handling reads error.message; the envelope is error.error.error.message with a code that is never mapped."
+      "summary": "Error handling reads error.message; the envelope is error.error.error.message with a code that is never mapped. The D-11 error catalog is still pending; the 2026-11-07 approval covers only the no-automatic-replay-after-401 policy."
     },
     {
       "id": "A-08",

@@ -1,5 +1,5 @@
 {
-  "$comment": "PROPOSED behavior for the coordinated core increment (Google -> attempt/nonce -> credential exchange -> internal JWT -> session bootstrap -> profile -> refresh rotate -> logout current). Nothing here is approved or implemented. Every item points to an open decision in docs/MTEC15_B07_DECISION_REGISTER.md. contracts/tests/test_b07_reconciliation.py checks that it only uses operations and status codes the OpenAPI declares, that it never calls blocked operations, and that it does not use web storage. D-07 and D-11 are PENDING: the refresh and retry sections below are proposals under discussion, not authorized algorithms.",
+  "$comment": "PROPOSED behavior for the coordinated core increment (Google -> attempt/nonce -> credential exchange -> internal JWT -> session bootstrap -> profile -> refresh rotate -> logout current). The flow as a whole and B07 are NOT approved (approved=false) and nothing here is implemented. Every item points to a decision in docs/MTEC15_B07_DECISION_REGISTER.md. contracts/tests/test_b07_reconciliation.py checks that it only uses operations and status codes the OpenAPI declares, that it never calls blocked operations, and that it does not use web storage. Scope of the 2026-11-07 approvals (MTEC-40): D-07 is approved as a DESIGN POLICY (cross-tab refresh and lost response) and D-11 is approved ONLY for the initial retry policy (no automatic replay of any business request after a 401, GET and all mutations included). The error catalog (new Java codes, OpenAPI enum, ACCESS_TOKEN_EXPIRED), new public DTOs, OpenAPI semantics and future per-operation retries remain PENDING. The approvals are not Angular, ms-users or security conformities and do not approve B07.",
   "kind": "proposed",
   "approved": false,
   "contractVersion": "0.3.0-draft",
@@ -172,11 +172,13 @@
     },
     "reload": {
       "decision": "D-01",
+      "requires": "web-locks-lock-acquired",
+      "withoutMutualExclusion": "no refresh POST; secure reauthentication; BroadcastChannel is not a substitute for the mutex",
       "steps": [
         {
           "n": 1,
           "actor": "angular",
-          "action": "memory is empty after reload; enter the critical section"
+          "action": "memory is empty after reload; enter the critical section only if the Web Locks lock is acquired"
         },
         {
           "n": 2,
@@ -189,7 +191,7 @@
             "session"
           ],
           "onStatus": {
-            "401": "unauthenticated: leave the critical section, go to /login, no retry"
+            "401": "unauthenticated (cookie absent or invalid, or session expired): leave the critical section, no refresh POST, go to /login, no retry"
           },
           "note": "inside the critical section"
         },
@@ -208,18 +210,20 @@
             "token",
             "csrfToken"
           ],
-          "note": "same critical section; result applied to memory before leaving it"
+          "note": "same critical section, only after GET /session answered 200; at most one POST; result applied to memory before leaving it"
         }
       ]
     },
     "scheduledRefresh": {
       "decision": "D-07",
+      "status": "design-policy-approved-2026-11-07",
+      "requires": "web-locks-lock-acquired",
       "trigger": "token exp minus a margin chosen by Angular, never after session.expiresAt",
       "steps": [
         {
           "n": 1,
           "actor": "angular",
-          "action": "enter the critical section (single refresh in flight per tab, cross-tab mutex)"
+          "action": "enter the critical section (single refresh in flight per tab, cross-tab exclusion with Web Locks)"
         },
         {
           "n": 2,
@@ -246,7 +250,7 @@
     },
     "lostResponse": {
       "decision": "D-07",
-      "status": "proposed-pending-approval",
+      "status": "design-policy-approved-2026-11-07",
       "steps": [
         {
           "n": 1,
@@ -267,7 +271,7 @@
     },
     "loserTab": {
       "decision": "D-07",
-      "status": "proposed-pending-approval",
+      "status": "design-policy-approved-2026-11-07",
       "steps": [
         {
           "n": 1,
@@ -288,7 +292,7 @@
     },
     "businessCall401": {
       "decision": "D-11",
-      "status": "proposed-pending-approval",
+      "status": "initial-retry-policy-approved-2026-11-07",
       "steps": [
         {
           "n": 1,
@@ -298,12 +302,12 @@
         {
           "n": 2,
           "actor": "angular",
-          "action": "no automatic refresh-and-replay of arbitrary requests"
+          "action": "never replay the failed request automatically: no GET and no mutation is repeated after a 401"
         },
         {
           "n": 3,
           "actor": "angular",
-          "action": "if approved, only a GET on an explicit allowlist may be retried once after a rotation, verifying the same principal and session; otherwise inform or reauthenticate"
+          "action": "handle the error and recover the session under D-07 (at most one refresh POST per demand, inside the critical section) without silently repeating the failed request; the user or caller starts any new request explicitly, otherwise inform or reauthenticate"
         }
       ]
     },
@@ -369,16 +373,16 @@
         401
       ],
       "action": "businessCall401",
-      "retry": "no-generic-replay",
-      "note": "Java code outside the OpenAPI enum (M-19); no automatic refresh-and-replay (D-11 pending)"
+      "retry": "no-automatic-replay",
+      "note": "Java code outside the OpenAPI enum (M-19; catalog change still pending under D-11); the failed request is never replayed automatically (D-11 initial policy, approved 2026-11-07)"
     },
     "ACCESS_TOKEN_EXPIRED": {
       "http": [
         401
       ],
       "action": "businessCall401",
-      "retry": "no-generic-replay",
-      "note": "documented, never emitted by Java"
+      "retry": "no-automatic-replay",
+      "note": "documented, never emitted by Java; the expiry signal itself is still pending under D-11 and is not approved by the retry policy"
     },
     "SESSION_EXPIRED": {
       "http": [
@@ -402,7 +406,7 @@
       ],
       "action": "loserTab",
       "retry": false,
-      "note": "reconcile with GET /session; no chained POST (D-07 pending)"
+      "note": "reconcile with GET /session; no chained POST (D-07 design policy approved 2026-11-07)"
     },
     "FORBIDDEN": {
       "http": [
@@ -605,14 +609,46 @@
       "ms_users_contract"
     ]
   },
-  "pendingDecisions": {
-    "D-07": "pending",
-    "D-11": "pending"
+  "decisionStatus": {
+    "D-07": {
+      "status": "design-policy-approved",
+      "approvedOn": "2026-11-07",
+      "approvedScope": "cross-tab refresh serialization and lost-response reconciliation as a design policy",
+      "stillPending": [
+        "Angular implementation",
+        "cross-tab coordination tests in the supported browsers",
+        "Angular, ms-users and security conformities",
+        "B07 contract approval"
+      ]
+    },
+    "D-11": {
+      "status": "partially-approved",
+      "approvedOn": "2026-11-07",
+      "approvedScope": "no automatic replay of any business request after a 401 (GET and all mutations)",
+      "stillPending": [
+        "error code catalog: new Java codes and OpenAPI enum",
+        "ACCESS_TOKEN_EXPIRED signal",
+        "new public DTOs",
+        "OpenAPI semantics",
+        "future per-operation retries",
+        "Angular, ms-users and security conformities",
+        "B07 contract approval"
+      ]
+    }
   },
   "criticalSection": {
     "decision": "D-07",
-    "status": "proposed-pending-approval",
-    "mutex": "real cross-tab mutual exclusion; candidate Web Locks (navigator.locks); BroadcastChannel only for signals, never as the mutex",
+    "status": "design-policy-approved-2026-11-07",
+    "mutex": "cross-tab mutual exclusion with Web Locks (navigator.locks); BroadcastChannel only for signals, never as the mutex",
+    "approvedMechanism": "web-locks",
+    "mutualExclusionRequiredBeforeRotation": true,
+    "withoutGuaranteedMutualExclusion": {
+      "condition": "Web Locks unavailable and no equivalent mutual exclusion demonstrated",
+      "action": "secure-reauthentication",
+      "refreshPostsAllowed": 0,
+      "automaticRotationAllowed": false,
+      "broadcastChannelSubstitutesMutex": false
+    },
     "covers": [
       "bootstrap",
       "refresh",
@@ -622,27 +658,36 @@
     "maxRefreshPostsPerDemand": 1,
     "maxRefreshInFlightPerTab": 1,
     "postFailureAction": "GET /v1/auth/session to reconcile state only; never chain another POST automatically",
-    "logoutCoordination": "logout cancels pending refresh and restores and marks the local session closed",
+    "logoutCoordination": "logout cancels pending refresh and restores and marks the local session closed so a late restore cannot reinstate credentials",
+    "sessionGet200Proves": "current validity of the cookie only; not a rotation and not the issuance of an access JWT",
     "shareCredentialsBetweenTabs": false
   },
   "retryPolicy": {
     "decision": "D-11",
-    "status": "proposed-pending-approval",
+    "status": "initial-retry-policy-approved-2026-11-07",
     "genericReplayAllowed": false,
+    "automaticReplayAfter401": {
+      "GET": false,
+      "POST": false,
+      "PUT": false,
+      "PATCH": false,
+      "DELETE": false
+    },
     "mutationsExcluded": [
       "PUT /v1/me/profile",
       "PUT /v1/usuarios/{userId}"
     ],
     "getRetry": {
-      "allowed": "only if approved, explicit allowlist",
-      "maxAttempts": 1,
-      "requiresSamePrincipalAndSession": true
+      "allowed": false,
+      "maxAttempts": 0
     },
+    "futurePerOperationRetries": "pending-not-approved",
     "retryAfterAuthorizesRefresh": false
   },
   "angularErrorParsing": {
     "decision": "D-11",
     "status": "proposed-pending-approval",
+    "note": "part of the D-11 error catalog, which is not covered by the 2026-11-07 approval of the initial retry policy",
     "codePath": "error.error?.error?.code",
     "cases": {
       "networkOrCors": "status === 0 and no body",
