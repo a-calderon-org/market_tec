@@ -252,7 +252,7 @@
     </div>
 
     <div class="google-access" [attr.aria-busy]="googleLoading() || submitting()">
-      <div #googleButton class="google-button" [hidden]="submitting()"></div>
+      <div #googleButton class="google-button" [hidden]="submitting() || (authCoreV2 && googleLoading())"></div>
       @if (googleLoading()) {
         <p class="google-login-note" role="status">Cargando Google...</p>
       }
@@ -263,6 +263,18 @@
         <button type="button" class="institutional-button" (click)="loadGoogleButton()">
           Reintentar conexión con Google
         </button>
+      }
+      @if (authCoreV2 && !googleLoading() && !submitting()) {
+        @if (googlePurpose() === 'login') {
+          <button type="button" class="institutional-button" (click)="setGooglePurpose('register')">
+            ¿Primera vez en MarketTEC? Crear cuenta con Google
+          </button>
+        } @else {
+          <p class="google-login-note">Estás creando una cuenta nueva con tu correo institucional.</p>
+          <button type="button" class="institutional-button" (click)="setGooglePurpose('login')">
+            Ya tengo cuenta: ingresar con Google
+          </button>
+        }
       }
     </div>
 

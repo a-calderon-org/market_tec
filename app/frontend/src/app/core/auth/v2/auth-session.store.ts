@@ -12,7 +12,11 @@ export type AuthSessionStatus =
   | 'closed';
 
 export type ReauthenticationReason =
-  'mutual-exclusion-unavailable' | 'session-invalid' | 'refresh-unrecoverable' | 'session-expired';
+  | 'mutual-exclusion-unavailable'
+  | 'session-invalid'
+  | 'session-changed'
+  | 'refresh-unrecoverable'
+  | 'session-expired';
 
 /**
  * Estado de sesión interno, SOLO en memoria (D-01): access JWT, CSRF, usuario y

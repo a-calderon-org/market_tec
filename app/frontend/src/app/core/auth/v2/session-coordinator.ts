@@ -99,7 +99,9 @@ export class SessionCoordinator {
     // identidad de la demanda y, si la sesión ya cambió, la demanda nace cancelada.
     const epoch = demandEpoch ?? this.store.epoch;
 
-    if (epoch !== this.store.epoch) return Promise.resolve(CANCELLED);
+    if (epoch !== this.store.epoch || this.store.reauthenticationReason() === 'session-changed') {
+      return Promise.resolve(CANCELLED);
+    }
 
     if (this.inFlight && this.inFlightEpoch === epoch) return this.inFlight;
 
@@ -118,6 +120,7 @@ export class SessionCoordinator {
   /** Logout `current`: invalida primero lo local y luego avisa (mejor esfuerzo). */
   async logout(): Promise<void> {
     const csrfToken = this.store.csrfToken();
+    const sessionId = this.store.session()?.sessionId;
 
     // Todo lo local es síncrono: JWT/CSRF caen y las esperas de lock se cancelan ya.
     this.store.close();
@@ -125,7 +128,7 @@ export class SessionCoordinator {
     this.channel.post({ type: 'logout' });
 
     try {
-      await this.call((signal) => this.api.logout(csrfToken, signal));
+      await this.call((signal) => this.api.logout(csrfToken, signal, sessionId));
     } catch {
       // La sesión local ya está cerrada; un fallo remoto no la reabre ni se reintenta.
     }
@@ -217,6 +220,8 @@ export class SessionCoordinator {
       return { kind: 'unavailable', status: error instanceof AuthApiError ? error.status : 0 };
     }
 
+    if (this.store.epoch !== epoch) return CANCELLED;
+    if (this.sessionChanged(bootstrap)) return this.reauthenticationRequired('session-changed');
     if (!this.store.applySessionResponse(bootstrap, epoch)) return CANCELLED;
 
     // 2. Como máximo un POST de refresh para esta demanda.
@@ -229,6 +234,8 @@ export class SessionCoordinator {
     }
 
     // 3. Aplicar el resultado antes de salir de la sección crítica.
+    if (this.store.epoch !== epoch) return CANCELLED;
+    if (this.sessionChanged(rotated)) return this.reauthenticationRequired('session-changed');
     if (!this.store.applyAuthResponse(rotated, epoch)) return CANCELLED;
 
     this.channel.post({ type: 'session-rotated' });
@@ -242,6 +249,8 @@ export class SessionCoordinator {
     try {
       const snapshot = await this.call((signal) => this.api.getSession(signal));
 
+      if (this.store.epoch !== epoch) return CANCELLED;
+      if (this.sessionChanged(snapshot)) return this.reauthenticationRequired('session-changed');
       if (!this.store.applySessionResponse(snapshot, epoch)) return CANCELLED;
 
       return { kind: 'session-valid-without-token' };
@@ -250,6 +259,15 @@ export class SessionCoordinator {
 
       return this.reauthenticationRequired('refresh-unrecoverable');
     }
+  }
+
+  /** Una cookie compartida puede apuntar a otra cuenta o a otro login de la misma cuenta. */
+  private sessionChanged(response: SessionResponse): boolean {
+    const session = this.store.session();
+    return session !== null && (
+      session.sessionId !== response.session.sessionId ||
+      this.store.user()?.userId !== response.user.userId
+    );
   }
 
   private async call<T>(operation: (signal: AbortSignal) => Promise<T>): Promise<T> {

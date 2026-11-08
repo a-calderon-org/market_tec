@@ -1,9 +1,10 @@
 /**
  * Tipos del núcleo de autenticación v2 (flag `authCoreV2`).
  *
- * ESTADO: derivados de `contracts/openapi/users.json` 0.3.0-draft. B07 NO está
- * aprobado: ninguna forma de este archivo es un contrato vigente. Cuando el
- * contrato cambie, este archivo cambia con él.
+ * ESTADO: derivados de `contracts/openapi/users.json` 0.3.0-draft y verificados
+ * contra los controladores Java de ms-users (`main@08ccf05`); ver
+ * `docs/MTEC10_AUTH_V2_HTTP_INTEROPERABILITY.md`. B07 NO está aprobado: ninguna
+ * forma de este archivo es un contrato vigente.
  */
 
 export type EpochSeconds = number;
@@ -47,9 +48,18 @@ export interface SessionResponse {
   readonly csrfToken: string;
 }
 
+/**
+ * Propósito del intento Google. Java acepta ambos; `register` responde 503
+ * `AUTH_TEMPORARILY_UNAVAILABLE` mientras `users.google.registration.enabled=false`.
+ * La semántica contractual de D-06 sigue pendiente: Angular nunca convierte un
+ * login fallido en registro.
+ */
+export type GoogleAttemptPurpose = 'login' | 'register';
+
 /** Intento de login con Google (nonce que debe pasar a `initialize` de GIS). */
 export interface GoogleLoginAttempt {
   readonly attemptId: string;
+  readonly purpose: GoogleAttemptPurpose;
   readonly nonce: string;
   readonly expiresAt: EpochSeconds;
   /** Solo memoria; no registrar. */
@@ -65,6 +75,8 @@ export type GoogleCredential = string;
 export interface GoogleExchangeRequest {
   readonly attemptId: string;
   readonly credential: GoogleCredential;
+  /** Selecciona la ruta de intercambio; NO viaja en el cuerpo (Java rechaza campos extra). */
+  readonly purpose: GoogleAttemptPurpose;
 }
 
 /** `status === 0` representa red/CORS, timeout o respuesta perdida. */
@@ -82,6 +94,8 @@ export class AuthApiError extends Error {
 export const NETWORK_ERROR_CODE = 'NETWORK';
 export const TIMEOUT_ERROR_CODE = 'TIMEOUT';
 export const ABORTED_ERROR_CODE = 'ABORTED';
+/** 2xx con un cuerpo que no cumple la forma esperada: se trata como respuesta inutilizable. */
+export const INVALID_RESPONSE_CODE = 'INVALID_RESPONSE';
 
 /**
  * Lee `error.error.code` del sobre `{error:{code,...}}` (A-07). Un cuerpo

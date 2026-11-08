@@ -5,7 +5,11 @@ import { environment } from '../../../../environments/environment';
 import { apiVersionlessPath } from '../../api/api-url';
 import { isBearerRoute } from './bearer-routes';
 import { blockedOwnOriginPath, isExplicitStaticRead } from './business-destination';
-import { AUTH_V2_BUSINESS_TRANSPORT, BusinessTransportBlockedError } from './business-transport';
+import {
+  AUTH_V2_BUSINESS_TRANSPORT,
+  BusinessTransportBlockedError,
+  isRestrictedBusinessOperation,
+} from './business-transport';
 import { AuthRequiredError } from './auth-contract';
 import { AuthSessionService } from './auth-session.service';
 
@@ -23,6 +27,9 @@ import { AuthSessionService } from './auth-session.service';
  *   cualquier `next()` (ver `blockedOwnOriginPath`), también los prefijos de API
  *   solos (`/api`, `/v1/`). Pasan sin credenciales: lecturas GET/HEAD de estáticos
  *   explícitos (`/favicon.ico`, `/assets/*`), `/auth/*`, `/.well-known/*` y otros orígenes.
+ * - Con el adaptador HTTP real (`restricted`) solo salen hacia la API las
+ *   operaciones exactas de `isRestrictedBusinessOperation` (GET/PUT `/me/profile`);
+ *   cualquier otra ruta o método del mismo origen se bloquea antes de `next()`.
  * - NO envía `Ocp-Apim-Subscription-Key` ni ninguna clave de APIM.
  * - `401` de negocio: se propaga el error y se gestiona la pérdida de sesión; la
  *   petición original NUNCA se reejecuta (GET, POST, PUT, PATCH ni DELETE).
@@ -38,12 +45,26 @@ import { AuthSessionService } from './auth-session.service';
 export const authCoreV2Interceptor: HttpInterceptorFn = (req, next) => {
   const route = apiVersionlessPath(req.url, environment.apiBaseUrl);
 
-  const transportBlocked = inject(AUTH_V2_BUSINESS_TRANSPORT) === 'blocked';
+  const transport = inject(AUTH_V2_BUSINESS_TRANSPORT);
+
+  // Modo HTTP real: lista exacta de operaciones; lo demás del mismo origen, bloqueado.
+  if (transport === 'restricted' && !isExplicitStaticRead(req.url, req.method)) {
+    const blocked =
+      route !== null
+        ? !isRestrictedBusinessOperation(req.method, route)
+        : blockedOwnOriginPath(req.url, environment.apiBaseUrl) !== null;
+
+    if (blocked) {
+      return throwError(
+        () => new BusinessTransportBlockedError(`${req.method} ${route ?? req.url}`),
+      );
+    }
+  }
 
   // El bloqueo se evalúa ANTES de cualquier retorno temprano: con la API base vacía,
   // raíz o fuera de su prefijo, `route` puede ser null (o cubrirlo todo) aunque la URL
   // sea de negocio.
-  if (transportBlocked) {
+  if (transport === 'blocked') {
     // Única excepción: lecturas GET/HEAD de estáticos explícitos del propio frontend
     // (`/favicon.ico`, `/assets/*`), sin credenciales. Nunca autoriza escrituras.
     if (isExplicitStaticRead(req.url, req.method)) {

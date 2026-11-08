@@ -4,6 +4,7 @@ import {
   AuthApiError,
   AuthenticatedUser,
   AuthResponse,
+  GoogleAttemptPurpose,
   GoogleExchangeRequest,
   GoogleLoginAttempt,
   NETWORK_ERROR_CODE,
@@ -175,9 +176,10 @@ export class MockAuthApiAdapter extends AuthApiPort {
     super();
   }
 
-  createGoogleAttempt(): Promise<GoogleLoginAttempt> {
+  createGoogleAttempt(purpose: GoogleAttemptPurpose = 'login'): Promise<GoogleLoginAttempt> {
     return Promise.resolve({
       attemptId: 'mock-attempt',
+      purpose,
       nonce: 'mock-nonce',
       expiresAt: Math.floor(Date.now() / 1000) + 300,
       csrfToken: 'mock-attempt-csrf',

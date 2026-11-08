@@ -1,7 +1,13 @@
 import { inject, Injectable } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthApiPort } from './auth-api.port';
-import { AuthRequiredError, GoogleCredential, GoogleLoginAttempt } from './auth-contract';
+import {
+  AuthenticatedUser,
+  AuthRequiredError,
+  GoogleAttemptPurpose,
+  GoogleCredential,
+  GoogleLoginAttempt,
+} from './auth-contract';
 import { AuthSessionStore } from './auth-session.store';
 import { SessionCoordinator } from './session-coordinator';
 
@@ -10,6 +16,16 @@ const LEGACY_GOOGLE_TOKEN_KEY = 'google_token';
 /** Access JWT junto con la generación de sesión (epoch) en la que se leyó. */
 export interface AccessCredential {
   readonly token: string;
+  readonly epoch: number;
+}
+
+/**
+ * Identidad interna y generación de sesión en el instante en que se inició una
+ * operación. Sirve para descartar respuestas que llegan después de un logout o
+ * de un cambio de usuario.
+ */
+export interface SessionIdentity {
+  readonly userId: string;
   readonly epoch: number;
 }
 
@@ -35,8 +51,24 @@ export class AuthSessionService {
   }
 
   /** Crea el intento cuyo `nonce` debe pasarse a `google.accounts.id.initialize`. */
-  startGoogleAttempt(): Promise<GoogleLoginAttempt> {
-    return this.api.createGoogleAttempt();
+  startGoogleAttempt(purpose: GoogleAttemptPurpose = 'login'): Promise<GoogleLoginAttempt> {
+    return this.api.createGoogleAttempt(purpose);
+  }
+
+  /** Identidad interna vigente, o null si no hay sesión activa con usuario. */
+  currentIdentity(): SessionIdentity | null {
+    const user: AuthenticatedUser | null = this.store.user();
+
+    return this.store.status() === 'active' && user
+      ? { userId: user.userId, epoch: this.store.epoch }
+      : null;
+  }
+
+  /** ¿Sigue vigente la identidad capturada (misma generación y mismo usuario)? */
+  isCurrentIdentity(identity: SessionIdentity): boolean {
+    const current = this.currentIdentity();
+
+    return current !== null && current.epoch === identity.epoch && current.userId === identity.userId;
   }
 
   /**
@@ -50,7 +82,7 @@ export class AuthSessionService {
 
     const epoch = this.store.beginLogin();
     const response = await this.api.exchangeGoogle(
-      { attemptId: attempt.attemptId, credential },
+      { attemptId: attempt.attemptId, credential, purpose: attempt.purpose },
       attempt.csrfToken,
     );
 

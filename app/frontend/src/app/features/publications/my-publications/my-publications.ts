@@ -29,7 +29,15 @@ export class MyPublications implements OnInit {
 
   private readonly authCoreV2 = inject(FEATURE_FLAGS).authCoreV2;
 
+  /** Solo flujo legado (authCoreV2=false). Con authCoreV2 nunca se usa. */
   private readonly currentUserId = 'USR-001';
+
+  /**
+   * authCoreV2: ms-publications aún no valida el JWT interno ni ofrece una ruta de
+   * «mis publicaciones» derivada del token. La pantalla queda explícitamente no
+   * disponible y no emite peticiones (ni con 'USR-001' ni con el userId interno).
+   */
+  readonly unavailable = signal(false);
 
   private readonly allPublications =
     signal<UserPublication[]>([]);
@@ -190,6 +198,7 @@ export class MyPublications implements OnInit {
       // el principal interno. Con authCoreV2 no se consulta con 'USR-001' ni se
       // inventa otro id; la pantalla queda sin datos hasta aprobar ese contrato.
       this.allPublications.set([]);
+      this.unavailable.set(true);
       this.error.set(true);
       this.loading.set(false);
       return;

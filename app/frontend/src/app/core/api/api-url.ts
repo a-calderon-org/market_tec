@@ -77,3 +77,16 @@ function normalizePath(pathname: string): string {
 
   return withoutTrailingSlashes || '/';
 }
+
+/**
+ * URL absoluta de una operación versionada de la API a partir de la base
+ * configurada y una ruta SIN prefijo de versión (`/auth/session`, `/me/profile`).
+ * Si la base ya termina en `/v1` no se duplica: `https://h/v1` + `/me/profile`
+ * produce `https://h/v1/me/profile`, igual que `https://h` + `/me/profile`.
+ */
+export function versionedApiUrl(configuredBaseUrl: string, versionlessPath: string): string {
+  const base = configuredBaseUrl.trim().replace(/\/+$/, '');
+  const path = versionlessPath.startsWith('/') ? versionlessPath : `/${versionlessPath}`;
+
+  return /\/v1$/.test(base) ? `${base}${path}` : `${base}/v1${path}`;
+}

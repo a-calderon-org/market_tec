@@ -1,21 +1,25 @@
 import {
   AuthResponse,
+  GoogleAttemptPurpose,
   GoogleExchangeRequest,
   GoogleLoginAttempt,
   SessionResponse,
 } from './auth-contract';
 
 /**
- * Puerto hacia ms-users para el núcleo v2. Hoy solo existe un adaptador mock
- * (`MockAuthApiAdapter`); el adaptador HTTP real queda pendiente de B07 y de la
- * topología same-site HTTPS (D-04). Un adaptador HTTP deberá usar `HttpBackend`
- * (no el interceptor de negocio) y `withCredentials` solo en las cinco rutas de cookie.
+ * Puerto hacia ms-users para el núcleo v2. Adaptadores: `MockAuthApiAdapter`
+ * (solo desarrollo/pruebas) y `HttpAuthApiAdapter` (HTTP real, usa `HttpBackend`
+ * y `withCredentials` solo en las rutas de cookie). La selección está en
+ * `provideAuthCoreV2`.
  *
  * Todas las operaciones rechazan con `AuthApiError`. `status === 0` es red,
  * timeout, abort o respuesta perdida.
  */
 export abstract class AuthApiPort {
-  abstract createGoogleAttempt(signal?: AbortSignal): Promise<GoogleLoginAttempt>;
+  abstract createGoogleAttempt(
+    purpose: GoogleAttemptPurpose,
+    signal?: AbortSignal,
+  ): Promise<GoogleLoginAttempt>;
 
   abstract exchangeGoogle(
     request: GoogleExchangeRequest,
@@ -29,6 +33,6 @@ export abstract class AuthApiPort {
   /** `POST /v1/auth/refresh` con `{mode:"rotate"}` y el CSRF vigente. */
   abstract refresh(csrfToken: string, signal?: AbortSignal): Promise<AuthResponse>;
 
-  /** `POST /v1/auth/logout` con `{scope:"current"}`. */
-  abstract logout(csrfToken: string | null, signal?: AbortSignal): Promise<void>;
+  /** Logout de la sesión local indicada. HTTP obtiene el CSRF vigente dentro del lock. */
+  abstract logout(csrfToken: string | null, signal?: AbortSignal, sessionId?: string): Promise<void>;
 }
