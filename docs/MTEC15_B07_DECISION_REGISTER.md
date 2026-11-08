@@ -19,7 +19,7 @@
 | A-07 | Clave privada solo en ms-users; JWKS público; públicas aprovisionadas a APIM y backends. | ADR-004 §3.4.1 (B05 D2) | Rotación, caché y propagación sin ensayar. |
 | A-08 | Access JWT y CSRF solo en memoria; refresh opaco y rotatorio en cookie HttpOnly, Secure, host-only; sincronizador CSRF; preferencia same-site; CORS explícito sin comodín con credenciales. | ADR-004 §3.4.1 (B06 D4–D5) | Nombres, SameSite, Path y hosts reales siguen como propuesta. |
 | A-09 | Refresh serializado incluso entre pestañas, sin gracia general. | ADR-004 §3.4.1 (B06 D6) | Protocolo concreto: ver D-07. |
-| A-10 | **Política C de refresh replay** (2026-11-04): consumo único; generación consumida rechazada sin reemisión; respuesta pública `401 REFRESH_INVALID`; un replay aislado **no** revoca a la ganadora; la revocación exige logout, recuperación autorizada o compromiso confirmado con evidencia independiente. | ADR-004 §3.4; Jira MTEC-40 | Auditoría estructurada y procedimiento de incidente sin implementar. No es una validación de producción. |
+| A-10 | **Política C de refresh replay** (2026-11-04): consumo único; generación consumida rechazada sin reemisión; respuesta pública `401 REFRESH_INVALID`; un replay aislado **no** revoca a la ganadora; la revocación exige logout, recuperación autorizada o compromiso confirmado con evidencia independiente. | ADR-004 §3.4; Jira MTEC-40 | Ver I-13: Java ya emite el evento `refresh_audit`; siguen pendientes evidencia operativa, retención, alertas, procedimiento de incidente y pruebas en entorno. No es una validación de producción. |
 | A-11 | Residual de JWT tras revocación ordinaria ≤300 s como objetivo verificable; fail-closed si falta la garantía; una caída de ms-users no invalida JWT verificables localmente. | ADR-004 §3.4.1 (B01 D1–D3) | Sin cota demostrada. |
 | A-12 | Topología objetivo: Angular en Static Web Apps y APIM como entrada, dos orígenes HTTPS del mismo *site*. | MTEC40_APPROVED_BROWSER_ARCHITECTURE | Hosts, DNS y políticas reales no determinados. |
 | A-13 | La subscription key de APIM no es identidad ni secreto de SPA (MTEC-41, abierto). | FRONTEND_BACKEND.md; MTEC-41 | Eliminación de la key en las operaciones OpenAPI sin cerrar. |
@@ -42,6 +42,7 @@ Todo esto existe en `ms-users@2089897`, tras flags que por defecto están apagad
 | I-10 | `mode=rotate` y `scope=current` implementados; `mode=continue` y `scope=all` responden 400. | Coincide con el contrato; falta aprobación de la interfaz completa. |
 | I-11 | `POST /v1/auth/session/activity` autentica y rechaza siempre con `403 ACTIVITY_EVIDENCE_REQUIRED`. | B03 sin protocolo; correcto como bloqueo. |
 | I-12 | El manifiesto APIM marca como `reconciled` casi todas las operaciones, incluidas las de forma divergente. | Es una etiqueta local de `infra/apim/operations.json`; las aprobaciones `approvals.*` siguen en `null`. |
+| I-13 | **Auditoría de refresh observada en código:** Java emite un evento estructurado `refresh_audit` (`eventType=session_refresh`) con `outcome` en `rotated`, `consumed_confirmed`, `proof_invalid`, `session_closed`, `policyVersion=C-1` y `sessionRef` derivada de 16 hex, sin secretos (`SessionAuthority`, `SessionRefreshController`, `SafeJsonLogFormatter`). | La capacidad existe; **no** hay evidencia operativa, retención, alertas, procedimiento de incidente ni pruebas en entorno. La política C aprobada en MTEC-40 no cambia. |
 
 ## 3. Propuestas anteriores sustituidas
 
@@ -95,7 +96,7 @@ Cada decisión indica una **propuesta recomendada**, una alternativa, el riesgo 
 - **Recomendada:** **sin cambio.** Mantener política C tal como está aprobada. Angular nunca reintenta un refresh fallido de forma automática ni revoca por un 401 aislado.
 - **Alternativa:** ninguna propuesta; la alternativa B (revocar familia) fue evaluada y descartada por el RP.
 - **Riesgo residual aceptado por el RP:** quien robe una cookie y gane la primera rotación conserva la generación activa hasta vencimiento o revocación.
-- **Aprobación:** ya aprobada. Pendientes de producción (auditoría estructurada, procedimiento de incidente) siguen en MTEC-40.
+- **Aprobación:** ya aprobada. Java ya emite `refresh_audit` (I-13). Pendientes de producción, en MTEC-40: evidencia operativa, retención, alertas, procedimiento de incidente y pruebas en entorno.
 
 ### D-06 — Flujo Google: login, registro y errores
 - **Recomendada:** (a) Angular ofrece dos acciones, "Ingresar" (`purpose=login`) y "Crear cuenta" (`purpose=register`), cada una con su intento y su nonce. (b) El registro inmediato se activa con `users.google.registration.enabled`. (c) Para distinguir "no registrado" de "prueba inválida", proponer que Java emita `REGISTRATION_REQUIRED` en el login de identidad desconocida solo después de una prueba Google válida. Hasta aprobarlo, Angular muestra un mensaje genérico con la acción "Crear cuenta".
@@ -103,16 +104,24 @@ Cada decisión indica una **propuesta recomendada**, una alternativa, el riesgo 
 - **Riesgo:** (c) revela que una cuenta Google verificada es desconocida; tras prueba válida el riesgo es bajo, pero es una decisión de privacidad. Sin (c), la UX es peor pero segura.
 - **Aprobación:** RP (privacidad de la respuesta), Angular y ms-users. Es un cambio de Java solo en (c).
 
-### D-07 — Refresh entre pestañas y respuesta perdida
-- **Recomendada:** (1) un único refresh en vuelo por pestaña (cola de promesas); (2) entre pestañas, `navigator.locks.request('mtec-refresh', …)` (Web Locks) con degradación a un lock de `BroadcastChannel`; (3) dentro del lock, antes de rotar, `GET /v1/auth/session` para tomar el `csrfToken` vigente, porque otra pestaña pudo rotar y dejar obsoleto el CSRF local; (4) **no** compartir access JWT ni CSRF entre pestañas (ni `BroadcastChannel` con credenciales, ni almacenamiento); la señal entre pestañas solo dice "se rotó"; (5) un `401 REFRESH_INVALID` no cierra la sesión: se verifica con `GET /v1/auth/session`; si responde 200, la sesión sigue viva y se hace como máximo **una** rotación nueva; si responde 401, reautenticar; (6) respuesta perdida: tratar el error de red como en (5); si el servidor ya consumió la generación y la cookie nueva no llegó, hay que reautenticar (política C, sin gracia).
-- **Alternativa:** compartir el access JWT entre pestañas por `BroadcastChannel`. Reduce rotaciones, pero amplía la superficie de credenciales en memoria; requiere aprobación expresa.
-- **Riesgo:** Web Locks no cubre navegadores muy antiguos; el pase por `GET /session` añade una llamada por rotación; el sondeo de `GET /session` no cuenta como actividad (por contrato).
-- **Aprobación:** Angular, seguridad y ms-users (B06 D6 pide protocolo concreto y pruebas).
+### D-07 — Refresh entre pestañas y respuesta perdida (PENDIENTE; propuesta, no algoritmo autorizado)
+- **Propuesta en discusión:**
+  1. Un refresh en vuelo por pestaña.
+  2. Exclusión mutua real entre pestañas que cubra **bootstrap, refresh y aplicación del resultado**. Candidato: Web Locks (`navigator.locks`). `BroadcastChannel` sirve solo para señales ("se rotó", "logout") y **no** es un mutex suficiente.
+  3. Dentro de esa sección crítica, y no antes de adquirirla, `GET /v1/auth/session` para obtener el CSRF vigente.
+  4. Un único `POST /v1/auth/refresh` por demanda; nunca se encadena automáticamente otro POST.
+  5. Tras un fallo (401 `REFRESH_INVALID`, timeout o error de red), `GET /v1/auth/session` solo para **reconciliar estado**, sin disparar otro POST. Si responde 200, la sesión sigue viva y la próxima demanda de token (nueva demanda, no un encadenamiento) decide si rota; si responde 401, o no se puede recuperar una sesión válida, se reautentica.
+  6. Coordinación con logout: un logout (propio o de otra pestaña) cancela refresh y restauraciones pendientes e impide que una restauración tardía reponga credenciales.
+  7. No se comparten access JWT ni CSRF entre pestañas.
+- **Alternativa:** compartir el access JWT por `BroadcastChannel`. Reduce rotaciones pero amplía la superficie de credenciales; requiere aprobación expresa.
+- **Riesgo:** Web Locks no está en navegadores antiguos y no hay mutex equivalente probado; con la política C (sin gracia), una respuesta perdida tras el commit puede exigir reautenticar.
+- **Aprobación:** Angular, seguridad y ms-users (B06 D6 exige protocolo concreto y pruebas). **Sin aprobar.**
 
 ### D-08 — Origen del `userId` y ruta de perfil
 - **Recomendada:** `userId = AuthResponse.user.userId` (o `SessionResponse.user.userId`) en memoria. Perfil propio vía `GET/PUT /v1/me/profile`, que no necesita id en la ruta. `/usuarios/{userId}` queda para compatibilidad. Se eliminan `USR-001` y el uso de Google `sub`. "Mis publicaciones" depende de un contrato de Catalog que aún no existe: queda bloqueado, sin sustituir el id por uno inventado.
 - **Alternativa:** mantener `/usuarios/{userId}` y poner el `userId` real. Funciona (owner-only) y cambia menos código, pero conserva el id en la ruta.
 - **Riesgo:** `my-publications` seguirá sin datos reales hasta que Catalog defina `GET /v1/me/publicaciones` o equivalente.
+- **Jira:** esta decisión se vincula con **MTEC-10** (consumo Angular de intentos/login, sesión y perfil propio, que sustituye Google `sub` y `USR-001`); el trabajo de Angular debe tramitarse allí. No se modificó Jira.
 - **Aprobación:** Angular y ms-catalog para la parte de publicaciones.
 
 ### D-09 — Convenciones de petición y mapeo APIM
@@ -127,11 +136,16 @@ Cada decisión indica una **propuesta recomendada**, una alternativa, el riesgo 
 - **Riesgo:** sin `continue`, la sesión se corta a los 60 min sin renovación voluntaria; con aviso a 300 s, el usuario solo puede reautenticar.
 - **Aprobación:** RP (UX de ventana), seguridad.
 
-### D-11 — Catálogo de errores y señal de expiración
-- **Recomendada:** el catálogo OpenAPI debe incluir los códigos que Java ya emite (I-04) y Angular debe mapear por `code`, nunca por `message`. Para el access vencido: Angular lee `exp` del JWT solo como pista para programar el refresh; si recibe `401 AUTH_REQUIRED` en una ruta de negocio con un token que creía vigente, ejecuta **una** rotación serializada y reintenta la petición **una** vez; si vuelve a fallar, reautentica. No se usa el `exp` local como autoridad.
-- **Alternativa:** que Java emita `ACCESS_TOKEN_EXPIRED` cuando el JWT esté bien firmado pero vencido. Es más limpio, pero distingue expirado de inválido (cambio de comportamiento y de superficie de información).
-- **Riesgo:** el reintento único de una petición de negocio es distinto del "retry automático" del refresh que el contrato prohíbe; hay que dejarlo explícito para que no se interprete como violación de la política C.
-- **Aprobación:** Angular, ms-users y seguridad.
+### D-11 — Catálogo de errores y señal de expiración (PENDIENTE)
+- **Propuesta en discusión:**
+  - El catálogo OpenAPI incluiría los códigos que Java ya emite (I-04). Angular mapea por `code`, nunca por `message`.
+  - Estructura real del error en Angular: `HttpErrorResponse.error` es el cuerpo, por lo que el código se obtiene con `error.error?.error?.code`. Se distinguen: error de red/CORS (`status === 0`), 401, 403 y envelope inesperado (cuerpo ausente o sin `error.code` textual). Un envelope inesperado produce un error genérico.
+  - `exp` del JWT se usa solo como pista para programar el refresh, nunca como autoridad.
+  - Un `401 AUTH_REQUIRED` **no** provoca por sí solo un refresh y repetición de cualquier petición. El primer incremento solo podría proponer, sujeto a aprobación, **un** reintento de un `GET` expresamente permitido, una sola vez, tras comprobar que el principal y la sesión siguen siendo los mismos. `PUT /v1/me/profile` y cualquier otra mutación quedan **excluidas** de toda política genérica de replay.
+  - `Retry-After` (p. ej. en 429) no autoriza otro refresh automático.
+- **Alternativa:** que Java emita `ACCESS_TOKEN_EXPIRED` para un JWT bien firmado pero vencido. Es más claro, pero distingue vencido de inválido (cambio de comportamiento e información expuesta).
+- **Riesgo:** repetir una mutación tras un 401 puede duplicar efectos o ejecutarla con otro principal; por eso se excluyen. Un reintento de GET sigue chocando con la prohibición de reintentos automáticos del refresh si se interpreta mal.
+- **Aprobación:** Angular, ms-users y seguridad. **Sin aprobar.**
 
 ### D-12 — Alcance prometido por el logout
 - **Recomendada:** la UI dice "sesión cerrada", pero no promete invalidación inmediata de JWT ya emitidos (≤240 s). Tras `204`, Angular borra el estado en memoria y no reutiliza el token.
@@ -164,7 +178,7 @@ Todo esto debe permanecer así hasta que cada responsable registre su conformida
 | Aprobaciones APIM (`approvals.abuse_protection`, `approvals.ms_users_contract`) | `null`. | Revisión independiente registrada. |
 | Perfil `sql-*` obligatorio para los controladores | Activo. | — |
 | Angular: `environment.apiBaseUrl` | Vacío en `environment.example.ts`; sin URL, el interceptor no adjunta nada. | Pipeline de despliegue. |
-| Flag de Angular para el nuevo cliente | No existe aún; el plan lo introduce apagado. | Responsable de Angular. |
+| Flag de Angular para el nuevo cliente | No existe aún; el plan lo introduce apagado. Con `authCoreV2=false` se conserva el cliente legado **con sus riesgos actuales** (token de Google en `sessionStorage`, `USR-001`); el flag no certifica la seguridad del frontend. | Responsable de Angular. |
 
 ## 7. Conformidades B07
 

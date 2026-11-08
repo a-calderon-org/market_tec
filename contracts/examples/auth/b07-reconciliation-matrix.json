@@ -12,7 +12,7 @@
   "legend": {
     "javaState": {
       "gated": "Route exists in Java but is registered only when its feature flags and verified-topology settings are on (all default off).",
-      "gated-refuses": "Route exists behind flags but, by design, always refuses (blocked by a pending decision).",
+      "gated-refuses": "Route exists behind flags and refuses in every configuration of the current code (only session/activity).",
       "always-on": "Registered without feature flag (still profile-bound to sql-*).",
       "metadata-gated": "Registered only when users.internal-jwt.enabled=true."
     },
@@ -26,7 +26,9 @@
       "P1": "Needed for the core increment to behave correctly in the browser.",
       "P2": "Needed before general exposure.",
       "P3": "Cosmetic or deferrable."
-    }
+    },
+    "editorialNote": "kind and priority are editorial triage labels. They are not an exhaustive security-impact classification and do not replace a security review.",
+    "evidence": "Java columns come from static inspection of the controllers, not from an integrated HTTP run."
   },
   "decisions": [
     "D-01",
@@ -80,7 +82,8 @@
       "decision": null,
       "acceptance": [
         "AT-HEALTH-1"
-      ]
+      ],
+      "openapiSecurity": []
     },
     {
       "operationId": "createAuthenticationAttempt",
@@ -171,6 +174,11 @@
         "AT-ATTEMPT-1",
         "AT-ATTEMPT-2",
         "AT-ATTEMPT-3"
+      ],
+      "openapiSecurity": [
+        [
+          "apimSubscriptionKey"
+        ]
       ]
     },
     {
@@ -262,6 +270,12 @@
         "AT-GOOGLE-2",
         "AT-GOOGLE-3",
         "AT-GOOGLE-4"
+      ],
+      "openapiSecurity": [
+        [
+          "apimSubscriptionKey",
+          "attemptCookie"
+        ]
       ]
     },
     {
@@ -326,6 +340,12 @@
       "decision": "D-06",
       "acceptance": [
         "AT-GOOGLE-3"
+      ],
+      "openapiSecurity": [
+        [
+          "apimSubscriptionKey",
+          "attemptCookie"
+        ]
       ]
     },
     {
@@ -399,6 +419,12 @@
       "acceptance": [
         "AT-SESSION-1",
         "AT-SESSION-2"
+      ],
+      "openapiSecurity": [
+        [
+          "apimSubscriptionKey",
+          "refreshCookie"
+        ]
       ]
     },
     {
@@ -475,6 +501,12 @@
         "AT-REFRESH-2",
         "AT-REFRESH-3",
         "AT-REFRESH-4"
+      ],
+      "openapiSecurity": [
+        [
+          "apimSubscriptionKey",
+          "refreshCookie"
+        ]
       ]
     },
     {
@@ -541,6 +573,15 @@
       "acceptance": [
         "AT-LOGOUT-1",
         "AT-LOGOUT-2"
+      ],
+      "openapiSecurity": [
+        [
+          "apimSubscriptionKey",
+          "refreshCookie"
+        ],
+        [
+          "apimSubscriptionKey"
+        ]
       ]
     },
     {
@@ -554,7 +595,7 @@
         "users.internal-jwt.enabled"
       ],
       "requestJava": "Authorization: Bearer <internal JWT>; exactly one header",
-      "requestOpenapi": "bearer or APIM key declared in security",
+      "requestOpenapi": "Authorization: Bearer plus Ocp-Apim-Subscription-Key, both required by the single security object",
       "responseJava": "200 UserProfileV1 {id, nombreUsuario, nombre, apellidos, correo, fotoPerfil, fechaRegistro(ISO), createdAt(epoch), verificado, estado:'activo'}",
       "responseOpenapi": "200 UserProfileV1 (same fields)",
       "transport": {
@@ -608,7 +649,15 @@
       "acceptance": [
         "AT-PROFILE-1",
         "AT-PROFILE-2"
-      ]
+      ],
+      "openapiSecurity": [
+        [
+          "apimSubscriptionKey",
+          "bearerAuth"
+        ]
+      ],
+      "javaAuth": "internal JWT only",
+      "securityNote": "OpenAPI Draft declares bearerAuth AND apimSubscriptionKey inside ONE security requirement object, i.e. both are required (not alternatives). Java observed: requires only the internal JWT and never reads Ocp-Apim-Subscription-Key. Proposed target (not approved): SPA with no confidential subscription key, subject to MTEC-41 and validation on a real APIM."
     },
     {
       "operationId": "updateOwnUserProfile",
@@ -621,7 +670,7 @@
         "users.internal-jwt.enabled"
       ],
       "requestJava": "Bearer JWT; body exactly {nombreUsuario, nombre, apellidos} all strings; no CSRF header required",
-      "requestOpenapi": "UpdateUserRequest (same three fields)",
+      "requestOpenapi": "UpdateUserRequest; same joint bearer + subscription-key requirement",
       "responseJava": "200 UpdateUserResponseV1 incl. message 'Perfil actualizado'",
       "responseOpenapi": "200 UpdateUserResponseV1",
       "transport": {
@@ -661,7 +710,15 @@
       "decision": null,
       "acceptance": [
         "AT-PROFILE-3"
-      ]
+      ],
+      "openapiSecurity": [
+        [
+          "apimSubscriptionKey",
+          "bearerAuth"
+        ]
+      ],
+      "javaAuth": "internal JWT only",
+      "securityNote": "OpenAPI Draft declares bearerAuth AND apimSubscriptionKey inside ONE security requirement object, i.e. both are required (not alternatives). Java observed: requires only the internal JWT and never reads Ocp-Apim-Subscription-Key. Proposed target (not approved): SPA with no confidential subscription key, subject to MTEC-41 and validation on a real APIM."
     },
     {
       "operationId": "getUserProfile",
@@ -674,7 +731,7 @@
         "users.internal-jwt.enabled"
       ],
       "requestJava": "Bearer JWT; path id must equal token sub, else 403 FORBIDDEN; malformed id 400",
-      "requestOpenapi": "owner only",
+      "requestOpenapi": "owner only; same joint bearer + subscription-key requirement",
       "responseJava": "200 UserProfileV1",
       "responseOpenapi": "200 UserProfileV1",
       "transport": {
@@ -722,7 +779,15 @@
       "acceptance": [
         "AT-PROFILE-4",
         "AT-ANGULAR-USERID-1"
-      ]
+      ],
+      "openapiSecurity": [
+        [
+          "apimSubscriptionKey",
+          "bearerAuth"
+        ]
+      ],
+      "javaAuth": "internal JWT only (+ path id = sub)",
+      "securityNote": "OpenAPI Draft declares bearerAuth AND apimSubscriptionKey inside ONE security requirement object, i.e. both are required (not alternatives). Java observed: requires only the internal JWT and never reads Ocp-Apim-Subscription-Key. Proposed target (not approved): SPA with no confidential subscription key, subject to MTEC-41 and validation on a real APIM."
     },
     {
       "operationId": "updateUserProfile",
@@ -735,7 +800,7 @@
         "users.internal-jwt.enabled"
       ],
       "requestJava": "Bearer JWT; path id equals sub; same three-field body",
-      "requestOpenapi": "owner only; UpdateUserRequest",
+      "requestOpenapi": "owner only; UpdateUserRequest; same joint bearer + subscription-key requirement",
       "responseJava": "200 UpdateUserResponseV1",
       "responseOpenapi": "200 UpdateUserResponseV1",
       "transport": {
@@ -775,7 +840,15 @@
       "decision": "D-08",
       "acceptance": [
         "AT-PROFILE-4"
-      ]
+      ],
+      "openapiSecurity": [
+        [
+          "apimSubscriptionKey",
+          "bearerAuth"
+        ]
+      ],
+      "javaAuth": "internal JWT only (+ path id = sub)",
+      "securityNote": "OpenAPI Draft declares bearerAuth AND apimSubscriptionKey inside ONE security requirement object, i.e. both are required (not alternatives). Java observed: requires only the internal JWT and never reads Ocp-Apim-Subscription-Key. Proposed target (not approved): SPA with no confidential subscription key, subject to MTEC-41 and validation on a real APIM."
     },
     {
       "operationId": "getPublicSigningKeys",
@@ -824,7 +897,8 @@
       "decision": "D-13",
       "acceptance": [
         "AT-JWKS-1"
-      ]
+      ],
+      "openapiSecurity": []
     },
     {
       "operationId": "getIdentityMetadata",
@@ -873,7 +947,8 @@
       "decision": "D-13",
       "acceptance": [
         "AT-JWKS-2"
-      ]
+      ],
+      "openapiSecurity": []
     },
     {
       "operationId": "requestInstitutionalEmailLink",
@@ -933,6 +1008,12 @@
       "decision": "D-02",
       "acceptance": [
         "AT-EMAIL-OFF-1"
+      ],
+      "openapiSecurity": [
+        [
+          "apimSubscriptionKey",
+          "attemptCookie"
+        ]
       ]
     },
     {
@@ -988,6 +1069,12 @@
       "decision": "D-02",
       "acceptance": [
         "AT-EMAIL-OFF-1"
+      ],
+      "openapiSecurity": [
+        [
+          "apimSubscriptionKey",
+          "attemptCookie"
+        ]
       ]
     },
     {
@@ -1041,6 +1128,13 @@
       "decision": "D-03",
       "acceptance": [
         "AT-BLOCKED-1"
+      ],
+      "openapiSecurity": [
+        [
+          "apimSubscriptionKey",
+          "bearerAuth",
+          "refreshCookie"
+        ]
       ]
     },
     {
@@ -1106,6 +1200,13 @@
       "decision": "D-14",
       "acceptance": [
         "AT-BLOCKED-2"
+      ],
+      "openapiSecurity": [
+        [
+          "apimSubscriptionKey",
+          "bearerAuth",
+          "refreshCookie"
+        ]
       ]
     },
     {
@@ -1166,6 +1267,13 @@
       "decision": "D-14",
       "acceptance": [
         "AT-BLOCKED-2"
+      ],
+      "openapiSecurity": [
+        [
+          "apimSubscriptionKey",
+          "bearerAuth",
+          "refreshCookie"
+        ]
       ]
     },
     {
@@ -1225,6 +1333,13 @@
       "decision": "D-14",
       "acceptance": [
         "AT-BLOCKED-2"
+      ],
+      "openapiSecurity": [
+        [
+          "apimSubscriptionKey",
+          "bearerAuth",
+          "refreshCookie"
+        ]
       ]
     },
     {
@@ -1286,6 +1401,13 @@
       "decision": "D-14",
       "acceptance": [
         "AT-BLOCKED-2"
+      ],
+      "openapiSecurity": [
+        [
+          "apimSubscriptionKey",
+          "bearerAuth",
+          "refreshCookie"
+        ]
       ]
     },
     {
@@ -1298,7 +1420,7 @@
         "users.api.http.enabled"
       ],
       "requestJava": "Bearer JWT",
-      "requestOpenapi": "bearer",
+      "requestOpenapi": "same joint bearer + subscription-key requirement",
       "responseJava": "200 {methods:[{provider, email, status}]}",
       "responseOpenapi": "200 MethodsResponse {userId, methods:[{authMethodId, method}]}",
       "transport": {
@@ -1339,21 +1461,29 @@
       "decision": "D-14",
       "acceptance": [
         "AT-BLOCKED-2"
-      ]
+      ],
+      "openapiSecurity": [
+        [
+          "apimSubscriptionKey",
+          "bearerAuth"
+        ]
+      ],
+      "javaAuth": "internal JWT only",
+      "securityNote": "OpenAPI Draft declares bearerAuth AND apimSubscriptionKey inside ONE security requirement object, i.e. both are required (not alternatives). Java observed: requires only the internal JWT and never reads Ocp-Apim-Subscription-Key. Proposed target (not approved): SPA with no confidential subscription key, subject to MTEC-41 and validation on a real APIM."
     },
     {
       "operationId": "linkOwnAuthMethod",
       "method": "POST",
       "path": "/v1/me/auth-methods",
       "group": "blocked",
-      "javaState": "gated-refuses",
+      "javaState": "gated",
       "flags": [
         "users.api.http.enabled",
         "users.auth-methods.linking.enabled (default false)"
       ],
       "requestJava": "{provider, currentAttemptId, newAttemptId, credential?}; answers 503 while linking is disabled",
       "requestOpenapi": "LinkMethodsRequest {reauthenticationProofId, newMethodProofId}",
-      "responseJava": "201 method object when enabled; 503 AUTH_TEMPORARILY_UNAVAILABLE by default",
+      "responseJava": "201 method object when users.auth-methods.linking.enabled=true (Java can complete the link); 503 AUTH_TEMPORARILY_UNAVAILABLE by default",
       "responseOpenapi": "200",
       "transport": {
         "cookies": [],
@@ -1399,6 +1529,13 @@
       "decision": "D-14",
       "acceptance": [
         "AT-BLOCKED-2"
+      ],
+      "openapiSecurity": [
+        [
+          "apimSubscriptionKey",
+          "bearerAuth",
+          "refreshCookie"
+        ]
       ]
     }
   ],

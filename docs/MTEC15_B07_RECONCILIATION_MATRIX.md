@@ -29,9 +29,9 @@
 | `requestEmailMethodProof` | POST `/v1/auth/proofs/email/requests` | gated | 202 400 401 403 503 | 202 400 401 403 409 410 429 503 | jwt_cookie / required / required | M-30 | D-14 |
 | `verifyEmailMethodProof` | POST `/v1/auth/proofs/email/confirm` | gated | 200 400 401 403 409 410 503 | 200 400 401 403 409 410 429 503 | jwt_cookie / required / required | M-31 | D-14 |
 | `getOwnAuthMethods` | GET `/v1/me/auth-methods` | gated | 200 401 503 | 200 401 403 429 503 | jwt / none / none | M-32 | D-14 |
-| `linkOwnAuthMethod` | POST `/v1/me/auth-methods` | gated-refuses | 201 400 401 403 409 503 | 200 400 401 403 409 410 429 503 | jwt_cookie / required / required | M-33 | D-14 |
+| `linkOwnAuthMethod` | POST `/v1/me/auth-methods` | gated | 201 400 401 403 409 503 | 200 400 401 403 409 410 429 503 | jwt_cookie / required / required | M-33 | D-14 |
 
-`gated`: la ruta existe en Java pero solo se registra con sus flags y topología verificada (todos apagados por defecto). `gated-refuses`: existe y rechaza por diseño. `metadata-gated`: requiere `users.internal-jwt.enabled`.
+`gated`: la ruta existe en Java pero solo se registra con sus flags y topología verificada (todos apagados por defecto). `gated-refuses`: existe y rechaza en toda configuración del código actual (solo `session/activity`); `linkOwnAuthMethod` es `gated`, porque Java puede completar el vínculo con su flag activo. `metadata-gated`: requiere `users.internal-jwt.enabled`.
 
 ## 2. Detalle por operación
 
@@ -168,9 +168,10 @@
 
 - **Flags (Java):** `users.api.http.enabled`, `users.internal-jwt.enabled`
 - **Request Java:** Authorization: Bearer <internal JWT>; exactly one header
-- **Request OpenAPI:** bearer or APIM key declared in security
+- **Request OpenAPI:** Authorization: Bearer plus Ocp-Apim-Subscription-Key, both required by the single security object
 - **Response Java:** 200 UserProfileV1 {id, nombreUsuario, nombre, apellidos, correo, fotoPerfil, fechaRegistro(ISO), createdAt(epoch), verificado, estado:'activo'}
 - **Response OpenAPI:** 200 UserProfileV1 (same fields)
+- **Seguridad (OpenAPI Draft vs Java vs objetivo):** OpenAPI `security` = un solo objeto con `bearerAuth` **y** `apimSubscriptionKey`: el borrador exige ambas condiciones, no una alternativa. Java observado: internal JWT only; no lee la subscription key. Objetivo propuesto (no aprobado): SPA sin subscription key confidencial, sujeto a MTEC-41 y a validación en un APIM real.
 - **Cookies / JWT / Origin / CSRF:** cookies: ninguna; JWT: sí; Origin: no; CSRF: no
 - **Códigos HTTP y envelope:** Java 200 401 403 404 503; OpenAPI 200 400 401 403 404 409 429 503; envelope: ErrorEnvelope details=[]
 - **APIM (`infra/apim/operations.json`):** auth `jwt`, cookie `none`, CSRF `none`, estado local `reconciled` (etiqueta del manifiesto, no aprobación; `approvals.*` = null)
@@ -185,9 +186,10 @@
 
 - **Flags (Java):** `users.api.http.enabled`, `users.internal-jwt.enabled`
 - **Request Java:** Bearer JWT; body exactly {nombreUsuario, nombre, apellidos} all strings; no CSRF header required
-- **Request OpenAPI:** UpdateUserRequest (same three fields)
+- **Request OpenAPI:** UpdateUserRequest; same joint bearer + subscription-key requirement
 - **Response Java:** 200 UpdateUserResponseV1 incl. message 'Perfil actualizado'
 - **Response OpenAPI:** 200 UpdateUserResponseV1
+- **Seguridad (OpenAPI Draft vs Java vs objetivo):** OpenAPI `security` = un solo objeto con `bearerAuth` **y** `apimSubscriptionKey`: el borrador exige ambas condiciones, no una alternativa. Java observado: internal JWT only; no lee la subscription key. Objetivo propuesto (no aprobado): SPA sin subscription key confidencial, sujeto a MTEC-41 y a validación en un APIM real.
 - **Cookies / JWT / Origin / CSRF:** cookies: ninguna; JWT: sí; Origin: no; CSRF: no
 - **Códigos HTTP y envelope:** Java 200 400 401 403 404 409 503; OpenAPI 200 400 401 403 404 409 429 503; envelope: ErrorEnvelope details=[]
 - **APIM (`infra/apim/operations.json`):** auth `jwt`, cookie `none`, CSRF `none`, estado local `reconciled` (etiqueta del manifiesto, no aprobación; `approvals.*` = null)
@@ -200,9 +202,10 @@
 
 - **Flags (Java):** `users.api.http.enabled`, `users.internal-jwt.enabled`
 - **Request Java:** Bearer JWT; path id must equal token sub, else 403 FORBIDDEN; malformed id 400
-- **Request OpenAPI:** owner only
+- **Request OpenAPI:** owner only; same joint bearer + subscription-key requirement
 - **Response Java:** 200 UserProfileV1
 - **Response OpenAPI:** 200 UserProfileV1
+- **Seguridad (OpenAPI Draft vs Java vs objetivo):** OpenAPI `security` = un solo objeto con `bearerAuth` **y** `apimSubscriptionKey`: el borrador exige ambas condiciones, no una alternativa. Java observado: internal JWT only (+ path id = sub); no lee la subscription key. Objetivo propuesto (no aprobado): SPA sin subscription key confidencial, sujeto a MTEC-41 y a validación en un APIM real.
 - **Cookies / JWT / Origin / CSRF:** cookies: ninguna; JWT: sí; Origin: no; CSRF: no
 - **Códigos HTTP y envelope:** Java 200 400 401 403 404 503; OpenAPI 200 400 401 403 404 409 429 503; envelope: ErrorEnvelope details=[]
 - **APIM (`infra/apim/operations.json`):** auth `jwt`, cookie `none`, CSRF `none`, estado local `reconciled` (etiqueta del manifiesto, no aprobación; `approvals.*` = null)
@@ -216,9 +219,10 @@
 
 - **Flags (Java):** `users.api.http.enabled`, `users.internal-jwt.enabled`
 - **Request Java:** Bearer JWT; path id equals sub; same three-field body
-- **Request OpenAPI:** owner only; UpdateUserRequest
+- **Request OpenAPI:** owner only; UpdateUserRequest; same joint bearer + subscription-key requirement
 - **Response Java:** 200 UpdateUserResponseV1
 - **Response OpenAPI:** 200 UpdateUserResponseV1
+- **Seguridad (OpenAPI Draft vs Java vs objetivo):** OpenAPI `security` = un solo objeto con `bearerAuth` **y** `apimSubscriptionKey`: el borrador exige ambas condiciones, no una alternativa. Java observado: internal JWT only (+ path id = sub); no lee la subscription key. Objetivo propuesto (no aprobado): SPA sin subscription key confidencial, sujeto a MTEC-41 y a validación en un APIM real.
 - **Cookies / JWT / Origin / CSRF:** cookies: ninguna; JWT: sí; Origin: no; CSRF: no
 - **Códigos HTTP y envelope:** Java 200 400 401 403 404 409 503; OpenAPI 200 400 401 403 404 409 429 503; envelope: ErrorEnvelope details=[]
 - **APIM (`infra/apim/operations.json`):** auth `jwt`, cookie `none`, CSRF `none`, estado local `reconciled` (etiqueta del manifiesto, no aprobación; `approvals.*` = null)
@@ -383,9 +387,10 @@
 
 - **Flags (Java):** `users.api.http.enabled`
 - **Request Java:** Bearer JWT
-- **Request OpenAPI:** bearer
+- **Request OpenAPI:** same joint bearer + subscription-key requirement
 - **Response Java:** 200 {methods:[{provider, email, status}]}
 - **Response OpenAPI:** 200 MethodsResponse {userId, methods:[{authMethodId, method}]}
+- **Seguridad (OpenAPI Draft vs Java vs objetivo):** OpenAPI `security` = un solo objeto con `bearerAuth` **y** `apimSubscriptionKey`: el borrador exige ambas condiciones, no una alternativa. Java observado: internal JWT only; no lee la subscription key. Objetivo propuesto (no aprobado): SPA sin subscription key confidencial, sujeto a MTEC-41 y a validación en un APIM real.
 - **Cookies / JWT / Origin / CSRF:** cookies: ninguna; JWT: sí; Origin: no; CSRF: no
 - **Códigos HTTP y envelope:** Java 200 401 503; OpenAPI 200 401 403 429 503; envelope: ErrorEnvelope details=[]
 - **APIM (`infra/apim/operations.json`):** auth `jwt`, cookie `none`, CSRF `none`, estado local `reconciled` (etiqueta del manifiesto, no aprobación; `approvals.*` = null)
@@ -400,7 +405,7 @@
 - **Flags (Java):** `users.api.http.enabled`, `users.auth-methods.linking.enabled (default false)`
 - **Request Java:** {provider, currentAttemptId, newAttemptId, credential?}; answers 503 while linking is disabled
 - **Request OpenAPI:** LinkMethodsRequest {reauthenticationProofId, newMethodProofId}
-- **Response Java:** 201 method object when enabled; 503 AUTH_TEMPORARILY_UNAVAILABLE by default
+- **Response Java:** 201 method object when users.auth-methods.linking.enabled=true (Java puede completar el vínculo); 503 AUTH_TEMPORARILY_UNAVAILABLE por defecto
 - **Response OpenAPI:** 200
 - **Cookies / JWT / Origin / CSRF:** cookies: ninguna; JWT: sí; Origin: no; CSRF: sí
 - **Códigos HTTP y envelope:** Java 201 400 401 403 409 503; OpenAPI 200 400 401 403 409 410 429 503; envelope: ErrorEnvelope details=[]
@@ -491,6 +496,8 @@
 | M-34 | createMethodProofAttempt | doc-only | D-14 | Java uses method value 'institutional_email' (underscore); OpenAPI AuthMethod uses 'institutional-email' (hyphen). Pick one spelling before any client is generated. |
 
 ### Separación por tipo de cambio
+
+Inventario: M-01 a M-34 (34 divergencias de operaciones) y A-01 a A-09 (9 del consumidor Angular). `kind` y `priority` son etiquetas editoriales de triaje: no son una clasificación exhaustiva del impacto de seguridad ni sustituyen una revisión de seguridad. Las columnas Java provienen de inspección estática, no de una ejecución HTTP integrada.
 
 - **doc-only** (13): se pueden corregir en texto/fixtures sin tocar comportamiento. Este incremento aplica las correcciones de descripciones históricas; el resto se deja anotado.
 - **behavior** (17): requieren cambiar Java o Angular; no se aplicaron.

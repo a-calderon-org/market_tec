@@ -1,6 +1,6 @@
 # MTEC-15 / B07 — Incremento 1: núcleo de autenticación Angular ↔ ms-users
 
-**Fecha:** 2026-11-07. **Estado:** plan propuesto; nada de lo descrito está aprobado ni implementado. **Alcance:** Google → intento con nonce → intercambio de credencial → JWT interno → bootstrap de sesión → perfil → refresh `rotate` → logout `current`. **Fuera de alcance:** Magic Link (D-02), actividad (D-03), pruebas y vínculos (D-14), `refresh continue` y `logout all` (D-10), Catalog y Notifications.
+**Fecha:** 2026-11-07. **Estado:** plan propuesto; nada de lo descrito está aprobado ni implementado. **D-07 (refresh entre pestañas) y D-11 (errores y reintentos) siguen pendientes de aprobación: las secciones 5, 6 y 8 son propuestas en discusión, no algoritmos autorizados.** **Alcance:** Google → intento con nonce → intercambio de credencial → JWT interno → bootstrap de sesión → perfil → refresh `rotate` → logout `current`. **Fuera de alcance:** Magic Link (D-02), actividad (D-03), pruebas y vínculos (D-14), `refresh continue` y `logout all` (D-10), Catalog y Notifications.
 
 Cada paso lleva el id de la decisión abierta en el [registro de decisiones](MTEC15_B07_DECISION_REGISTER.md). Si una decisión cambia, el paso cambia con ella. El flujo está codificado en [`proposed-core-flow.json`](../contracts/examples/auth/proposed-core-flow.json) y comprobado contra el OpenAPI por `test_b07_reconciliation.py`. El comportamiento actual de ms-users está en [`observed-ms-users-2089897.json`](../contracts/examples/auth/observed-ms-users-2089897.json) y las diferencias en la [matriz](MTEC15_B07_RECONCILIATION_MATRIX.md).
 
@@ -28,7 +28,7 @@ Cada paso lleva el id de la decisión abierta en el [registro de decisiones](MTE
 
 `AuthResponse.user.userId` (y `SessionResponse.user.userId` tras recargar) es la única fuente (D-08). Cambios:
 - `GoogleAuthService.user` deja de derivarse del Google `sub`; su `id` pasa a ser el `userId` interno.
-- `profile.ts:25` y `my-publications.ts:29` dejan de usar `'USR-001'`. Perfil: `GET/PUT /v1/me/profile`, sin id en la ruta.
+- (Seguimiento Jira: MTEC-10; no se modificó Jira.) `profile.ts:25` y `my-publications.ts:29` dejan de usar `'USR-001'`. Perfil: `GET/PUT /v1/me/profile`, sin id en la ruta.
 - "Mis publicaciones" no tiene contrato de Catalog que acepte el principal. Mientras no exista, la pantalla queda bloqueada tras el flag; no se inventa un id.
 
 ## 4. Cookies HttpOnly, Origin y CSRF
@@ -42,25 +42,25 @@ Cada paso lleva el id de la decisión abierta en el [registro de decisiones](MTE
 | CSRF | Intento → `csrfToken` del intento. Sesión → `csrfToken` de `AuthResponse`/`SessionResponse`. Siempre en `X-CSRF-Token`, solo en memoria. |
 | SameSite | Java emite `Lax`. Solo válido con hosts *same-site* HTTPS; los flags de topología verificada siguen apagados hasta tener evidencia (D-04). |
 
-## 5. Recuperar la sesión tras recargar (D-01, D-07)
+## 5. Recuperar la sesión tras recargar (propuesta, D-01 y D-07)
 
 1. La memoria está vacía.
-2. `GET /v1/auth/session` con la cookie. `200` → `user`, `session`, `csrfToken` (sin JWT). `401 REFRESH_INVALID` → no hay sesión: `/login`, sin reintento.
-3. Dentro del lock entre pestañas, `POST /v1/auth/refresh` `{mode:"rotate"}` con el `csrfToken` recién obtenido. `200` → `token` y `csrfToken` nuevos.
-4. El `authGuard` espera ambos pasos antes de dejar pasar. `GET /v1/auth/session` no cuenta como actividad.
+2. Se entra en la sección crítica entre pestañas (sección 6). Dentro de ella: `GET /v1/auth/session` con la cookie. `200` → `user`, `session`, `csrfToken` (sin JWT). `401 REFRESH_INVALID` → no hay sesión: `/login`, sin reintento.
+3. Todavía dentro de la sección crítica, un único `POST /v1/auth/refresh` `{mode:"rotate"}` con ese `csrfToken`. `200` → `token` y `csrfToken` nuevos, que se aplican a la memoria antes de salir de la sección.
+4. El `authGuard` espera ambos pasos. `GET /v1/auth/session` no cuenta como actividad.
 
-## 6. Dos pestañas y respuestas perdidas (D-07, política C)
+## 6. Dos pestañas y respuestas perdidas (D-07, PENDIENTE; política C)
 
-La política C implica que cada generación de refresh se consume una sola vez y que un 401 aislado no revoca a la ganadora.
+La política C implica que cada generación de refresh se consume una sola vez y que un 401 aislado no revoca a la ganadora. Lo siguiente es lo que se propone discutir; no está aprobado.
 
-- **Una sola rotación en vuelo por pestaña** (cola de promesas) y **un lock entre pestañas** con `navigator.locks` (fallback: lock con `BroadcastChannel`).
-- **Dentro del lock, antes de rotar**, `GET /v1/auth/session` para tomar el `csrfToken` vigente. Sin esto, la pestaña que perdió la carrera envía un CSRF de la generación anterior, y Java lo trata como prueba inválida (`401 REFRESH_INVALID`).
-- **No se comparten credenciales entre pestañas.** El canal solo emite "se rotó"; cada pestaña obtiene su propio JWT al necesitarlo. Compartir el JWT exige aprobación expresa.
-- **`401 REFRESH_INVALID` en una pestaña:** no cierra la sesión. `GET /v1/auth/session` decide: `200` → otra pestaña ganó, se toma el CSRF nuevo y, como máximo, **una** rotación nueva; `401` → reautenticar.
-- **Respuesta perdida** (red o timeout): no se repite la misma petición. Se consulta `GET /v1/auth/session`. Si la cookie nueva llegó, la sesión está viva y se hace una rotación nueva con el CSRF devuelto. Si el servidor consumió la generación y la cookie nueva no llegó, no hay gracia: reautenticar.
-- **Sin bucles:** máximo una rotación por demanda; sin reintentos automáticos del refresh.
-
-Los reintentos de peticiones de negocio tras un `401 AUTH_REQUIRED` (D-11) son distintos: se rota una vez y se repite la petición original **una** vez. Debe aclararse en la revisión de Angular para que no se lea como un retry automático del refresh.
+- **Un refresh en vuelo por pestaña** (cola de promesas) y **un único `POST /v1/auth/refresh` por demanda de token**.
+- **Exclusión mutua real entre pestañas** (candidato: Web Locks) que cubre juntas las tres operaciones: bootstrap (`GET /session`), refresh y aplicación del resultado a la memoria. `BroadcastChannel` se usa solo para señales (p. ej. "se rotó", "logout"); no es un mutex suficiente.
+- **El CSRF se obtiene dentro de la sección crítica**, nunca antes de adquirirla. Si no, la pestaña que esperaba el lock envía el CSRF de la generación anterior y Java lo trata como prueba inválida.
+- **No se comparten credenciales entre pestañas.** Cada pestaña obtiene su propio JWT al necesitarlo; compartirlo exige aprobación expresa.
+- **Tras un fallo del refresh** (`401 REFRESH_INVALID`, timeout o error de red) se hace `GET /v1/auth/session` **solo para reconciliar el estado**. No se encadena otro POST automáticamente. Si responde `200`, la sesión sigue viva; el siguiente refresh solo ocurre ante una **nueva** demanda de token, dentro de la sección crítica. Si responde `401`, o no se puede recuperar una sesión válida, se reautentica. Con la cookie consumida y la nueva sin llegar no hay gracia (política C).
+- **Un `401 REFRESH_INVALID` no cierra por sí mismo la sesión** en otra pestaña: se reconcilia con `GET /session` antes de descartar el estado.
+- **Coordinación con logout:** un logout, propio o de otra pestaña, cancela refresh y restauraciones pendientes y marca la sesión local como cerrada, de modo que una restauración tardía no reponga credenciales.
+- **Sin bucles ni reintentos automáticos del refresh.**
 
 ## 7. Cómo se dejan de usar `USR-001` y el token Google
 
@@ -72,11 +72,14 @@ Los reintentos de peticiones de negocio tras un `401 AUTH_REQUIRED` (D-11) son d
 | `restoreSession()` decodifica el token almacenado | Bootstrap + refresh (sección 5) |
 | `USR-001`, Google `sub` | `AuthResponse.user.userId` |
 
-## 8. Errores del servidor en Angular (D-11)
+## 8. Errores del servidor en Angular (D-11, PENDIENTE)
 
-- Se interpreta el envelope `{error:{code,message,details,correlationId,timestamp}}`. Angular lee `error.error.code`, nunca `message` (A-07).
-- La tabla completa de acciones está en `errorMap` de [`proposed-core-flow.json`](../contracts/examples/auth/proposed-core-flow.json) y cubre los 21 códigos del OpenAPI más los 9 que Java emite fuera del enum. Un código desconocido produce un error genérico y nunca habilita un fallback a identidad Google.
-- Resumen: `CSRF_INVALID`, `ATTEMPT_CONSUMED`, `ATTEMPT_EXPIRED` → crear otro intento. `REFRESH_INVALID` → verificar con `GET /session` (sección 6). `AUTH_REQUIRED` en negocio → una rotación y un reintento. `AUTH_TEMPORARILY_UNAVAILABLE` → mensaje de no disponible (también para `register` con el registro apagado). `FORBIDDEN` → denegación, nunca dispara refresh.
+- El envelope es `{error:{code,message,details,correlationId,timestamp}}`. En Angular `HttpErrorResponse.error` es el cuerpo, así que el código se lee con `error.error?.error?.code`, nunca de `message` (A-07).
+- Se distinguen cuatro casos: **error de red/CORS** (`status === 0`, sin cuerpo), **401**, **403** y **envelope inesperado** (cuerpo ausente, no objeto, o sin `error.code` textual). Un envelope inesperado o un código desconocido produce un error genérico y nunca habilita un fallback a identidad Google.
+- La tabla de acciones propuestas está en `errorMap` de [`proposed-core-flow.json`](../contracts/examples/auth/proposed-core-flow.json) y cubre los 21 códigos del OpenAPI más los 9 que Java emite fuera del enum.
+- `CSRF_INVALID`, `ATTEMPT_CONSUMED`, `ATTEMPT_EXPIRED` → crear otro intento. `REFRESH_INVALID` → reconciliar con `GET /session` (sección 6). `AUTH_TEMPORARILY_UNAVAILABLE` → mensaje de no disponible (también para `register` con el registro apagado). `FORBIDDEN` → denegación; nunca dispara refresh.
+- **`401 AUTH_REQUIRED` en una petición de negocio no dispara automáticamente refresh y repetición de cualquier petición.** El primer incremento solo puede proponer, sujeto a aprobación, un reintento de un `GET` expresamente permitido, **una sola vez**, tras comprobar que el principal y la sesión son los mismos. `PUT /v1/me/profile` y las demás mutaciones quedan excluidas de cualquier política genérica de replay; ante ese 401 se informa o se reautentica.
+- `Retry-After` (p. ej. en 429) no es autorización para otro refresh automático.
 - Las respuestas 401 de Java traen `WWW-Authenticate: Bearer` aunque el fallo sea de cookie o prueba; Angular no lo usa para decidir.
 
 ## 9. Qué impide la exposición prematura
@@ -115,12 +118,12 @@ Verificables en cuanto exista la implementación; cada criterio nombra la prueba
 3. **AT-ATTEMPT-1/3.** El botón se inicializa con el `nonce` del intento. Con `purpose=register` y registro apagado, la UI muestra "no disponible".
 4. **AT-GOOGLE-2/3.** `CSRF_INVALID`, `ATTEMPT_CONSUMED` y `ATTEMPT_EXPIRED` crean un intento nuevo sin reutilizar el anterior.
 5. **AT-SESSION-1/2 y recarga.** Recargar con cookie válida restaura sesión con una llamada a `/session` y una a `/refresh`; sin cookie, `/login` sin reintentos.
-6. **AT-REFRESH-1/2/4.** Dos pestañas refrescando a la vez producen una sola rotación ganadora; la perdedora toma el CSRF nuevo vía `/session` y la sesión sigue abierta. Nunca hay dos refresh simultáneos desde una pestaña.
-7. **Respuesta perdida.** Con la respuesta del refresh descartada, se llama a `/session` y no se repite el refresh; con la cookie vieja consumida, la UI pide reautenticar.
+6. **AT-REFRESH-1/2/4 (sujeto a D-07).** Con dos pestañas refrescando a la vez, la sección crítica serializa bootstrap, refresh y aplicación del resultado; la pestaña que espera obtiene el CSRF dentro de la sección. Nunca hay dos refresh simultáneos desde una pestaña ni un segundo POST encadenado tras un fallo.
+7. **Fallo del refresh (sujeto a D-07).** Con la respuesta descartada, un `401 REFRESH_INVALID` o un timeout, la UI llama a `GET /session` solo para reconciliar y no emite otro POST; si no hay sesión recuperable, pide reautenticar. Un logout en otra pestaña impide una restauración tardía.
 8. **AT-LOGOUT-1.** Logout llama a `/logout` con CSRF, limpia memoria y no deja credenciales; una segunda llamada sin cookie responde 204.
-9. **AT-PROFILE-2 / D-11.** Un `401 AUTH_REQUIRED` en negocio provoca una rotación y un reintento; el segundo 401 reautentica, sin bucle.
+9. **AT-PROFILE-2 / D-11 (sujeto a aprobación).** Un `401 AUTH_REQUIRED` en negocio no provoca refresco ni repetición automática de peticiones. Si D-11 aprueba un reintento, solo aplica a `GET` permitidos, una vez y con el mismo principal y sesión; `PUT /v1/me/profile` nunca se repite. El código se lee con `error.error?.error?.code` y se distingue red/CORS, 401, 403 y envelope inesperado.
 10. **Bloqueos.** Ningún test de Angular llama a las operaciones de `operationsAngularMustNotCall`; un `grep` de CI las rechaza.
-11. **Flags.** Con `authCoreV2=false` el comportamiento y las pruebas actuales no cambian.
+11. **Flags.** Con `authCoreV2=false` el comportamiento y las pruebas actuales no cambian. Eso conserva el cliente legado **con sus riesgos** (token de Google en `sessionStorage`, `USR-001`); el flag no certifica la seguridad del frontend.
 12. **Ningún secreto.** Ninguna petición lleva `Ocp-Apim-Subscription-Key` ni el valor se compila en el bundle.
 
 Las pruebas contra ms-users real (nonce de GIS, cookies reales, preflight, SameSite) requieren hosts same-site HTTPS y no pueden cerrarse con mocks: siguen pendientes de D-04.

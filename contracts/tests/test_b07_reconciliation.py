@@ -6,6 +6,7 @@ service, do not approve B07 and do not record any team conformity.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import unittest
@@ -176,6 +177,55 @@ class B07ReconciliationTest(unittest.TestCase):
         else:
             self.assertTrue(errors, "request marked divergent now validates; update the fixture")
 
+    def test_google_exchange_cases_carry_coherent_preconditions(self):
+        """Each Google exchange case must be reachable in the order Java checks things."""
+        order = self.observed["javaCheckOrder"]
+        self.assertLess(order.index("attempt cookie + X-CSRF-Token (else 403 CSRF_INVALID)"),
+                        order.index("persisted attempt: missing->401, consumed->409 ATTEMPT_CONSUMED, expired->410 ATTEMPT_EXPIRED"))
+        self.assertIn("static-inspection", self.observed["evidence"])
+        cases = [c for c in self.observed["cases"] if c["operationId"] == "exchangeGoogleCredential"]
+        self.assertEqual(
+            {"obs-google-exchange-200", "obs-google-csrf-invalid-403", "obs-google-unknown-identity-401",
+             "obs-google-attempt-consumed-409", "obs-google-attempt-expired-410"},
+            {c["id"] for c in cases})
+        for case in cases:
+            with self.subTest(case["id"]):
+                pre = case["preconditions"]
+                headers = case["request"]["headers"]
+                body = case["request"]["body"]
+                secret = pre["attemptCookieSecret"]
+                self.assertRegex(secret, r"^[0-9a-f]{64}$")
+                self.assertEqual("__Host-mtec-attempt=" + secret, headers["Cookie"])
+                self.assertEqual("web", headers["X-MTEC-Client"])
+                self.assertTrue(headers["Origin"].startswith("https://"))
+                self.assertRegex(body["attemptId"], r"^[0-9a-f]{32}$")
+                self.assertEqual(body["attemptId"], pre["persistedAttempt"]["attemptId"])
+                expected_csrf = hashlib.sha256(("mtec-attempt-csrf:" + secret).encode("ascii")).hexdigest()
+                status = case["response"]["status"]
+                if status == 403:
+                    self.assertNotEqual(expected_csrf, headers.get("X-CSRF-Token"))
+                    continue
+                self.assertEqual(expected_csrf, headers["X-CSRF-Token"])
+                attempt, now = pre["persistedAttempt"], pre["serverTime"]
+                if status == 409:
+                    self.assertTrue(attempt["consumed"])
+                    self.assertEqual("consumed", attempt["state"])
+                elif status == 410:
+                    self.assertFalse(attempt["consumed"])
+                    self.assertLessEqual(attempt["expiresAt"], now)
+                    self.assertEqual("expired", attempt["state"])
+                else:
+                    self.assertFalse(attempt["consumed"])
+                    self.assertGreater(attempt["expiresAt"], now)
+                    self.assertEqual("pending", attempt["state"])
+                    proof = pre["googleProof"]
+                    for flag in ("verified", "nonceMatchesAttempt", "issuerAllowed", "audienceMatches",
+                                 "emailVerified", "domainAllowed"):
+                        self.assertIs(True, proof[flag], flag)
+                    self.assertIs(status == 200, proof["identityLinkExists"])
+                if status in (409, 410):
+                    self.assertIsNone(pre["googleProof"])
+
     def test_observed_error_code_inventory_is_consistent(self):
         outside = set(self.observed["javaErrorCodesNotInOpenapiEnum"])
         never = set(self.observed["openapiErrorCodesNeverEmittedByJava"])
@@ -263,6 +313,63 @@ class B07ReconciliationTest(unittest.TestCase):
         self.assertIn("users.auth-methods.linking.enabled", gates["msUsersFlagsThatMustStayOff"])
         self.assertIs(False, gates["angularFeatureFlag"]["default"])
         self.assertEqual(["abuse_protection", "ms_users_contract"], gates["apimApprovalsRemainNull"])
+
+    def test_matrix_security_matches_openapi_and_distinguishes_java_and_target(self):
+        for row in self.matrix["operations"]:
+            _, _, op = self.ops_by_id[row["operationId"]]
+            self.assertEqual([sorted(r) for r in op.get("security", [])], row["openapiSecurity"], row["operationId"])
+        for operation_id in ("getOwnUserProfile", "updateOwnUserProfile", "getUserProfile", "updateUserProfile",
+                             "getOwnAuthMethods"):
+            row = next(r for r in self.matrix["operations"] if r["operationId"] == operation_id)
+            self.assertEqual([["apimSubscriptionKey", "bearerAuth"]], row["openapiSecurity"], operation_id)
+            self.assertIn("internal JWT only", row["javaAuth"])
+            self.assertNotIn("bearer or APIM", row["requestOpenapi"])
+            self.assertIn("not alternatives", row["securityNote"])
+            self.assertIn("MTEC-41", row["securityNote"])
+
+    def test_link_route_is_gated_not_refusing_and_activity_is_the_only_refusal(self):
+        states = {r["operationId"]: r["javaState"] for r in self.matrix["operations"]}
+        self.assertEqual("gated", states["linkOwnAuthMethod"])
+        self.assertEqual(["recordSessionActivity"], [k for k, v in states.items() if v == "gated-refuses"])
+
+    def test_inventory_counts_and_editorial_note(self):
+        ids = sorted(x["id"] for r in self.matrix["operations"] for x in r["divergences"])
+        self.assertEqual([f"M-{n:02d}" for n in range(1, 35)], ids)
+        self.assertEqual([f"A-{n:02d}" for n in range(1, 10)], sorted(x["id"] for x in self.matrix["angularDivergences"]))
+        self.assertIn("not an exhaustive security-impact classification", self.matrix["legend"]["editorialNote"])
+        self.assertIn("static inspection", self.matrix["legend"]["evidence"])
+        self.assertIn("34 divergencias", MATRIX_DOC.read_text(encoding="utf-8"))
+
+    def test_d07_and_d11_are_pending_proposals_without_chained_actions(self):
+        self.assertEqual({"D-07": "pending", "D-11": "pending"}, self.proposed["pendingDecisions"])
+        section = self.proposed["criticalSection"]
+        self.assertTrue({"bootstrap", "refresh", "apply-result-to-memory"} <= set(section["covers"]))
+        self.assertIs(True, section["csrfObtainedInside"])
+        self.assertEqual(1, section["maxRefreshPostsPerDemand"])
+        self.assertEqual(1, section["maxRefreshInFlightPerTab"])
+        self.assertIn("BroadcastChannel only for signals", section["mutex"])
+        self.assertIs(False, section["shareCredentialsBetweenTabs"])
+        for name, flow in self.proposed["flows"].items():
+            posts = [s for s in flow["steps"] if s.get("call") == "refreshSession"]
+            self.assertLessEqual(len(posts), 1, f"{name} chains more than one refresh POST")
+            if name in ("lostResponse", "loserTab"):
+                self.assertEqual([], posts, f"{name} must only reconcile with GET /session")
+                self.assertEqual("proposed-pending-approval", flow["status"])
+        retry = self.proposed["retryPolicy"]
+        self.assertIs(False, retry["genericReplayAllowed"])
+        self.assertIs(False, retry["retryAfterAuthorizesRefresh"])
+        self.assertIn("PUT /v1/me/profile", retry["mutationsExcluded"])
+        self.assertEqual(1, retry["getRetry"]["maxAttempts"])
+        self.assertEqual("error.error?.error?.code", self.proposed["angularErrorParsing"]["codePath"])
+        self.assertEqual("no-generic-replay", self.proposed["errorMap"]["AUTH_REQUIRED"]["retry"])
+        for doc in (PLAN_DOC, REGISTER_DOC):
+            text = doc.read_text(encoding="utf-8")
+            self.assertIn("PENDIENTE", text)
+            self.assertIn("error.error?.error?.code", text)
+        register = REGISTER_DOC.read_text(encoding="utf-8")
+        self.assertIn("MTEC-10", register)
+        self.assertIn("refresh_audit", register)
+        self.assertIn("consumed_confirmed", register)
 
     # --------------------------------------------------- documentation checks
 
