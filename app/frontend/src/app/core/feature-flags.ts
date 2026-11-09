@@ -1,4 +1,5 @@
 import { InjectionToken } from '@angular/core';
+import { environment } from '../../environments/environment';
 
 /** Adaptador de `AuthApiPort` bajo `authCoreV2`. */
 export type AuthCoreV2Adapter =
@@ -31,7 +32,28 @@ export const DEFAULT_FEATURE_FLAGS: FeatureFlags = Object.freeze({
   authCoreV2HttpTopologyVerified: false,
 });
 
+/**
+ * Flags del build. Solo un build cuyo `environment.ts` declare `featureFlags` (p. ej. el preview de staging
+ * `d04`) cambia los valores; producción y CI no lo declaran y conservan `DEFAULT_FEATURE_FLAGS`. Solo se
+ * aceptan valores del tipo exacto: cualquier otro se ignora y queda el valor por defecto.
+ */
+export function resolveFeatureFlags(source: unknown): FeatureFlags {
+  if (typeof source !== 'object' || source === null) return DEFAULT_FEATURE_FLAGS;
+  const raw = source as Record<string, unknown>;
+  return Object.freeze({
+    authCoreV2: typeof raw['authCoreV2'] === 'boolean' ? raw['authCoreV2'] : DEFAULT_FEATURE_FLAGS.authCoreV2,
+    authCoreV2Adapter:
+      raw['authCoreV2Adapter'] === 'http' || raw['authCoreV2Adapter'] === 'mock'
+        ? raw['authCoreV2Adapter']
+        : DEFAULT_FEATURE_FLAGS.authCoreV2Adapter,
+    authCoreV2HttpTopologyVerified:
+      typeof raw['authCoreV2HttpTopologyVerified'] === 'boolean'
+        ? raw['authCoreV2HttpTopologyVerified']
+        : DEFAULT_FEATURE_FLAGS.authCoreV2HttpTopologyVerified,
+  });
+}
+
 export const FEATURE_FLAGS = new InjectionToken<FeatureFlags>('FEATURE_FLAGS', {
   providedIn: 'root',
-  factory: () => DEFAULT_FEATURE_FLAGS,
+  factory: () => resolveFeatureFlags((environment as { featureFlags?: unknown }).featureFlags),
 });
