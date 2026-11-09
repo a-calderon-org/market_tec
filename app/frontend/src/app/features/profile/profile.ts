@@ -1,6 +1,10 @@
 import { Component, computed, EventEmitter, inject, OnInit, Output, signal } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
+import { AuthApiError, AuthRequiredError } from '../../core/auth/v2/auth-contract';
+import { BusinessTransportBlockedError } from '../../core/auth/v2/business-transport';
+import { FEATURE_FLAGS } from '../../core/feature-flags';
+import { GoogleAuthService } from '../auth/services/google-auth.service';
 import { UpdateUser, User } from './models/user.model';
 import { UserService } from './services/user.service';
 
@@ -21,8 +25,19 @@ export class Profile implements OnInit {
   private readonly userService =
     inject(UserService);
 
-  readonly currentUserId =
-    'USR-001';
+  private readonly authCoreV2 =
+    inject(FEATURE_FLAGS).authCoreV2;
+
+  /**
+   * authCoreV2=false conserva el identificador fijo heredado. Con el flag
+   * activo solo se usa para saber si hay sesión: el perfil se pide a
+   * `/v1/me/profile` y el servidor deriva el usuario del JWT interno; nunca el
+   * sub de Google, el correo ni 'USR-001'. Sin sesión no se consulta nada.
+   */
+  readonly currentUserId: string | null =
+    this.authCoreV2
+      ? (inject(GoogleAuthService).user()?.id ?? null)
+      : 'USR-001';
 
   readonly user =
     signal<User | null>(
@@ -146,10 +161,16 @@ export class Profile implements OnInit {
     this.error.set(false);
     this.imageFailed.set(false);
 
-    this.userService
-      .getUser(
-        this.currentUserId
-      )
+    if (this.currentUserId === null) {
+      this.user.set(null);
+      this.error.set(true);
+      this.loading.set(false);
+      return;
+    }
+
+    (this.authCoreV2
+      ? this.userService.getMyProfile()
+      : this.userService.getUser(this.currentUserId))
       .subscribe({
         next: (user) => {
           this.user.set(
@@ -206,7 +227,8 @@ export class Profile implements OnInit {
 
     if (
       this.profileForm.invalid ||
-      this.saving()
+      this.saving() ||
+      this.currentUserId === null
     ) {
       this.profileForm
         .markAllAsTouched();
@@ -234,11 +256,9 @@ export class Profile implements OnInit {
       true
     );
 
-    this.userService
-      .updateUser(
-        this.currentUserId,
-        payload
-      )
+    (this.authCoreV2
+      ? this.userService.updateMyProfile(payload)
+      : this.userService.updateUser(this.currentUserId, payload))
       .subscribe({
         next: (response) => {
           this.user.set(
@@ -275,7 +295,7 @@ export class Profile implements OnInit {
 
         error: (
           error:
-            HttpErrorResponse
+            unknown
         ) => {
           this.saveError.set(
             true
@@ -357,10 +377,16 @@ export class Profile implements OnInit {
 
   private getErrorMessage(
     error:
-      HttpErrorResponse
+      unknown
   ): string {
+    if (this.authCoreV2) {
+      return this.getV2ErrorMessage(error);
+    }
+
     const apiMessage =
-      error.error?.message;
+      error instanceof HttpErrorResponse
+        ? error.error?.message
+        : undefined;
 
     if (
       typeof apiMessage ===
@@ -375,4 +401,39 @@ export class Profile implements OnInit {
     );
   }
 
+  /** Mensajes por código del sobre Java (`{error:{code}}`); nunca se reintenta. */
+  private getV2ErrorMessage(error: unknown): string {
+    if (error instanceof AuthRequiredError) {
+      return 'Tu sesión cambió o expiró. Vuelve a ingresar para editar tu perfil.';
+    }
+
+    if (error instanceof BusinessTransportBlockedError) {
+      return 'La edición del perfil no está disponible en este momento.';
+    }
+
+    const status = error instanceof HttpErrorResponse
+      ? error.status
+      : error instanceof AuthApiError ? error.status : 0;
+    const code = error instanceof HttpErrorResponse
+      ? (error.error?.error?.code as string | undefined)
+      : undefined;
+
+    if (status === 401) {
+      return 'Tu sesión expiró. Vuelve a ingresar para editar tu perfil.';
+    }
+
+    if (status === 409 && code === 'CONCURRENT_MODIFICATION') {
+      return 'Tu perfil cambió en otra sesión. Recarga e inténtalo de nuevo.';
+    }
+
+    if (status === 400) {
+      return 'Revisa los datos del perfil e inténtalo nuevamente.';
+    }
+
+    if (status === 503) {
+      return 'La edición del perfil no está disponible en este momento.';
+    }
+
+    return 'No fue posible actualizar el perfil. Inténtalo nuevamente.';
+  }
 }

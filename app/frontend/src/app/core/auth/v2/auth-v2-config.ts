@@ -1,0 +1,127 @@
+import { inject, InjectionToken } from '@angular/core';
+import { environment } from '../../../../environments/environment';
+import { FEATURE_FLAGS, FeatureFlags } from '../../feature-flags';
+
+declare const ngDevMode: unknown;
+
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+/**
+ * Valida la API base para el adaptador HTTP real y devuelve su forma normalizada
+ * (origen + ruta, sin barra final), o null si no es un destino autorizable.
+ *
+ * - URL absoluta: una ruta relativa o vacía es ambigua (dependería del host del
+ *   documento) y no se acepta como "la API".
+ * - `https:` obligatorio. `http:` solo hacia loopback y solo si `allowLoopbackHttp`
+ *   (pruebas locales en build de desarrollo).
+ * - Sin credenciales en la URL, sin query y sin fragmento.
+ *
+ * No decide hosts definitivos (D-04): solo rechaza configuraciones inseguras.
+ */
+export function resolveHttpApiBase(value: unknown, allowLoopbackHttp: boolean): string | null {
+  if (typeof value !== 'string') return null;
+
+  const raw = value.trim();
+  if (!raw || raw.includes('?') || raw.includes('#') || raw.includes('\\')) return null;
+
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return null;
+  }
+
+  const secure = url.protocol === 'https:';
+  const loopbackHttp =
+    allowLoopbackHttp && url.protocol === 'http:' && LOOPBACK_HOSTS.has(url.hostname);
+
+  if ((!secure && !loopbackHttp) || url.username || url.password || url.search || url.hash) {
+    return null;
+  }
+
+  const path = url.pathname.replace(/\/+$/, '');
+
+  return `${url.origin}${path}`;
+}
+
+/**
+ * ¿La configuración pide explícitamente el adaptador HTTP real? Exige las tres
+ * condiciones: `authCoreV2`, `authCoreV2Adapter === 'http'` y la declaración de
+ * topología HTTPS/CORS/cookies verificada (paralela a los flags de ms-users).
+ */
+export function requestsHttpAdapter(flags: Partial<FeatureFlags>): boolean {
+  return (
+    flags.authCoreV2 === true &&
+    flags.authCoreV2Adapter === 'http' &&
+    flags.authCoreV2HttpTopologyVerified === true
+  );
+}
+
+/**
+ * API base autorizada para el adaptador HTTP real, o null si el modo HTTP no
+ * está pedido o la configuración no es segura. Con null el núcleo v2 falla
+ * cerrado: no hay sesión real ni simulada y el transporte de negocio sigue bloqueado.
+ */
+export const AUTH_V2_HTTP_API_BASE = new InjectionToken<string | null>('AUTH_V2_HTTP_API_BASE', {
+  providedIn: 'root',
+  factory: () =>
+    requestsHttpAdapter(inject(FEATURE_FLAGS))
+      ? resolveHttpApiBase(
+          environment.apiBaseUrl,
+          typeof ngDevMode !== 'undefined' && !!ngDevMode,
+        )
+      : null,
+});
+
+/**
+ * Arranque en frío de staging (MTEC-12/D04): ms-users escala a cero y la primera petición tarda 35-47 s
+ * (medido 2026-11-09) en llegar a Java a través de APIM. Un tope menor abortaría el primer
+ * `POST /refresh` mientras Java aún puede rotar el refresh token, perdiendo la rotación. Debe quedar
+ * por debajo de los 240 s de APIM y del ingreso de Container Apps.
+ */
+export const AUTH_V2_COLD_START_BUDGET_MS = 70_000;
+
+/** Espera entre reintentos ante `503 BACKEND_WARMING` del proxy same-origin (dentro del mismo tope total). */
+export const AUTH_V2_WARMING_RETRY_MS = new InjectionToken<number>('AUTH_V2_WARMING_RETRY_MS', {
+  providedIn: 'root',
+  factory: () => 3_000,
+});
+
+/** Tope por petición del adaptador HTTP (las de sesión tienen además el del coordinador). */
+export const AUTH_V2_HTTP_TIMEOUT_MS = new InjectionToken<number>('AUTH_V2_HTTP_TIMEOUT_MS', {
+  providedIn: 'root',
+  factory: () => AUTH_V2_COLD_START_BUDGET_MS,
+});
+
+/**
+ * MTEC-37: presupuesto mínimo restante para EMPEZAR un POST. Por debajo, la escritura no se envía (el resultado
+ * sería incierto antes de que termine). Coincide con lo que exige el proxy same-origin: margen de tránsito (2 s)
+ * + `MIN_FORWARD_MS` (8 s); un proxy que recibiera menos contestaría `BACKEND_WARMING` sin enviarla.
+ */
+export const AUTH_V2_MIN_WRITE_START_MS = new InjectionToken<number>('AUTH_V2_MIN_WRITE_START_MS', {
+  providedIn: 'root',
+  factory: () => 10_000,
+});
+
+/**
+ * Cabecera del JWT interno. Static Web Apps SUSTITUYE `Authorization` antes de entregar la petición a la Function
+ * administrada (verificado 2026-11-09: llega siempre su propio token de 372 caracteres), así que hacia el proxy
+ * same-origin (`https://<swa>/api/...`) el JWT viaja en `X-MTEC-Authorization` y el proxy lo entrega a APIM como
+ * `Authorization`. Hacia cualquier otra API base se usa `Authorization`.
+ */
+export const SAME_ORIGIN_PROXY_AUTHORIZATION_HEADER = 'X-MTEC-Authorization';
+
+export function bearerHeaderName(
+  apiBaseUrl: unknown,
+  documentOrigin: string | undefined = globalThis.location?.origin,
+): string {
+  if (typeof apiBaseUrl !== 'string') return 'Authorization';
+  try {
+    const url = new URL(apiBaseUrl);
+    return url.origin === documentOrigin && /^\/api(\/|$)/.test(url.pathname)
+      ? SAME_ORIGIN_PROXY_AUTHORIZATION_HEADER
+      : 'Authorization';
+  } catch {
+    return 'Authorization';
+  }
+}

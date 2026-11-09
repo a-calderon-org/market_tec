@@ -1,0 +1,700 @@
+{
+  "$comment": "PROPOSED behavior for the coordinated core increment (Google -> attempt/nonce -> credential exchange -> internal JWT -> session bootstrap -> profile -> refresh rotate -> logout current). The flow as a whole and B07 are NOT approved (approved=false) and nothing here is implemented. Every item points to a decision in docs/MTEC15_B07_DECISION_REGISTER.md. contracts/tests/test_b07_reconciliation.py checks that it only uses operations and status codes the OpenAPI declares, that it never calls blocked operations, and that it does not use web storage. Scope of the 2026-11-07 approvals (MTEC-40): D-07 is approved as a DESIGN POLICY (cross-tab refresh and lost response) and D-11 is approved ONLY for the initial retry policy (no automatic replay of any business request after a 401, GET and all mutations included). The error catalog (new Java codes, OpenAPI enum, ACCESS_TOKEN_EXPIRED), new public DTOs, OpenAPI semantics and future per-operation retries remain PENDING. The approvals are not Angular, ms-users or security conformities and do not approve B07.",
+  "kind": "proposed",
+  "approved": false,
+  "contractVersion": "0.3.0-draft",
+  "storagePolicy": {
+    "accessToken": "memory",
+    "csrfToken": "memory",
+    "refreshToken": "httponly-cookie-managed-by-browser",
+    "authenticatedUser": "memory",
+    "googleCredential": "never-stored",
+    "localStorage": [],
+    "sessionStorage": [],
+    "indexedDb": [],
+    "decision": "D-01"
+  },
+  "credentialsPolicy": {
+    "withCredentialsRoutes": [
+      "/v1/auth/attempts",
+      "/v1/auth/google",
+      "/v1/auth/session",
+      "/v1/auth/refresh",
+      "/v1/auth/logout"
+    ],
+    "bearerRoutes": [
+      "/v1/me/profile",
+      "/v1/usuarios/{userId}"
+    ],
+    "neverSendBearerTo": [
+      "/v1/auth/attempts",
+      "/v1/auth/google",
+      "/v1/auth/session",
+      "/v1/auth/refresh",
+      "/v1/auth/logout",
+      "/.well-known/jwks.json",
+      "/.well-known/markettec-identity"
+    ],
+    "apimSubscriptionKeyFromSpa": false,
+    "requiredHeaders": {
+      "authPosts": [
+        "X-MTEC-Client: web",
+        "Content-Type: application/json"
+      ],
+      "csrfRoutes": [
+        "X-CSRF-Token"
+      ]
+    },
+    "decision": "D-04"
+  },
+  "operationsCalledByAngular": [
+    "createAuthenticationAttempt",
+    "exchangeGoogleCredential",
+    "getSessionState",
+    "refreshSession",
+    "logoutSession",
+    "getOwnUserProfile",
+    "updateOwnUserProfile"
+  ],
+  "operationsAngularMustNotCall": {
+    "recordSessionActivity": "D-03",
+    "createMethodProofAttempt": "D-14",
+    "verifyGoogleMethodProof": "D-14",
+    "requestEmailMethodProof": "D-14",
+    "verifyEmailMethodProof": "D-14",
+    "linkOwnAuthMethod": "D-14",
+    "getOwnAuthMethods": "D-14",
+    "requestInstitutionalEmailLink": "D-02",
+    "confirmInstitutionalEmailLink": "D-02",
+    "legacyGoogleRegistrationCompatibility": "D-06"
+  },
+  "unsupportedParameters": {
+    "refreshSession": {
+      "mode": [
+        "continue"
+      ],
+      "decision": "D-10"
+    },
+    "logoutSession": {
+      "scope": [
+        "all"
+      ],
+      "decision": "D-10"
+    }
+  },
+  "flows": {
+    "login": {
+      "decision": "D-06",
+      "steps": [
+        {
+          "n": 1,
+          "actor": "angular",
+          "call": "createAuthenticationAttempt",
+          "body": {
+            "method": "google",
+            "purpose": "login"
+          },
+          "expect": 200,
+          "keep": [
+            "attemptId",
+            "csrfToken",
+            "nonce",
+            "expiresAt"
+          ]
+        },
+        {
+          "n": 2,
+          "actor": "angular",
+          "action": "google.accounts.id.initialize({client_id, nonce, callback}) then renderButton",
+          "note": "The nonce from step 1 must be in initialize; a new attempt requires a new initialize."
+        },
+        {
+          "n": 3,
+          "actor": "google",
+          "action": "callback(credential)"
+        },
+        {
+          "n": 4,
+          "actor": "angular",
+          "call": "exchangeGoogleCredential",
+          "headers": {
+            "X-CSRF-Token": "<attempt csrfToken>"
+          },
+          "body": {
+            "attemptId": "<step 1>",
+            "credential": "<step 3>"
+          },
+          "expect": 200,
+          "keep": [
+            "token",
+            "csrfToken",
+            "user.userId",
+            "session"
+          ]
+        },
+        {
+          "n": 5,
+          "actor": "angular",
+          "action": "discard credential and attempt csrfToken; store token, csrfToken, user, session in memory; schedule refresh from session and token exp"
+        },
+        {
+          "n": 6,
+          "actor": "angular",
+          "call": "getOwnUserProfile",
+          "headers": {
+            "Authorization": "Bearer <token>"
+          },
+          "expect": 200
+        }
+      ]
+    },
+    "register": {
+      "decision": "D-06",
+      "steps": [
+        {
+          "n": 1,
+          "actor": "angular",
+          "call": "createAuthenticationAttempt",
+          "body": {
+            "method": "google",
+            "purpose": "register"
+          },
+          "expect": 200,
+          "unavailableStatus": 503
+        },
+        {
+          "n": 2,
+          "actor": "angular",
+          "call": "exchangeGoogleCredential",
+          "note": "same call as login; the server's stored purpose decides"
+        }
+      ]
+    },
+    "reload": {
+      "decision": "D-01",
+      "requires": "web-locks-lock-acquired",
+      "withoutMutualExclusion": "no refresh POST; secure reauthentication; BroadcastChannel is not a substitute for the mutex",
+      "steps": [
+        {
+          "n": 1,
+          "actor": "angular",
+          "action": "memory is empty after reload; enter the critical section only if the Web Locks lock is acquired"
+        },
+        {
+          "n": 2,
+          "actor": "angular",
+          "call": "getSessionState",
+          "expect": 200,
+          "keep": [
+            "csrfToken",
+            "user",
+            "session"
+          ],
+          "onStatus": {
+            "401": "unauthenticated (cookie absent or invalid, or session expired): leave the critical section, no refresh POST, go to /login, no retry"
+          },
+          "note": "inside the critical section"
+        },
+        {
+          "n": 3,
+          "actor": "angular",
+          "call": "refreshSession",
+          "body": {
+            "mode": "rotate"
+          },
+          "headers": {
+            "X-CSRF-Token": "<step 2 csrfToken>"
+          },
+          "expect": 200,
+          "keep": [
+            "token",
+            "csrfToken"
+          ],
+          "note": "same critical section, only after GET /session answered 200; at most one POST; result applied to memory before leaving it"
+        }
+      ]
+    },
+    "scheduledRefresh": {
+      "decision": "D-07",
+      "status": "design-policy-approved-2026-11-07",
+      "requires": "web-locks-lock-acquired",
+      "trigger": "token exp minus a margin chosen by Angular, never after session.expiresAt",
+      "steps": [
+        {
+          "n": 1,
+          "actor": "angular",
+          "action": "enter the critical section (single refresh in flight per tab, cross-tab exclusion with Web Locks)"
+        },
+        {
+          "n": 2,
+          "actor": "angular",
+          "call": "getSessionState",
+          "note": "inside the critical section: take the csrfToken currently valid for the cookie"
+        },
+        {
+          "n": 3,
+          "actor": "angular",
+          "call": "refreshSession",
+          "body": {
+            "mode": "rotate"
+          },
+          "expect": 200,
+          "note": "one POST per demand"
+        },
+        {
+          "n": 4,
+          "actor": "angular",
+          "action": "apply token and csrfToken to memory, then leave the critical section; signal 'rotated' without credentials"
+        }
+      ]
+    },
+    "lostResponse": {
+      "decision": "D-07",
+      "status": "design-policy-approved-2026-11-07",
+      "steps": [
+        {
+          "n": 1,
+          "actor": "angular",
+          "action": "refreshSession failed with a timeout or network error: do not repeat the request"
+        },
+        {
+          "n": 2,
+          "actor": "angular",
+          "call": "getSessionState",
+          "note": "reconcile state only; no automatic second POST",
+          "onStatus": {
+            "200": "session alive; a later new demand for a token may rotate inside the critical section",
+            "401": "cannot recover a valid session: reauthenticate (policy C, no grace)"
+          }
+        }
+      ]
+    },
+    "loserTab": {
+      "decision": "D-07",
+      "status": "design-policy-approved-2026-11-07",
+      "steps": [
+        {
+          "n": 1,
+          "actor": "angular",
+          "action": "refreshSession answered 401 REFRESH_INVALID"
+        },
+        {
+          "n": 2,
+          "actor": "angular",
+          "call": "getSessionState",
+          "note": "reconcile only; do not chain another POST",
+          "onStatus": {
+            "200": "the presented cookie is still valid at this instant and the response carries the currently valid csrfToken; it does not show that another tab refreshed, that a rotation happened, or that Angular holds a new access JWT. Do not chain another refresh POST; a later new demand for a token is decided inside the critical section",
+            "401": "reauthenticate"
+          }
+        }
+      ]
+    },
+    "businessCall401": {
+      "decision": "D-11",
+      "status": "initial-retry-policy-approved-2026-11-07",
+      "steps": [
+        {
+          "n": 1,
+          "actor": "angular",
+          "action": "business request answered 401 AUTH_REQUIRED"
+        },
+        {
+          "n": 2,
+          "actor": "angular",
+          "action": "never replay the failed request automatically: no GET and no mutation is repeated after a 401"
+        },
+        {
+          "n": 3,
+          "actor": "angular",
+          "action": "handle the error and recover the session under D-07 (at most one refresh POST per demand, inside the critical section) without silently repeating the failed request; the user or caller starts any new request explicitly, otherwise inform or reauthenticate"
+        }
+      ]
+    },
+    "logout": {
+      "decision": "D-12",
+      "steps": [
+        {
+          "n": 1,
+          "actor": "angular",
+          "call": "logoutSession",
+          "body": {
+            "scope": "current"
+          },
+          "headers": {
+            "X-CSRF-Token": "<session csrfToken>"
+          },
+          "expect": 204
+        },
+        {
+          "n": "1b",
+          "actor": "angular",
+          "action": "cancel pending refresh and restores; mark the local session closed so a late restore cannot reinstate credentials"
+        },
+        {
+          "n": 2,
+          "actor": "angular",
+          "action": "clear memory regardless of the answer; sign out of GIS (disableAutoSelect); navigate to /login"
+        },
+        {
+          "n": 3,
+          "actor": "angular",
+          "note": "204 proves revocation in ms-users only; an already issued access JWT stays valid until exp (<=240 s)"
+        }
+      ]
+    }
+  },
+  "errorMap": {
+    "INVALID_REQUEST": {
+      "http": [
+        400
+      ],
+      "action": "show-generic-error",
+      "retry": false
+    },
+    "AUTH_PROOF_INVALID": {
+      "http": [
+        401
+      ],
+      "action": "show-generic-auth-error",
+      "retry": false,
+      "note": "also returned for an unknown Google identity today (M-06)"
+    },
+    "UNAUTHORIZED": {
+      "http": [
+        401
+      ],
+      "action": "reauthenticate",
+      "retry": false,
+      "note": "documented, never emitted by Java"
+    },
+    "AUTH_REQUIRED": {
+      "http": [
+        401
+      ],
+      "action": "businessCall401",
+      "retry": "no-automatic-replay",
+      "note": "Java code outside the OpenAPI enum (M-19; catalog change still pending under D-11); the failed request is never replayed automatically (D-11 initial policy, approved 2026-11-07)"
+    },
+    "ACCESS_TOKEN_EXPIRED": {
+      "http": [
+        401
+      ],
+      "action": "businessCall401",
+      "retry": "no-automatic-replay",
+      "note": "documented, never emitted by Java; the expiry signal itself is still pending under D-11 and is not approved by the retry policy"
+    },
+    "SESSION_EXPIRED": {
+      "http": [
+        401
+      ],
+      "action": "reauthenticate",
+      "retry": false,
+      "note": "documented, never emitted by Java"
+    },
+    "SESSION_REVOKED": {
+      "http": [
+        401
+      ],
+      "action": "reauthenticate",
+      "retry": false,
+      "note": "documented, never emitted by Java"
+    },
+    "REFRESH_INVALID": {
+      "http": [
+        401
+      ],
+      "action": "loserTab",
+      "retry": false,
+      "note": "reconcile with GET /session; no chained POST (D-07 design policy approved 2026-11-07)"
+    },
+    "FORBIDDEN": {
+      "http": [
+        403
+      ],
+      "action": "show-forbidden",
+      "retry": false
+    },
+    "CSRF_INVALID": {
+      "http": [
+        403
+      ],
+      "action": "restart-attempt",
+      "retry": false
+    },
+    "ORIGIN_DENIED": {
+      "http": [
+        403
+      ],
+      "action": "show-configuration-error",
+      "retry": false
+    },
+    "ELIGIBILITY_DENIED": {
+      "http": [
+        403
+      ],
+      "action": "show-domain-not-eligible",
+      "retry": false,
+      "note": "documented, never emitted by Java"
+    },
+    "REAUTHENTICATION_REQUIRED": {
+      "http": [
+        403
+      ],
+      "action": "blocked-until-D-14",
+      "retry": false
+    },
+    "ATTEMPT_CONSUMED": {
+      "http": [
+        409
+      ],
+      "action": "restart-attempt",
+      "retry": false
+    },
+    "IDENTITY_CONFLICT": {
+      "http": [
+        409
+      ],
+      "action": "show-generic-auth-error",
+      "retry": false
+    },
+    "CONTINUITY_REQUIRED": {
+      "http": [
+        409
+      ],
+      "action": "blocked-until-D-02",
+      "retry": false
+    },
+    "REGISTRATION_REQUIRED": {
+      "http": [
+        409
+      ],
+      "action": "offer-register",
+      "retry": false,
+      "note": "documented, never emitted by Java (D-06)"
+    },
+    "ACTIVITY_NOT_ACCEPTED": {
+      "http": [
+        409
+      ],
+      "action": "none",
+      "retry": false,
+      "note": "blocked (D-03)"
+    },
+    "RESOURCE_NOT_FOUND": {
+      "http": [
+        404
+      ],
+      "action": "show-not-found",
+      "retry": false,
+      "note": "documented, never emitted by Java"
+    },
+    "ATTEMPT_EXPIRED": {
+      "http": [
+        410
+      ],
+      "action": "restart-attempt",
+      "retry": false
+    },
+    "RATE_LIMITED": {
+      "http": [
+        429
+      ],
+      "action": "backoff-with-Retry-After",
+      "retry": "after-user-or-new-demand",
+      "note": "documented, never emitted by Java; Retry-After never authorizes an automatic refresh"
+    },
+    "AUTH_TEMPORARILY_UNAVAILABLE": {
+      "http": [
+        503
+      ],
+      "action": "show-unavailable",
+      "retry": "manual"
+    },
+    "ACTIVITY_EVIDENCE_REQUIRED": {
+      "http": [
+        403
+      ],
+      "action": "none",
+      "retry": false,
+      "note": "Java code outside the enum; never called by Angular"
+    },
+    "INSTITUTIONAL_EMAIL_REQUIRED": {
+      "http": [
+        400
+      ],
+      "action": "none",
+      "retry": false,
+      "note": "Java code outside the enum; email is off"
+    },
+    "USER_NOT_FOUND": {
+      "http": [
+        404
+      ],
+      "action": "reauthenticate",
+      "retry": false,
+      "note": "Java code outside the enum"
+    },
+    "USER_DEACTIVATED": {
+      "http": [
+        403
+      ],
+      "action": "show-account-disabled",
+      "retry": false,
+      "note": "Java code outside the enum"
+    },
+    "CONCURRENT_MODIFICATION": {
+      "http": [
+        409
+      ],
+      "action": "reload-profile",
+      "retry": false,
+      "note": "Java code outside the enum"
+    },
+    "INTERNAL_ERROR": {
+      "http": [
+        500
+      ],
+      "action": "show-generic-error",
+      "retry": false,
+      "note": "Java code outside the enum"
+    },
+    "ROUTE_NOT_FOUND": {
+      "http": [
+        404
+      ],
+      "action": "show-generic-error",
+      "retry": false,
+      "note": "Java code outside the enum"
+    },
+    "METHOD_NOT_ALLOWED": {
+      "http": [
+        405
+      ],
+      "action": "show-generic-error",
+      "retry": false,
+      "note": "Java code outside the enum"
+    }
+  },
+  "unknownErrorCodePolicy": "show-generic-error; never fall back to a Google identity or keep a stale session",
+  "releaseGates": {
+    "angularFeatureFlag": {
+      "name": "authCoreV2",
+      "default": false,
+      "owner": "angular"
+    },
+    "msUsersFlagsRequiredOnlyInTestEnvironments": [
+      "users.google.enabled",
+      "users.google.login-enabled",
+      "users.google.http.enabled",
+      "users.internal-jwt.enabled",
+      "users.session.http.enabled",
+      "users.session.refresh.enabled",
+      "users.session.logout.enabled",
+      "users.api.http.enabled"
+    ],
+    "msUsersFlagsThatMustStayOff": [
+      "users.email.enabled",
+      "users.auth-methods.linking.enabled"
+    ],
+    "msUsersFlagsDecidedByRp": [
+      "users.google.registration.enabled"
+    ],
+    "topologyFlagsRequireEvidence": [
+      "users.google.http.same-site-verified",
+      "users.session.http.https-topology-verified"
+    ],
+    "apimApprovalsRemainNull": [
+      "abuse_protection",
+      "ms_users_contract"
+    ]
+  },
+  "decisionStatus": {
+    "D-07": {
+      "status": "design-policy-approved",
+      "approvedOn": "2026-11-07",
+      "approvedScope": "cross-tab refresh serialization and lost-response reconciliation as a design policy",
+      "stillPending": [
+        "Angular implementation",
+        "cross-tab coordination tests in the supported browsers",
+        "Angular, ms-users and security conformities",
+        "B07 contract approval"
+      ]
+    },
+    "D-11": {
+      "status": "partially-approved",
+      "approvedOn": "2026-11-07",
+      "approvedScope": "no automatic replay of any business request after a 401 (GET and all mutations)",
+      "stillPending": [
+        "error code catalog: new Java codes and OpenAPI enum",
+        "ACCESS_TOKEN_EXPIRED signal",
+        "new public DTOs",
+        "OpenAPI semantics",
+        "future per-operation retries",
+        "Angular, ms-users and security conformities",
+        "B07 contract approval"
+      ]
+    }
+  },
+  "criticalSection": {
+    "decision": "D-07",
+    "status": "design-policy-approved-2026-11-07",
+    "mutex": "cross-tab mutual exclusion with Web Locks (navigator.locks); BroadcastChannel only for signals, never as the mutex",
+    "approvedMechanism": "web-locks",
+    "mutualExclusionRequiredBeforeRotation": true,
+    "withoutGuaranteedMutualExclusion": {
+      "condition": "Web Locks unavailable and no equivalent mutual exclusion demonstrated",
+      "action": "secure-reauthentication",
+      "refreshPostsAllowed": 0,
+      "automaticRotationAllowed": false,
+      "broadcastChannelSubstitutesMutex": false
+    },
+    "covers": [
+      "bootstrap",
+      "refresh",
+      "apply-result-to-memory"
+    ],
+    "csrfObtainedInside": true,
+    "maxRefreshPostsPerDemand": 1,
+    "maxRefreshInFlightPerTab": 1,
+    "postFailureAction": "GET /v1/auth/session to reconcile state only; never chain another POST automatically",
+    "logoutCoordination": "logout cancels pending refresh and restores and marks the local session closed so a late restore cannot reinstate credentials",
+    "sessionGet200Proves": "current validity of the cookie only; not a rotation and not the issuance of an access JWT",
+    "shareCredentialsBetweenTabs": false
+  },
+  "retryPolicy": {
+    "decision": "D-11",
+    "status": "initial-retry-policy-approved-2026-11-07",
+    "genericReplayAllowed": false,
+    "automaticReplayAfter401": {
+      "GET": false,
+      "POST": false,
+      "PUT": false,
+      "PATCH": false,
+      "DELETE": false
+    },
+    "mutationsExcluded": [
+      "PUT /v1/me/profile",
+      "PUT /v1/usuarios/{userId}"
+    ],
+    "getRetry": {
+      "allowed": false,
+      "maxAttempts": 0
+    },
+    "futurePerOperationRetries": "pending-not-approved",
+    "retryAfterAuthorizesRefresh": false
+  },
+  "angularErrorParsing": {
+    "decision": "D-11",
+    "status": "proposed-pending-approval",
+    "note": "part of the D-11 error catalog, which is not covered by the 2026-11-07 approval of the initial retry policy",
+    "codePath": "error.error?.error?.code",
+    "cases": {
+      "networkOrCors": "status === 0 and no body",
+      "unauthorized": "status 401",
+      "forbidden": "status 403",
+      "unexpectedEnvelope": "body absent, not an object, or error.code not a string"
+    },
+    "unexpectedEnvelopeAction": "show-generic-error"
+  }
+}

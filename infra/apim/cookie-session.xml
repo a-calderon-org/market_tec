@@ -1,0 +1,11 @@
+<policies>
+  <inbound>
+    <base />
+    <set-header name="X-User-Id" exists-action="delete" />
+    <set-header name="X-Session-Id" exists-action="delete" />
+    <set-header name="X-Authenticated-User" exists-action="delete" />
+  </inbound>
+  <backend><base /></backend>
+  <outbound><base /></outbound>
+  <on-error><base /></on-error>
+</policies>

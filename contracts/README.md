@@ -17,6 +17,13 @@ no demuestran que una ruta o integración esté implementada.
 - `tests/test_auth_contracts.py`: formas, fixtures y reglas temporales del Draft Users.
 - `tests/test_jwt_profile.py`: oráculo contractual aislado para vectores JWT sintéticos
   RS256/RSA-2048; requiere `openssl` en PATH. No certifica autenticadores reales.
+- `examples/auth/b07-reconciliation-matrix.json`, `observed-ms-users-2089897.json` y
+  `proposed-core-flow.json`: matriz de conciliación B07, comportamiento **observado** de
+  ms-users (no aprobado) y flujo **propuesto** del núcleo de autenticación (no aprobado).
+  Se explican en `docs/MTEC15_B07_RECONCILIATION_MATRIX.md` y
+  `docs/MTEC15_B07_DECISION_REGISTER.md`.
+- `tests/test_b07_reconciliation.py`: mantiene esos fixtures coherentes con el OpenAPI y
+  `infra/apim/operations.json`. No prueba un servicio en ejecución ni registra conformidades.
 - `tests/test_formal_validation.py`: validación formal de JSON Schema Draft
   2020-12 mediante `jsonschema`.
 

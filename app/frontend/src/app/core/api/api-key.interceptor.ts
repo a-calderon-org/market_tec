@@ -3,8 +3,15 @@ import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { catchError, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { AuthTokenService } from '../auth/auth-token.service';
+import { authCoreV2Interceptor } from '../auth/v2/auth-core-v2.interceptor';
+import { FEATURE_FLAGS } from '../feature-flags';
+import { isAuthorizedApiUrl } from './api-url';
 
 export const apiKeyInterceptor: HttpInterceptorFn = (req, next) => {
+  if (inject(FEATURE_FLAGS).authCoreV2) {
+    return authCoreV2Interceptor(req, next);
+  }
+
   if (!isAuthorizedApiUrl(req.url, environment.apiBaseUrl)) {
     return next(req);
   }
@@ -25,46 +32,3 @@ export const apiKeyInterceptor: HttpInterceptorFn = (req, next) => {
     })
   );
 };
-
-function isAuthorizedApiUrl(requestUrl: string, configuredBaseUrl: unknown): boolean {
-  if (typeof configuredBaseUrl !== 'string' || !configuredBaseUrl.trim()) {
-    return false;
-  }
-
-  try {
-    const documentBase = document.baseURI;
-    const apiUrl = new URL(configuredBaseUrl, documentBase);
-    const destination = new URL(requestUrl, documentBase);
-
-    if (
-      !['http:', 'https:'].includes(apiUrl.protocol) ||
-      !['http:', 'https:'].includes(destination.protocol) ||
-      apiUrl.username ||
-      apiUrl.password ||
-      apiUrl.search ||
-      apiUrl.hash ||
-      destination.username ||
-      destination.password ||
-      destination.origin !== apiUrl.origin
-    ) {
-      return false;
-    }
-
-    const allowedPath = normalizePath(apiUrl.pathname);
-    const destinationPath = normalizePath(destination.pathname);
-
-    return (
-      allowedPath === '/' ||
-      destinationPath === allowedPath ||
-      destinationPath.startsWith(`${allowedPath}/`)
-    );
-  } catch {
-    return false;
-  }
-}
-
-function normalizePath(pathname: string): string {
-  const withoutTrailingSlashes = pathname.replace(/\/+$/, '');
-
-  return withoutTrailingSlashes || '/';
-}

@@ -1,5 +1,6 @@
 import {Component, computed, inject, OnInit, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { FEATURE_FLAGS } from '../../../core/feature-flags';
 import { UserPublication } from '../models/my-publications.model';
 import { PublicationService } from '../services/publication.service';
 
@@ -26,7 +27,17 @@ export class MyPublications implements OnInit {
   private readonly publicationService =
     inject(PublicationService);
 
+  private readonly authCoreV2 = inject(FEATURE_FLAGS).authCoreV2;
+
+  /** Solo flujo legado (authCoreV2=false). Con authCoreV2 nunca se usa. */
   private readonly currentUserId = 'USR-001';
+
+  /**
+   * authCoreV2: ms-publications aún no valida el JWT interno ni ofrece una ruta de
+   * «mis publicaciones» derivada del token. La pantalla queda explícitamente no
+   * disponible y no emite peticiones (ni con 'USR-001' ni con el userId interno).
+   */
+  readonly unavailable = signal(false);
 
   private readonly allPublications =
     signal<UserPublication[]>([]);
@@ -181,6 +192,17 @@ export class MyPublications implements OnInit {
   loadPublications(): void {
     this.loading.set(true);
     this.error.set(false);
+
+    if (this.authCoreV2) {
+      // PENDIENTE (Catalog, contrato no aprobado): no existe un contrato que acepte
+      // el principal interno. Con authCoreV2 no se consulta con 'USR-001' ni se
+      // inventa otro id; la pantalla queda sin datos hasta aprobar ese contrato.
+      this.allPublications.set([]);
+      this.unavailable.set(true);
+      this.error.set(true);
+      this.loading.set(false);
+      return;
+    }
 
     this.publicationService
       .getUserPublications(

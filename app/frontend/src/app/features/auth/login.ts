@@ -1,6 +1,8 @@
 import { AfterViewInit, Component, ElementRef, ViewChild, effect, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
-import { GoogleAuthService } from './services/google-auth.service';
+import { describeGoogleAuthFailure, GoogleAuthService } from './services/google-auth.service';
+import type { GoogleAttemptPurpose } from '../../core/auth/v2/auth-contract';
+import { FEATURE_FLAGS } from '../../core/feature-flags';
 import { AbstractControl, NonNullableFormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { LoginService } from './services/login.service';
@@ -19,6 +21,7 @@ export class Login implements AfterViewInit {
   private readonly googleAuth = inject(GoogleAuthService);
   private readonly themeService = inject(ThemeService);
   private googleButtonReady = false;
+  private renderingGoogleButton = false;
 
   private readonly googleButtonThemeEffect = effect(() => {
     const theme = this.themeService.theme();
@@ -31,6 +34,16 @@ export class Login implements AfterViewInit {
   @ViewChild('googleButton') private googleButton!: ElementRef<HTMLElement>;
   readonly googleLoading = signal(true);
   readonly googleLoadError = signal(false);
+  /** Solo authCoreV2: cada propósito usa su propio intento y nonce (D-06). */
+  readonly authCoreV2 = inject(FEATURE_FLAGS).authCoreV2;
+  readonly googlePurpose = signal<GoogleAttemptPurpose>('login');
+
+  /** Cambia entre «Ingresar» y «Crear cuenta»; pide un intento nuevo a ms-users. */
+  setGooglePurpose(purpose: GoogleAttemptPurpose): void {
+    if (!this.authCoreV2 || this.googleLoading() || this.submitting() || this.googlePurpose() === purpose) return;
+    this.googlePurpose.set(purpose);
+    void this.loadGoogleButton();
+  }
 
   ngAfterViewInit(): void {
     this.googleButtonReady = true;
@@ -45,18 +58,21 @@ export class Login implements AfterViewInit {
     theme: 'light' | 'dark',
     resetFeedback: boolean
   ): Promise<void> {
+    if (this.authCoreV2 && (this.renderingGoogleButton || this.submitting())) return;
+    this.renderingGoogleButton = true;
     this.googleLoading.set(true);
     this.googleLoadError.set(false);
     if (resetFeedback) this.error.set(false);
     try {
       await this.googleAuth.renderButton(this.googleButton.nativeElement, credential => {
         void this.signInWithGoogle(credential);
-      }, theme === 'dark' ? 'outline_dark' : 'outline');
+      }, theme === 'dark' ? 'outline_dark' : 'outline', this.googlePurpose());
     } catch (error) {
       this.googleLoadError.set(true);
       this.error.set(true);
       this.errorMessage.set(error instanceof Error ? error.message : 'No se pudo cargar Google.');
     } finally {
+      this.renderingGoogleButton = false;
       this.googleLoading.set(false);
     }
   }
@@ -65,16 +81,24 @@ export class Login implements AfterViewInit {
     if (this.submitting()) return;
     this.submitting.set(true);
     this.error.set(false);
+    let signedIn = false;
     try {
       await this.googleAuth.signIn(credential);
+      signedIn = true;
       if (!await this.router.navigate(['/'])) throw new Error('No fue posible abrir MarketTec.');
     } catch (error) {
       this.error.set(true);
       this.errorMessage.set(error instanceof HttpErrorResponse
         ? error.error?.message || 'No se pudo conectar con el servidor de acceso. Inténtalo nuevamente.'
-        : 'No fue posible ingresar a MarketTec.');
+        : this.authCoreV2 && !signedIn
+          ? describeGoogleAuthFailure(error, this.googlePurpose())
+          : 'No fue posible ingresar a MarketTec.');
     } finally {
       this.submitting.set(false);
+    }
+    // v2: el intento ya se consumió (o falló); otro clic necesita un intento nuevo.
+    if (this.authCoreV2 && !signedIn) {
+      await this.renderGoogleButton(this.themeService.theme(), false);
     }
   }
   private readonly loginService =

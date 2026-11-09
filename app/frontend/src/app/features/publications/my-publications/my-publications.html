@@ -38,7 +38,11 @@
     @if (error()) {
       <div class="state-message state-message--error">
         <p>
-          No fue posible cargar tus publicaciones.
+          @if (unavailable()) {
+            Mis publicaciones aún no está disponible con el nuevo acceso institucional.
+          } @else {
+            No fue posible cargar tus publicaciones.
+          }
         </p>
 
         <button

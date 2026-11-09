@@ -428,6 +428,27 @@ política vigente. `sid`/`jti` y borrar cookies no propagan revocaciones.
 
 El compromiso de la clave permite fabricar también tiempos y jti: esperar el TTL no basta mientras siga siendo confiable. El runbook propuesto detiene firma, sustituye clave y retira/bloquea el `kid` comprometido en cada validador con caché ya cargada; si no puede garantizarse, suspende rutas protegidas antes de reabrirlas con evidencia. Responsable operativo, SLA y mecanismo efectivo APIM están pendientes. Se requiere simulacro autorizado; no se promete rechazo inmediato con solo borrar la clave del JWKS.
 
+#### Decisiones D-07 y D-11 de MTEC-40 — 2026-11-07
+
+**Estado: Accepted en alcance de diseño para MarketTec v1.** Responsable: responsable del proyecto, decisión expresa del 2026-11-07 en [MTEC-40](https://allanaron06122005.atlassian.net/browse/MTEC-40). Concretan B06 D6 y no modifican la política C anterior, que permanece intacta.
+
+**D-07 — Refresh entre pestañas y respuesta perdida.**
+
+1. Las pestañas se serializan mediante Web Locks.
+2. La sección crítica contiene `GET /v1/auth/session`, un único `POST /v1/auth/refresh` por demanda y la aplicación del resultado.
+3. El CSRF se obtiene dentro del lock.
+4. `BroadcastChannel` solo transporta señales; nunca actúa como mutex ni transporta credenciales.
+5. Tras `401 REFRESH_INVALID`, timeout o respuesta perdida, `GET /v1/auth/session` solo reconcilia estado. Queda prohibido encadenar automáticamente otro `POST`.
+6. Un `200` de `GET /v1/auth/session` demuestra la validez actual de la cookie; no demuestra una rotación ni la emisión de un access JWT.
+7. El logout impide restauraciones tardías.
+8. Si no se demuestra exclusión mutua, el cliente degrada de forma segura a reautenticación.
+
+**D-11 — Política inicial de reintentos tras 401.** Ninguna petición de negocio puede reintentarse automáticamente tras un `401` en MarketTec v1, incluidas las lecturas `GET` y todas las mutaciones. El cliente debe manejar el error y la recuperación de sesión sin repetir silenciosamente la solicitud fallida.
+
+**No se aprueba por implicación, y siguen pendientes:** nuevos códigos de error Java, `ACCESS_TOKEN_EXPIRED`, nuevos DTO públicos, cambios de semántica OpenAPI y reintentos futuros por operación.
+
+**Límites.** La aprobación fija la política de diseño. No constituye conformidad técnica de Angular, ms-users ni seguridad; pruebas de Web Locks en los navegadores soportados; validación de concurrencia SQL; pruebas de pérdida de respuesta, cookies o CORS reales; aprobación contractual B07; ni autorización de despliegue. MTEC-40 y MTEC-15 continúan In Progress.
+
 #### 3.4.1. Consolidación de aprobaciones y pendientes — 2026-11-02
 
 **Verificado:** lectura de la descripción vigente de [MTEC-40](https://allanaron06122005.atlassian.net/browse/MTEC-40)
@@ -450,7 +471,8 @@ ya aprobadas por RP; no crea aprobaciones nuevas ni conformidades de equipos.
 | B05 D3 | ≤240 s, exp acotado a 60/30/8, cero leeway positivo a expiración | Relojes/márgenes y residual ≤300 s por demostrar; no asignar skew concreto |
 | B06 D4 | Access y CSRF solo en memoria; refresh opaco rotatorio en cookie HttpOnly/Secure/host-only | Nombres, SameSite, Path y hosts reales requieren contrato/pruebas; no persistir credenciales en almacenamiento web |
 | B06 D5 | Sincronizador CSRF, preferencia same-site y CORS explícito | Orígenes/métodos/headers/credenciales/rutas y topología real pendientes; sin wildcard con credenciales |
-| B06 D6 | Refresh serializado entre pestañas sin gracia general; carreras/pérdida explícitas; logout/revocación servidor y bloqueo de emisión posterior | Protocolo concreto de concurrencia/reconciliación y pruebas pendientes. Aviso candidato 300 s antes del deadline efectivo de sesión, nunca del JWT |
+| B06 D6 | Refresh serializado entre pestañas sin gracia general; carreras/pérdida explícitas; logout/revocación servidor y bloqueo de emisión posterior | Protocolo de concurrencia/reconciliación aprobado como política de diseño el 2026-11-07 (D-07, ver arriba); pruebas, conformidades y verificación en navegadores soportados pendientes. Aviso candidato 300 s antes del deadline efectivo de sesión, nunca del JWT |
+| D-11 | Ninguna petición de negocio se reintenta automáticamente tras 401 en v1, incluidos `GET` y mutaciones (2026-11-07) | Códigos de error Java nuevos, `ACCESS_TOKEN_EXPIRED`, DTO públicos nuevos, semántica OpenAPI y reintentos futuros por operación: **sin aprobar**. Sin conformidad Angular/ms-users/seguridad |
 | B07 | **Sin conformidades registradas en esta revisión** | Responsables ms-users, Angular, APIM, otros servicios y SEG deben revisar compatibilidad y consumo de versión canónica |
 
 **No determinado:** márgenes de reloj, topología, infraestructura y tiempos reales.
