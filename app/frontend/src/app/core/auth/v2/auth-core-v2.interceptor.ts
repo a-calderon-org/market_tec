@@ -3,6 +3,12 @@ import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { catchError, from, switchMap, throwError } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import { apiVersionlessPath } from '../../api/api-url';
+import {
+  CATALOG_GOOGLE_AUTHORIZATION_HEADER,
+  catalogApiBase,
+  isCatalogOperation,
+} from '../../api/catalog-api';
+import { GoogleCatalogCredential } from './google-catalog-credential';
 import { isBearerRoute } from './bearer-routes';
 import { blockedOwnOriginPath, isExplicitStaticRead } from './business-destination';
 import {
@@ -31,6 +37,8 @@ import { bearerHeaderName } from './auth-v2-config';
  * - Con el adaptador HTTP real (`restricted`) solo salen hacia la API las
  *   operaciones exactas de `isRestrictedBusinessOperation` (GET/PUT `/me/profile`);
  *   cualquier otra ruta o método del mismo origen se bloquea antes de `next()`.
+ * - Publicaciones: las operaciones exactas de `isCatalogOperation` hacia `catalogApiBaseUrl` salen con el ID
+ *   Token de Google en memoria (`GoogleCatalogCredential`), nunca con el JWT interno. Sin token, no salen.
  * - NO envía `Ocp-Apim-Subscription-Key` ni ninguna clave de APIM.
  * - `401` de negocio: se propaga el error y se gestiona la pérdida de sesión; la
  *   petición original NUNCA se reejecuta (GET, POST, PUT, PATCH ni DELETE).
@@ -47,6 +55,18 @@ export const authCoreV2Interceptor: HttpInterceptorFn = (req, next) => {
   const route = apiVersionlessPath(req.url, environment.apiBaseUrl);
 
   const transport = inject(AUTH_V2_BUSINESS_TRANSPORT);
+
+  // Publicaciones (proxy same-origin del catálogo): lista exacta de operaciones, solo con el ID Token de Google
+  // retenido en memoria. Nunca el JWT interno; las cookies de ms-users las descarta el proxy.
+  if (transport !== 'blocked' && isCatalogOperation(req.url, req.method, catalogApiBase())) {
+    const googleToken = inject(GoogleCatalogCredential).current();
+
+    if (!googleToken) {
+      return throwError(() => new AuthRequiredError('token-unavailable'));
+    }
+
+    return next(req.clone({ setHeaders: { [CATALOG_GOOGLE_AUTHORIZATION_HEADER]: `Bearer ${googleToken}` } }));
+  }
 
   // Modo HTTP real: lista exacta de operaciones; lo demás del mismo origen, bloqueado.
   if (transport === 'restricted' && !isExplicitStaticRead(req.url, req.method)) {
