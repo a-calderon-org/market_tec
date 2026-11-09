@@ -380,6 +380,8 @@ primer `POST /refresh` mientras Java aún puede procesarlo arriesga perder la ro
   encima del arranque observado y por debajo de 240 s. V2 sigue deshabilitado.
 * Container App: sonda Startup `initialDelaySeconds 10→1`, `periodSeconds 10→3` (`failureThreshold` 30, ~90 s de
   margen). Revisión `ca-ms-users-stg--w8dnrtz`, misma imagen, flags y escala.
+  **Verificado** con una muestra tras escalar a cero (14:04 UTC): 25,9 s a través de APIM con la autenticación de
+  Container Apps activa (sidecar incluido). Una sola medición: la variación de la plataforma no está caracterizada.
 * Sin sondeos periódicos ni `minReplicas=1`. **Inferido** (tarifa pública de reposo, no verificada en la factura):
   una réplica permanente de 0,5 vCPU / 1 GiB costaría ~US$10–12/mes tras la concesión gratuita, casi la mitad del
   presupuesto de US$25; solo con autorización expresa.
