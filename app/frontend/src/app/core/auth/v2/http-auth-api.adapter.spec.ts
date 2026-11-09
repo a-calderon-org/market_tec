@@ -24,7 +24,12 @@ import { AuthApiPort } from './auth-api.port';
 import { AuthApiError, AuthRequiredError } from './auth-contract';
 import { AuthSessionService } from './auth-session.service';
 import { AuthSessionStore } from './auth-session.store';
-import { AUTH_V2_HTTP_API_BASE, AUTH_V2_HTTP_TIMEOUT_MS, resolveHttpApiBase } from './auth-v2-config';
+import {
+  AUTH_V2_HTTP_API_BASE,
+  AUTH_V2_HTTP_TIMEOUT_MS,
+  AUTH_V2_WARMING_RETRY_MS,
+  resolveHttpApiBase,
+} from './auth-v2-config';
 import { InMemoryLock, SignalHub } from './auth-v2.testing';
 import { AUTH_V2_BUSINESS_TRANSPORT, BusinessTransportBlockedError } from './business-transport';
 import { HttpAuthApiAdapter } from './http-auth-api.adapter';
@@ -390,6 +395,49 @@ describe('HttpAuthApiAdapter + núcleo v2 contra ms-users (HttpTestingController
     await expect(pending).rejects.toEqual(new AuthApiError(0, 'TIMEOUT'));
     expect(req.cancelled).toBe(true);
     httpTesting.expectNone(url('/v1/auth/refresh'));
+  });
+
+  describe('arranque en frío tras el proxy same-origin (MTEC-12/D04)', () => {
+    const warming = { error: { code: 'BACKEND_WARMING' } };
+    const unavailable = { status: 503, statusText: 'Service Unavailable' };
+
+    it('503 BACKEND_WARMING: repite el mismo POST /refresh y entrega la respuesta', async () => {
+      configure(HTTP_FLAGS, [{ provide: AUTH_V2_WARMING_RETRY_MS, useValue: 1 }]);
+      const pending = TestBed.inject(AuthApiPort).refresh(SESSION_CSRF);
+      httpTesting.expectOne(url('/v1/auth/refresh')).flush(warming, unavailable);
+      await new Promise((r) => setTimeout(r, 5));
+      const retry = httpTesting.expectOne(url('/v1/auth/refresh'));
+      expect(retry.request.headers.get('X-CSRF-Token')).toBe(SESSION_CSRF);
+      expect(retry.request.body).toEqual({ mode: 'rotate' });
+      retry.flush(authResponse(ROTATED_JWT, ROTATED_CSRF));
+      await expect(pending).resolves.toMatchObject({ token: ROTATED_JWT });
+    });
+
+    it('otros 503, 504 y TIMEOUT no se reintentan (la escritura pudo procesarse)', async () => {
+      configure(HTTP_FLAGS, [{ provide: AUTH_V2_WARMING_RETRY_MS, useValue: 1 }]);
+      const port = TestBed.inject(AuthApiPort);
+      for (const [body, status] of [
+        [{ error: { code: 'INTERNAL_JWT_UNCONFIGURED' } }, unavailable],
+        [{ error: { code: 'UPSTREAM_TIMEOUT' } }, { status: 504, statusText: 'Gateway Timeout' }],
+      ] as const) {
+        const pending = port.refresh(SESSION_CSRF);
+        httpTesting.expectOne(url('/v1/auth/refresh')).flush(body, status);
+        await expect(pending).rejects.toBeInstanceOf(AuthApiError);
+        await new Promise((r) => setTimeout(r, 5));
+        httpTesting.expectNone(url('/v1/auth/refresh'));
+      }
+    });
+
+    it('los reintentos respetan el tope total del adaptador', async () => {
+      configure(HTTP_FLAGS, [
+        { provide: AUTH_V2_HTTP_TIMEOUT_MS, useValue: 30 },
+        { provide: AUTH_V2_WARMING_RETRY_MS, useValue: 40 },
+      ]);
+      const pending = TestBed.inject(AuthApiPort).getSession();
+      httpTesting.expectOne(url('/v1/auth/session')).flush(warming, unavailable);
+      await expect(pending).rejects.toEqual(new AuthApiError(503, 'BACKEND_WARMING'));
+      httpTesting.expectNone(url('/v1/auth/session'));
+    });
   });
 
   describe('sesión (D-07) por HTTP', () => {

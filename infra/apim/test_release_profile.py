@@ -345,3 +345,70 @@ class PartialStagingPackageTest(unittest.TestCase):
         with self.assertRaises(gp.PackageError):  # global and api exports are still mandatory
             gp.build_package(MANIFEST, None, "", "", {"global": UPSTREAM["global"]}, OPENAPI_BYTES, ROUTES, None,
                              PROFILE, ORIGINS, jwt_unconfigured=True, no_product_scope=True)
+
+
+class GatewayAuthTest(unittest.TestCase):
+    """MTEC-12/D04: APIM -> Container Apps managed-identity auth without destroying the internal user JWT."""
+    RESOURCE = "api://9ef55975-8943-4bc4-9e98-21457569d4cc"
+    NO_PRODUCT = {s: UPSTREAM[s] for s in ("global", "api")}
+
+    def package(self, **args):
+        manifest, directory = evidence_case(self)
+        return gp.build_package(manifest, JWKS, ISS, AUD, UPSTREAM, OPENAPI_BYTES, ROUTES, directory, PROFILE, ORIGINS,
+                                gateway_resource=self.RESOURCE, **args)
+
+    def inbound(self, xml):
+        return list(ET.fromstring(xml).find("inbound"))
+
+    def test_every_forwarded_operation_ends_with_gateway_identity(self):
+        result = self.package()
+        for d in result["definitions"]:
+            inbound = self.inbound(result["policies"][d["id"]])
+            mi = [e for e in inbound if e.tag == "authentication-managed-identity"]
+            if d["status"] == "enabled":
+                self.assertEqual(["rewrite-uri", "set-header", "authentication-managed-identity"],
+                                 [e.tag for e in inbound[-3:]], d["id"])
+                self.assertEqual({"resource": self.RESOURCE}, mi[0].attrib, d["id"])
+            else:  # terminal denials never fetch a token nor reach the backend
+                self.assertEqual([], mi, d["id"])
+        self.assertEqual(self.RESOURCE, result["gateway_auth"]["resource"])
+
+    def test_user_jwt_is_validated_then_relocated_before_authorization_is_replaced(self):
+        result = self.package()
+        for op_id in PROFILE_OPS:
+            inbound = self.inbound(result["policies"][op_id])
+            tags = [e.tag for e in inbound]
+            relocate = inbound[-2]
+            self.assertLess(tags.index("validate-jwt"), len(tags) - 2, op_id)
+            self.assertEqual((gp.USER_TOKEN_HEADER, "override"),
+                             (relocate.attrib["name"], relocate.attrib["exists-action"]), op_id)
+            self.assertEqual('@(context.Request.Headers.GetValueOrDefault("Authorization", ""))',
+                             relocate.find("value").text, op_id)
+
+    def test_non_jwt_operations_drop_a_client_supplied_user_token(self):
+        result = self.package()
+        for op_id in ("getSessionState", "refreshSession", "logoutSession"):
+            relocate = self.inbound(result["policies"][op_id])[-2]
+            self.assertEqual((gp.USER_TOKEN_HEADER, "delete"),
+                             (relocate.attrib["name"], relocate.attrib["exists-action"]), op_id)
+
+    def test_partial_staging_package_with_gateway_identity(self):
+        result = gp.build_package(MANIFEST, None, "", "", self.NO_PRODUCT, OPENAPI_BYTES, ROUTES, None, PROFILE,
+                                  ORIGINS, jwt_unconfigured=True, no_product_scope=True, gateway_resource=self.RESOURCE)
+        enabled = {d["id"] for d in result["definitions"] if d["status"] == "enabled"}
+        self.assertEqual({"getSessionState", "refreshSession", "logoutSession"}, enabled)
+        for op_id in PROFILE_OPS:
+            self.assertNotIn("authentication-managed-identity", result["policies"][op_id])
+
+    def test_without_option_policies_are_unchanged(self):
+        result = approved(self)
+        self.assertIsNone(result["gateway_auth"])
+        for xml in result["policies"].values():
+            self.assertNotIn("authentication-managed-identity", xml)
+            self.assertNotIn(gp.USER_TOKEN_HEADER, xml)
+
+    def test_invalid_resource_rejected(self):
+        for bad in ("https://management.azure.com", "api://*", "api://9ef55975", self.RESOURCE + "/.default"):
+            with self.assertRaises(ValueError):
+                gp.build_package(MANIFEST, None, "", "", self.NO_PRODUCT, OPENAPI_BYTES, ROUTES, None, PROFILE,
+                                 ORIGINS, jwt_unconfigured=True, no_product_scope=True, gateway_resource=bad)

@@ -18,7 +18,8 @@ export interface SessionCoordinatorConfig {
 
 export const SESSION_COORDINATOR_CONFIG = new InjectionToken<SessionCoordinatorConfig>(
   'SESSION_COORDINATOR_CONFIG',
-  { providedIn: 'root', factory: () => ({ requestTimeoutMs: 10_000 }) },
+  // Algo mayor que el tope del adaptador (AUTH_V2_COLD_START_BUDGET_MS) para que este informe primero su TIMEOUT.
+  { providedIn: 'root', factory: () => ({ requestTimeoutMs: 75_000 }) },
 );
 
 export type SessionOutcome =

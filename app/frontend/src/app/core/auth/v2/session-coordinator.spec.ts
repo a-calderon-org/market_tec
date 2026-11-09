@@ -12,6 +12,7 @@ import {
   UnavailableLock,
 } from './auth-v2.testing';
 import { MOCK_USER, MockAuthBackend } from './mock-auth-api.adapter';
+import { AUTH_V2_COLD_START_BUDGET_MS, AUTH_V2_HTTP_TIMEOUT_MS } from './auth-v2-config';
 import { SESSION_COORDINATOR_CONFIG, SessionCoordinator } from './session-coordinator';
 import { SessionLock } from './session-lock';
 
@@ -693,5 +694,19 @@ describe('SessionCoordinator (D-07, política C) — pestañas simuladas', () =>
     const a = tab('A', new InMemoryLock());
 
     expect(a.injector.get(SessionCoordinator)).toBe(a.coordinator);
+  });
+});
+
+describe('Topes de tiempo frente al arranque en frío de staging (MTEC-12/D04)', () => {
+  const OBSERVED_COLD_START_MS = 47_000;
+  const GATEWAY_LIMIT_MS = 240_000;
+
+  it('el adaptador HTTP y el coordinador esperan más que el arranque en frío y menos que APIM', () => {
+    const adapter = TestBed.inject(AUTH_V2_HTTP_TIMEOUT_MS);
+    const coordinator = TestBed.inject(SESSION_COORDINATOR_CONFIG).requestTimeoutMs;
+    expect(adapter).toBe(AUTH_V2_COLD_START_BUDGET_MS);
+    expect(adapter).toBeGreaterThan(OBSERVED_COLD_START_MS);
+    expect(coordinator).toBeGreaterThan(adapter);
+    expect(coordinator).toBeLessThan(GATEWAY_LIMIT_MS);
   });
 });

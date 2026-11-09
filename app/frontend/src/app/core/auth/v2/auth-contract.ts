@@ -94,6 +94,11 @@ export class AuthApiError extends Error {
 export const NETWORK_ERROR_CODE = 'NETWORK';
 export const TIMEOUT_ERROR_CODE = 'TIMEOUT';
 export const ABORTED_ERROR_CODE = 'ABORTED';
+/**
+ * 503 del proxy same-origin de Static Web Apps (MTEC-12/D04) mientras ms-users arranca desde cero. Garantiza que la
+ * petición NO se reenvió (o era una lectura), así que repetirla es seguro. Cualquier otro error no se reintenta.
+ */
+export const BACKEND_WARMING_ERROR_CODE = 'BACKEND_WARMING';
 /** 2xx con un cuerpo que no cumple la forma esperada: se trata como respuesta inutilizable. */
 export const INVALID_RESPONSE_CODE = 'INVALID_RESPONSE';
 

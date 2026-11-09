@@ -1,0 +1,6 @@
+{
+  "name": "markettec-swa-api",
+  "private": true,
+  "description": "Same-origin proxy /api/users/* -> APIM markettec-users-v1 (MTEC-12/D04). No runtime dependencies.",
+  "scripts": { "test": "node --test test/proxy.test.js" }
+}
