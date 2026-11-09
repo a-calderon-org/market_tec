@@ -17,6 +17,16 @@ Runs write to a staging directory and rename it, so a failure leaves nothing and
 directory is never reused or mixed. `package` refuses unless all three scope exports pass the local
 check and JWKS, issuer and audience are given.
 
+## Release profile `ms-users-google-v1` (MTEC-12/MTEC-41)
+
+`--release ms-users-google-v1 --allowed-origin https://<spa-origin>` (repeatable) narrows the surface to the eight
+Google-flow operations in `release_profiles.py` (reviewed code). Every other operation becomes a terminal 404
+`OPERATION_NOT_RELEASED`; released operations still need their approvals (intent/login/registration stay closed
+without `abuse_protection`). It also writes a candidate keyless API definition (`api-definition.*.json`,
+`subscriptionRequired=false`, separate from `markettec-api-v1`), an API-scope CORS policy with explicit origins
+(`api-scope.*`) and the resolved Angular → APIM → ms-users chain (`route_check.py`). Nothing is applied to Azure.
+Operator steps: [`docs/MTEC12_41_MS_USERS_STAGING_HANDOFF.md`](../../docs/MTEC12_41_MS_USERS_STAGING_HANDOFF.md).
+
 ## Approvals
 
 `approvals.*` in the manifest point to a JSON document in `infra/apim/evidence/` and its SHA-256. The
