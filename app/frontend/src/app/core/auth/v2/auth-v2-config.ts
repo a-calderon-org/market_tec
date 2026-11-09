@@ -92,3 +92,13 @@ export const AUTH_V2_HTTP_TIMEOUT_MS = new InjectionToken<number>('AUTH_V2_HTTP_
   providedIn: 'root',
   factory: () => AUTH_V2_COLD_START_BUDGET_MS,
 });
+
+/**
+ * MTEC-37: presupuesto mínimo restante para EMPEZAR un POST. Por debajo, la escritura no se envía (el resultado
+ * sería incierto antes de que termine). Coincide con lo que exige el proxy same-origin: margen de tránsito (2 s)
+ * + `MIN_FORWARD_MS` (8 s); un proxy que recibiera menos contestaría `BACKEND_WARMING` sin enviarla.
+ */
+export const AUTH_V2_MIN_WRITE_START_MS = new InjectionToken<number>('AUTH_V2_MIN_WRITE_START_MS', {
+  providedIn: 'root',
+  factory: () => 10_000,
+});

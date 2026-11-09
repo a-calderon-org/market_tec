@@ -17,6 +17,10 @@ const crypto = require('node:crypto');
  * (return-response) never carry one. The warm-up therefore sends a fresh nonce and is accepted only when that
  * exact value comes back with a non-5xx status. Every deadline covers the whole response, body included.
  *
+ * MTEC-37: a write reaching a proxy that does not already know ms-users is warm is never held for the warm-up:
+ * the proxy warms up and answers 503 BACKEND_WARMING without sending it, so a write is only ever forwarded on
+ * arrival — never after a wait during which the browser may have cancelled it.
+ *
  * MTEC-37: the SPA sends its remaining budget in X-MTEC-Client-Budget-Ms. The proxy never works past it (minus a
  * transit margin), so a write is never forwarded after the browser has already given up on it: when the budget
  * cannot cover the warm-up plus the write, the answer is 503 BACKEND_WARMING and the write was NOT sent. The header
@@ -228,8 +232,14 @@ async function handle(req, config, overrides = {}) {
   const warming = json(503, 'BACKEND_WARMING', { 'Retry-After': '3' });
 
   if (req.method !== 'GET') {
-    const warm = await ensureWarm(deps, config, left() - deps.minForwardMs);
-    if (!warm || left() < deps.minForwardMs) return warming; // the write was NOT sent: safe to retry
+    if (deps.now() >= warmUntil) {
+      // MTEC-37: the proxy cannot see a browser that gave up (logout, cancellation, its own deadline) while the
+      // proxy waits. A write is therefore forwarded only on arrival, never after a wait: warm up within the
+      // client budget and answer BACKEND_WARMING. The write was NOT sent; the client retries it once warm.
+      await ensureWarm(deps, config, left());
+      return warming;
+    }
+    if (left() < deps.minForwardMs) return warming; // the write was NOT sent: safe to retry
   }
   if (left() <= 0) return warming; // the client already gave up: nothing is sent
   let upstream;

@@ -27,9 +27,12 @@ import { AuthSessionStore } from './auth-session.store';
 import {
   AUTH_V2_HTTP_API_BASE,
   AUTH_V2_HTTP_TIMEOUT_MS,
+  AUTH_V2_MIN_WRITE_START_MS,
   AUTH_V2_WARMING_RETRY_MS,
   resolveHttpApiBase,
 } from './auth-v2-config';
+import { bindDeadline } from './request-deadline';
+import { SESSION_COORDINATOR_CONFIG } from './session-coordinator';
 import { InMemoryLock, SignalHub } from './auth-v2.testing';
 import { AUTH_V2_BUSINESS_TRANSPORT, BusinessTransportBlockedError } from './business-transport';
 import { CLIENT_BUDGET_HEADER, HttpAuthApiAdapter } from './http-auth-api.adapter';
@@ -388,7 +391,10 @@ describe('HttpAuthApiAdapter + núcleo v2 contra ms-users (HttpTestingController
   });
 
   it('timeout del adaptador → AuthApiError(0, TIMEOUT) sin reintento', async () => {
-    configure(HTTP_FLAGS, [{ provide: AUTH_V2_HTTP_TIMEOUT_MS, useValue: 5 }]);
+    configure(HTTP_FLAGS, [
+      { provide: AUTH_V2_HTTP_TIMEOUT_MS, useValue: 5 },
+      { provide: AUTH_V2_MIN_WRITE_START_MS, useValue: 0 },
+    ]);
     const pending = TestBed.inject(AuthApiPort).refresh(SESSION_CSRF);
     const req = httpTesting.expectOne(url('/v1/auth/refresh'));
 
@@ -434,6 +440,7 @@ describe('HttpAuthApiAdapter + núcleo v2 contra ms-users (HttpTestingController
         { provide: AUTH_V2_HTTP_API_BASE, useValue: base },
         { provide: AUTH_V2_HTTP_TIMEOUT_MS, useValue: 5_000 },
         { provide: AUTH_V2_WARMING_RETRY_MS, useValue: 20 },
+        { provide: AUTH_V2_MIN_WRITE_START_MS, useValue: 1_000 },
       ]);
       const pending = TestBed.inject(AuthApiPort).refresh(SESSION_CSRF);
       const first = httpTesting.expectOne(`${base}/v1/auth/refresh`);
@@ -467,6 +474,128 @@ describe('HttpAuthApiAdapter + núcleo v2 contra ms-users (HttpTestingController
       httpTesting.expectOne(url('/v1/auth/session')).flush(warming, unavailable);
       await expect(pending).rejects.toEqual(new AuthApiError(503, 'BACKEND_WARMING'));
       httpTesting.expectNone(url('/v1/auth/session'));
+    });
+  });
+
+  describe('MTEC-37: plazo compartido coordinador → adaptador → proxy', () => {
+    const base = `${location.origin}/api/users`;
+    const same = (path: string) => `${base}${path}`;
+    const sessionBody = () => ({ session: snapshot(), user: javaUser(), csrfToken: ROTATED_CSRF });
+
+    function configureSameOrigin(coordinatorMs: number, extra: Provider[] = []): void {
+      configure(HTTP_FLAGS, [
+        { provide: AUTH_V2_HTTP_API_BASE, useValue: base },
+        { provide: SESSION_COORDINATOR_CONFIG, useValue: { requestTimeoutMs: coordinatorMs } },
+        ...extra,
+      ]);
+    }
+
+    async function signInSameOrigin(): Promise<void> {
+      const session = TestBed.inject(AuthSessionService);
+      const attemptPromise = session.startGoogleAttempt('login');
+      await settle();
+      httpTesting.expectOne(same('/v1/auth/attempts')).flush(attemptResponse());
+      const attempt = await attemptPromise;
+      const done = session.signInWithGoogle(GOOGLE_ID_TOKEN, attempt);
+      await settle();
+      httpTesting.expectOne(same('/v1/auth/google')).flush(authResponse());
+      await done;
+    }
+
+    it('reproducción: GET /session consume 69 s de 75 → el POST /logout NO se envía con un presupuesto nuevo', async () => {
+      configureSameOrigin(75_000);
+      await signInSameOrigin();
+      const session = TestBed.inject(AuthSessionService);
+      const start = Date.now();
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(start);
+
+      const loggingOut = session.logout();
+      await settle();
+      const get = httpTesting.expectOne(same('/v1/auth/session'));
+      // El GET declara el plazo de la operación: min(70 s del adaptador, 75 s del coordinador).
+      expect(Number(get.request.headers.get(CLIENT_BUDGET_HEADER))).toBe(70_000);
+      clock.mockReturnValue(start + 69_000);
+      get.flush(sessionBody());
+      await settle();
+
+      // Antes el POST salía con X-MTEC-Client-Budget-Ms ≈ 70 000 aunque al coordinador le quedaran 6 s.
+      httpTesting.expectNone(same('/v1/auth/logout'));
+      await expect(loggingOut).resolves.toBeUndefined();
+      expect(session.status()).toBe('closed');
+    });
+
+    it('el POST /logout declara al proxy el presupuesto restante del coordinador, no uno propio', async () => {
+      configureSameOrigin(30_000);
+      await signInSameOrigin();
+      const session = TestBed.inject(AuthSessionService);
+      const start = Date.now();
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(start);
+
+      const loggingOut = session.logout();
+      await settle();
+      const get = httpTesting.expectOne(same('/v1/auth/session'));
+      expect(Number(get.request.headers.get(CLIENT_BUDGET_HEADER))).toBe(30_000);
+      clock.mockReturnValue(start + 12_000);
+      get.flush(sessionBody());
+      await settle();
+      const post = httpTesting.expectOne(same('/v1/auth/logout'));
+      expect(post.request.headers.get('X-CSRF-Token')).toBe(ROTATED_CSRF);
+      expect(Number(post.request.headers.get(CLIENT_BUDGET_HEADER))).toBe(18_000);
+      post.flush(null, { status: 204, statusText: 'No Content' });
+      await loggingOut;
+    });
+
+    it('con menos del mínimo para una escritura, el POST no empieza (tampoco tras un BACKEND_WARMING)', async () => {
+      configureSameOrigin(75_000, [{ provide: AUTH_V2_WARMING_RETRY_MS, useValue: 1 }]);
+      const port = TestBed.inject(AuthApiPort);
+      const start = Date.now();
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(start);
+      const controller = new AbortController();
+      bindDeadline(controller.signal, start + 12_000);
+
+      const pending = port.refresh(SESSION_CSRF, controller.signal);
+      const first = httpTesting.expectOne(same('/v1/auth/refresh'));
+      expect(Number(first.request.headers.get(CLIENT_BUDGET_HEADER))).toBe(12_000);
+      clock.mockReturnValue(start + 3_000); // quedan 9 s < 10 s: el reintento no se envía
+      first.flush({ error: { code: 'BACKEND_WARMING' } }, { status: 503, statusText: 'Service Unavailable' });
+      await expect(pending).rejects.toEqual(new AuthApiError(503, 'BACKEND_WARMING'));
+      await settle();
+      httpTesting.expectNone(same('/v1/auth/refresh'));
+
+      // Plazo ya agotado: ni siquiera el primer intento sale.
+      const expired = new AbortController();
+      bindDeadline(expired.signal, start + 3_000);
+      await expect(port.refresh(SESSION_CSRF, expired.signal)).rejects.toEqual(new AuthApiError(0, 'TIMEOUT'));
+      httpTesting.expectNone(same('/v1/auth/refresh'));
+    });
+
+    it('un POST no empieza tras cancelar: abortar durante la espera de BACKEND_WARMING no lo reenvía', async () => {
+      configureSameOrigin(75_000, [{ provide: AUTH_V2_WARMING_RETRY_MS, useValue: 30 }]);
+      const port = TestBed.inject(AuthApiPort);
+      const controller = new AbortController();
+      const pending = port.refresh(SESSION_CSRF, controller.signal);
+      httpTesting
+        .expectOne(same('/v1/auth/refresh'))
+        .flush({ error: { code: 'BACKEND_WARMING' } }, { status: 503, statusText: 'Service Unavailable' });
+      await tick();
+      controller.abort();
+      await expect(pending).rejects.toEqual(new AuthApiError(0, 'ABORTED'));
+      await new Promise((r) => setTimeout(r, 60));
+      httpTesting.expectNone(same('/v1/auth/refresh'));
+    });
+
+    it('un POST enviado cuyo resultado es incierto (TIMEOUT) no se reintenta aunque quede plazo', async () => {
+      configureSameOrigin(75_000, [
+        { provide: AUTH_V2_HTTP_TIMEOUT_MS, useValue: 40 },
+        { provide: AUTH_V2_MIN_WRITE_START_MS, useValue: 0 },
+        { provide: AUTH_V2_WARMING_RETRY_MS, useValue: 1 },
+      ]);
+      const pending = TestBed.inject(AuthApiPort).refresh(SESSION_CSRF);
+      const sent = httpTesting.expectOne(same('/v1/auth/refresh'));
+      await expect(pending).rejects.toEqual(new AuthApiError(0, 'TIMEOUT'));
+      expect(sent.cancelled).toBe(true);
+      await new Promise((r) => setTimeout(r, 20));
+      httpTesting.expectNone(same('/v1/auth/refresh'));
     });
   });
 

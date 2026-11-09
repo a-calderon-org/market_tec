@@ -8,11 +8,15 @@ import {
   TIMEOUT_ERROR_CODE,
 } from './auth-contract';
 import { AuthSessionStore, ReauthenticationReason } from './auth-session.store';
+import { bindDeadline } from './request-deadline';
 import { SESSION_LOCK_NAME, SessionLock } from './session-lock';
 import { SessionSignalChannel } from './session-signal-channel';
 
 export interface SessionCoordinatorConfig {
-  /** Tope por petición de sesión (GET /session y POST /refresh). */
+  /**
+   * Tope por operación de sesión (GET /session, POST /refresh o logout completo). Es un plazo compartido: el
+   * adaptador no lo amplía con su propio tope por petición (MTEC-37).
+   */
   readonly requestTimeoutMs: number;
 }
 
@@ -274,6 +278,10 @@ export class SessionCoordinator {
   private async call<T>(operation: (signal: AbortSignal) => Promise<T>): Promise<T> {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
+    // MTEC-37: un único plazo para toda la operación. El adaptador lo lee del signal y lo usa en cada petición
+    // interna (logout: GET /session + POST /logout) y en el presupuesto que declara al proxy.
+    const deadline = Date.now() + this.config.requestTimeoutMs;
+    bindDeadline(controller.signal, deadline);
 
     this.controllers.add(controller);
 
@@ -284,7 +292,7 @@ export class SessionCoordinator {
           timer = setTimeout(() => {
             controller.abort();
             reject(new AuthApiError(0, TIMEOUT_ERROR_CODE));
-          }, this.config.requestTimeoutMs);
+          }, Math.max(0, deadline - Date.now()));
 
           // Un abort (logout) libera la sección crítica y el lock sin esperar a un
           // puerto que no respete el signal; el resultado tardío se descarta.
