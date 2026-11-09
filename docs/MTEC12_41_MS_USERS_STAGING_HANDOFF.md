@@ -46,8 +46,9 @@ controladores ya llevan `/v1`.
 Si el operador elige otro sufijo o base, `route_check.resolve()` debe pasar con los valores reales; detecta `/v1`
 ausente o duplicado, login/registro intercambiados, rewrites erróneos y operaciones enviadas a otro backend.
 
-Con `authCoreV2` + adaptador `http`, Angular restringe las llamadas de negocio a `GET`/`PUT /me/profile`, de modo que
-`apiBaseUrl` puede apuntar a esta API sin romper rutas heredadas en ese modo. Con `authCoreV2=false` no debe
+Con `authCoreV2` + adaptador `http`, Angular restringe las llamadas de negocio hacia esta API a `GET`/`PUT /me/profile`,
+de modo que `apiBaseUrl` puede apuntar a ella sin romper rutas heredadas en ese modo. Las publicaciones van a
+`catalogApiBaseUrl` (proxy `/api/catalog/v1`; ver `context/integration/FRONTEND_BACKEND.md`). Con `authCoreV2=false` no debe
 cambiarse `apiBaseUrl` hacia esta API.
 
 ## 3. Operaciones permitidas y bloqueadas

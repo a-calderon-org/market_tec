@@ -10,6 +10,7 @@ import {
   type GoogleLoginAttempt,
 } from '../../../core/auth/v2/auth-contract';
 import { AuthSessionService } from '../../../core/auth/v2/auth-session.service';
+import { GoogleCatalogCredential } from '../../../core/auth/v2/google-catalog-credential';
 import { FEATURE_FLAGS } from '../../../core/feature-flags';
 
 interface GoogleIdentity {
@@ -77,6 +78,7 @@ export class GoogleAuthService {
   private readonly authToken = this.flags.authCoreV2 ? null : inject(AuthTokenService);
   /** Núcleo v2: sesión interna en memoria. Solo existe con authCoreV2=true. */
   private readonly session = this.flags.authCoreV2 ? inject(AuthSessionService) : null;
+  private readonly catalogCredential = this.flags.authCoreV2 ? inject(GoogleCatalogCredential) : null;
   private googleAttempt: GoogleLoginAttempt | null = null;
 
   readonly user = linkedSignal<AuthUser | null>(() =>
@@ -177,6 +179,8 @@ export class GoogleAuthService {
       }
 
       await this.session.signInWithGoogle(credential, attempt);
+      // Solo en memoria y solo para publicaciones (`markettec-api-v1` valida tokens de Google, no el JWT interno).
+      this.catalogCredential?.hold(credential);
       return;
     }
 
@@ -200,6 +204,7 @@ export class GoogleAuthService {
   async logout(): Promise<void> {
     if (this.session) {
       this.googleAttempt = null;
+      this.catalogCredential?.clear();
       await this.session.logout();
     } else {
       this.legacy.clearToken();

@@ -8,14 +8,19 @@ import {
   BusinessTransportBlockedError
 } from '../auth/v2/business-transport';
 import { FEATURE_FLAGS } from '../feature-flags';
+import { catalogApiBase } from './catalog-api';
 
 @Injectable({
   providedIn: 'root'
 })
 export class ApiClientService {
   private readonly http = inject(HttpClient);
-  private readonly baseUrl = environment.apiBaseUrl;
   private readonly authCoreV2 = inject(FEATURE_FLAGS).authCoreV2;
+  /**
+   * authCoreV2: `apiBaseUrl` es ms-users (sesión y perfil) y no atiende publicaciones; el negocio va al proxy del
+   * catálogo. Sin `catalogApiBaseUrl` se conserva `apiBaseUrl` y el interceptor sigue bloqueando el negocio.
+   */
+  private readonly baseUrl = (this.authCoreV2 && catalogApiBase()) || environment.apiBaseUrl;
   private readonly businessTransport = inject(AUTH_V2_BUSINESS_TRANSPORT);
 
   /**
