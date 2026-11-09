@@ -416,6 +416,13 @@ es de 26–45 s. El proxy trabaja con un plazo de 38 s:
   dura 120 s, por debajo del enfriamiento de 300 s de Container Apps.
 * Angular V2 repite solo 503 `BACKEND_WARMING`, cada 3 s, dentro de su tope total de 70 s. No reintenta ningún otro
   error.
+* MTEC-37: cada intento hacia el proxy same-origin lleva `X-MTEC-Client-Budget-Ms` con el presupuesto restante de
+  Angular. El plazo del proxy pasa a ser el menor entre 38 s y ese presupuesto menos 2 s. Así una escritura nunca se
+  envía después de que el navegador haya dejado de esperarla: antes, un `POST` podía llegar a Java tras el `TIMEOUT`
+  de Angular y su respuesta (p. ej. la rotación de refresh) se perdía. El proxy no reenvía este encabezado a APIM, y
+  Angular no lo envía a un origen ajeno. Con un arranque de más de 70 s, el `GET /session` inicial termina en
+  `unavailable` sin `POST` y la sesión local se conserva. Los `GET` de calentamiento ya han despertado ms-users, así
+  que la siguiente demanda de token se recupera.
 
 **Entorno de verificación:** entorno de preview `d04` de la SWA `markettec`
 (`https://victorious-beach-0a55f0c1e-d04.westus2.2.azurestaticapps.net`), desplegado desde esta rama con app settings

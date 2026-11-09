@@ -177,6 +177,65 @@ test('a GET that outlives the deadline answers BACKEND_WARMING; a write timing o
   assert.equal(JSON.parse(res.body).error.code, 'UPSTREAM_TIMEOUT'); // never "safe to retry"
 });
 
+// MTEC-37: the SPA's remaining budget caps the proxy. Scaled: deadline 300, minForward 60, margin 20.
+const BUDGET = 'x-mtec-client-budget-ms';
+const scaled = (up) => ({ ...up.deps, clientMarginMs: 20 });
+
+test('a write is never forwarded after the client budget: warm backend found too late answers BACKEND_WARMING', async () => {
+  // ms-users answers the warm-up after 200 ms. Without a client budget the proxy (300 ms) still sends the write;
+  // a browser with only 150 ms left would already have given up, so with its budget the write is NOT sent.
+  let up = upstream((url, init, n) => (n === 1 ? { status: 404, delayMs: 200, java: true } : { status: 200, java: true }));
+  let res = await handle(req('POST', '/api/users/v1/auth/refresh', { origin: ORIGIN }), CONFIG, scaled(up));
+  assert.equal(res.status, 200);
+  assert.deepEqual(up.calls.map((c) => c.init.method), ['GET', 'POST']);
+
+  resetWarmState();
+  up = upstream((url, init, n) => (n === 1 ? { status: 404, delayMs: 200, java: true } : { status: 200, java: true }));
+  res = await handle(req('POST', '/api/users/v1/auth/refresh', { origin: ORIGIN, [BUDGET]: '150' }), CONFIG, scaled(up));
+  assert.equal(res.status, 503);
+  assert.equal(JSON.parse(res.body).error.code, 'BACKEND_WARMING');
+  assert.deepEqual(up.calls.map((c) => c.init.method), ['GET']); // the write was not sent: safe to retry
+});
+
+test('a hanging warm-up is abandoned within the client budget, not the proxy deadline', async () => {
+  const up = upstream(() => ({ hang: true }));
+  const started = Date.now();
+  const res = await handle(req('POST', '/api/users/v1/auth/logout', { origin: ORIGIN, [BUDGET]: '120' }), CONFIG,
+    scaled(up));
+  assert.ok(Date.now() - started < 120, 'answered after the client budget');
+  assert.equal(JSON.parse(res.body).error.code, 'BACKEND_WARMING');
+  assert.deepEqual(up.calls.map((c) => c.init.method), ['GET']);
+});
+
+test('a budget too small for any write answers BACKEND_WARMING without contacting APIM', async () => {
+  for (const [method, path] of [['POST', '/api/users/v1/auth/refresh'], ['GET', '/api/users/v1/auth/session']]) {
+    const up = upstream(() => ({ status: 200, java: true }));
+    const res = await handle(req(method, path, { origin: ORIGIN, [BUDGET]: '20' }), CONFIG, scaled(up));
+    assert.equal(JSON.parse(res.body).error.code, 'BACKEND_WARMING');
+    assert.equal(up.calls.length, 0);
+  }
+});
+
+test('the client budget is never forwarded and a malformed one falls back to the proxy deadline', async () => {
+  const up = upstream(() => ({ status: 200, java: true }));
+  for (const value of ['5000', '-1', '1e9', '12345678', 'abc']) {
+    resetWarmState();
+    const res = await handle(req('POST', '/api/users/v1/auth/refresh', { origin: ORIGIN, [BUDGET]: value }), CONFIG,
+      scaled(up));
+    assert.equal(res.status, 200, value);
+  }
+  for (const call of up.calls) assert.equal(call.init.headers[BUDGET], undefined);
+});
+
+test('a write still timing out inside the client budget answers UPSTREAM_TIMEOUT and is not marked retryable', async () => {
+  const up = upstream((url, init, n) => (n === 1 ? { status: 404, java: true } : { hang: true }));
+  const res = await handle(req('POST', '/api/users/v1/auth/refresh', { origin: ORIGIN, [BUDGET]: '200' }), CONFIG,
+    scaled(up));
+  assert.equal(res.status, 504);
+  assert.equal(JSON.parse(res.body).error.code, 'UPSTREAM_TIMEOUT');
+  assert.deepEqual(up.calls.map((c) => c.init.method), ['GET', 'POST']); // sent exactly once, never resent
+});
+
 test('probe is disabled unless explicitly enabled and only sets a cookie for its own origin', () => {
   assert.equal(probe(req('POST', '/api/d04-probe/cookie', { origin: ORIGIN }), {}).status, 404);
   const env = { MTEC_D04_PROBE: 'enabled', MTEC_PUBLIC_ORIGIN: ORIGIN };

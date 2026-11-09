@@ -32,7 +32,7 @@ import {
 } from './auth-v2-config';
 import { InMemoryLock, SignalHub } from './auth-v2.testing';
 import { AUTH_V2_BUSINESS_TRANSPORT, BusinessTransportBlockedError } from './business-transport';
-import { HttpAuthApiAdapter } from './http-auth-api.adapter';
+import { CLIENT_BUDGET_HEADER, HttpAuthApiAdapter } from './http-auth-api.adapter';
 import { provideAuthCoreV2 } from './provide-auth-core-v2';
 import { SessionLock } from './session-lock';
 import { SessionSignalChannel } from './session-signal-channel';
@@ -426,6 +426,36 @@ describe('HttpAuthApiAdapter + núcleo v2 contra ms-users (HttpTestingController
         await new Promise((r) => setTimeout(r, 5));
         httpTesting.expectNone(url('/v1/auth/refresh'));
       }
+    });
+
+    it('MTEC-37: hacia el proxy same-origin cada intento declara su presupuesto restante', async () => {
+      const base = `${location.origin}/api/users`;
+      configure(HTTP_FLAGS, [
+        { provide: AUTH_V2_HTTP_API_BASE, useValue: base },
+        { provide: AUTH_V2_HTTP_TIMEOUT_MS, useValue: 5_000 },
+        { provide: AUTH_V2_WARMING_RETRY_MS, useValue: 20 },
+      ]);
+      const pending = TestBed.inject(AuthApiPort).refresh(SESSION_CSRF);
+      const first = httpTesting.expectOne(`${base}/v1/auth/refresh`);
+      const firstBudget = Number(first.request.headers.get(CLIENT_BUDGET_HEADER));
+      expect(firstBudget).toBeGreaterThan(4_000);
+      expect(firstBudget).toBeLessThanOrEqual(5_000);
+      first.flush(warming, unavailable);
+      await new Promise((r) => setTimeout(r, 40));
+      const retry = httpTesting.expectOne(`${base}/v1/auth/refresh`);
+      const retryBudget = Number(retry.request.headers.get(CLIENT_BUDGET_HEADER));
+      expect(retryBudget).toBeLessThan(firstBudget);
+      retry.flush(authResponse(ROTATED_JWT, ROTATED_CSRF));
+      await expect(pending).resolves.toMatchObject({ token: ROTATED_JWT });
+    });
+
+    it('MTEC-37: a un origen ajeno no se envía el presupuesto (no es un encabezado CORS permitido)', async () => {
+      configure(HTTP_FLAGS);
+      const pending = TestBed.inject(AuthApiPort).getSession();
+      const req = httpTesting.expectOne(url('/v1/auth/session'));
+      expect(req.request.headers.has(CLIENT_BUDGET_HEADER)).toBe(false);
+      req.flush(warming, { status: 401, statusText: 'Unauthorized' });
+      await expect(pending).rejects.toBeInstanceOf(AuthApiError);
     });
 
     it('los reintentos respetan el tope total del adaptador', async () => {
