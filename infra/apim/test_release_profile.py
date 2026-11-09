@@ -298,3 +298,50 @@ class OutputTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PartialStagingPackageTest(unittest.TestCase):
+    """Staging without JWKS/issuer/audience and without a product scope: denials only, never an enablement."""
+    NO_PRODUCT = {s: x for s, x in UPSTREAM.items() if s != "product"}
+
+    def partial(self, **kwargs):
+        args = dict(jwt_unconfigured=True, no_product_scope=True)
+        args.update(kwargs)
+        return gp.build_package(MANIFEST, None, "", "", self.NO_PRODUCT, OPENAPI_BYTES, ROUTES, None, PROFILE, ORIGINS,
+                                **args)
+
+    def test_jwt_operations_are_terminal_denials(self):
+        result = self.partial()
+        defs = definitions(result)
+        for op_id in PROFILE_OPS:
+            self.assertEqual(("blocked", ["internal_jwt_unconfigured"]), (defs[op_id]["status"], defs[op_id]["blocked_reasons"]))
+            log = simulate(result["policies"][op_id])
+            self.assertEqual(("503", False, []), (log["denied"], log["backend"], log["parent_actions"]))
+            self.assertIn("INTERNAL_JWT_UNCONFIGURED", result["policies"][op_id])
+        self.assertEqual("unconfigured: JWT operations denied", result["internal_jwt"])
+        self.assertTrue(result["product_scope"].startswith("none"))
+
+    def test_partial_package_enables_nothing_the_full_package_would_not(self):
+        partial, full = definitions(self.partial()), definitions(release())
+        enabled = {i for i, d in partial.items() if d["status"] == "enabled"}
+        self.assertEqual({"getSessionState", "refreshSession", "logoutSession"}, enabled)
+        self.assertTrue(enabled <= {i for i, d in full.items() if d["status"] == "enabled"})
+        for op_id in ("createAuthenticationAttempt", "exchangeGoogleCredential", "legacyGoogleRegistrationCompatibility"):
+            self.assertEqual(["abuse_protection_unapproved"], partial[op_id]["blocked_reasons"])
+        for op_id in set(partial) - RELEASED:
+            self.assertEqual(["not_in_release_profile"], partial[op_id]["blocked_reasons"])
+
+    def test_partial_options_are_explicit_and_consistent(self):
+        with self.assertRaises(gp.PackageError):  # no release profile
+            gp.build_package(MANIFEST, None, "", "", self.NO_PRODUCT, OPENAPI_BYTES, ROUTES, jwt_unconfigured=True)
+        with self.assertRaises(gp.PackageError):  # JWT inputs contradict jwt_unconfigured
+            gp.build_package(MANIFEST, JWKS, ISS, AUD, self.NO_PRODUCT, OPENAPI_BYTES, ROUTES, None, PROFILE, ORIGINS,
+                             jwt_unconfigured=True, no_product_scope=True)
+        with self.assertRaises(gp.PackageError):  # product still required without no_product_scope
+            self.partial(no_product_scope=False)
+        with self.assertRaises(ValueError):  # a product export contradicts no_product_scope
+            gp.build_package(MANIFEST, None, "", "", UPSTREAM, OPENAPI_BYTES, ROUTES, None, PROFILE, ORIGINS,
+                             jwt_unconfigured=True, no_product_scope=True)
+        with self.assertRaises(gp.PackageError):  # global and api exports are still mandatory
+            gp.build_package(MANIFEST, None, "", "", {"global": UPSTREAM["global"]}, OPENAPI_BYTES, ROUTES, None,
+                             PROFILE, ORIGINS, jwt_unconfigured=True, no_product_scope=True)

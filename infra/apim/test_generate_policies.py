@@ -783,11 +783,12 @@ class PolicyTest(unittest.TestCase):
         self.assertIn("!= 1", " ".join(self.conditions(name)))
 
     def test_cookie_name_regexes_distinguish_similar_names_and_duplicates(self):
-        confirm = next(c for c in self.conditions("confirmInstitutionalEmailLink") if "Matches" in c)
+        confirm = next(c for c in self.conditions("confirmInstitutionalEmailLink") if "Regex.Split" in c)
         count_pattern = regexes(confirm)[0]
         value = "a" * 64
-        def count(header):
-            return len(re.findall(count_pattern, header))
+        def count(header):  # mirrors Regex.Split(...).Length - 1 in the policy
+            self.assertEqual(len(re.findall(count_pattern, header)), len(re.split(count_pattern, header)) - 1)
+            return len(re.split(count_pattern, header)) - 1
         self.assertEqual(1, count(f"__Host-mtec-email-attempt={value}"))
         self.assertEqual(0, count(f"__Host-mtec-attempt={value}"))      # Google cookie is not the email one
         self.assertEqual(0, count(f"x__Host-mtec-email-attempt={value}"))
@@ -811,12 +812,12 @@ class PolicyTest(unittest.TestCase):
         for name in ("refreshSession", "recordSessionActivity"):
             conditions = " ".join(self.conditions(name))
             self.assertIn("__Host-mtec-refresh=", conditions)
-            self.assertIn(".Count != 1", conditions)
+            self.assertIn("Length - 1) != 1", conditions)
             self.assertIn("CSRF_INVALID", self.open[name])
 
     def test_logout_remains_idempotent_without_cookie(self):
         conditions = self.conditions("logoutSession")
-        cookie_check = next(c for c in conditions if "Matches" in c and "> 1" in c)
+        cookie_check = next(c for c in conditions if "Regex.Split" in c and "> 1" in c)
         csrf_check = next(c for c in conditions if "X-CSRF-Token" in c)
         self.assertNotIn("!= 1", cookie_check)
         self.assertIn("== 1) &&", csrf_check)
@@ -861,3 +862,31 @@ class PolicyTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AzureDefaultGlobalTest(unittest.TestCase):
+    """Azure's default global policy (as exported from markettec-api) omits <on-error>."""
+    DEFAULT = ("<policies><inbound></inbound><backend><forward-request /></backend><outbound></outbound></policies>")
+
+    def test_default_global_without_on_error_is_accepted_only_at_global_scope(self):
+        check_upstream("global", self.DEFAULT)
+        for scope in ("product", "api"):
+            with self.assertRaises(ValueError):
+                check_upstream(scope, SCOPED.replace("<on-error><base /></on-error>", ""))
+        with self.assertRaises(ValueError):  # only on-error may be absent
+            check_upstream("global", self.DEFAULT.replace("<outbound></outbound>", ""))
+
+
+class GatewayExpressionTypesTest(unittest.TestCase):
+    """Types Azure APIM refuses in policy expressions (gateway validation, markettec-api 2026-11-09)."""
+
+    def test_no_match_collection_in_generated_policies(self):
+        checked = []
+        for xml in package()["policies"].values():
+            self.assertNotIn("Regex.Matches", xml)
+            self.assertNotIn("MatchCollection", xml)
+            for when in ET.fromstring(xml).iter("when"):
+                for pattern in re.findall(r'Regex\.Split\([^@]*@"([^"]+)"', when.attrib["condition"]):
+                    checked.append(pattern)
+                    self.assertNotRegex(pattern, r"\((?!\?:)", "capturing groups would inflate Regex.Split length")
+        self.assertTrue(checked)

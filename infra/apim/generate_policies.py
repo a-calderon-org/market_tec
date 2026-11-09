@@ -17,6 +17,10 @@ Fail-closed rules:
 * A release profile (release_profiles.py, reviewed code) only narrows: operations outside it get a
   terminal deny, operations inside it still need their approvals. It adds a candidate API definition
   (no subscription key) and an API-scope CORS policy with explicit origins, never `*`.
+* Partial staging package (explicit opt-in, release profile only): `jwt_unconfigured` turns every
+  internal-JWT operation into a terminal deny instead of requiring JWKS/issuer/audience, and
+  `no_product_scope` records that the API belongs to no APIM product instead of requiring a product
+  export. Neither can enable an operation; both are recorded in the output.
 """
 import argparse
 import hashlib
@@ -238,7 +242,10 @@ def _cookie_header() -> str:
 
 
 def _count(name: str) -> str:
-    return f'System.Text.RegularExpressions.Regex.Matches({_cookie_header()}, @"(^|;\\s*){name}=").Count'
+    # Azure rejects System.Text.RegularExpressions.MatchCollection in policy expressions (verified on
+    # markettec-api, 2026-11-09), so Regex.Matches(...).Count cannot be used. Regex.Split returns string[];
+    # with a non-capturing pattern its length is the number of occurrences + 1.
+    return f'(System.Text.RegularExpressions.Regex.Split({_cookie_header()}, @"(?:^|;\\s*){name}=").Length - 1)'
 
 
 def _valid(name: str) -> str:
@@ -332,9 +339,20 @@ def terminal_deny(code: str, status: int = 503, reason: str = "Service Unavailab
     return _text(root)
 
 
-def policy_for(op: dict, approvals: dict, jwks, issuer: str, audience: str, released=None) -> str:
-    """`released`: operation ids of the release profile, or None when no profile narrows the surface."""
-    blocked = blocked_reason(op, approvals)
+JWT_UNCONFIGURED = ("internal_jwt_unconfigured", "INTERNAL_JWT_UNCONFIGURED")
+
+
+def _jwt_unconfigured(op: dict, jwt_unconfigured: bool):
+    return JWT_UNCONFIGURED if jwt_unconfigured and op["auth"] in ("jwt", "jwt_cookie") else None
+
+
+def policy_for(op: dict, approvals: dict, jwks, issuer: str, audience: str, released=None,
+               jwt_unconfigured: bool = False) -> str:
+    """`released`: operation ids of the release profile, or None when no profile narrows the surface.
+
+    `jwt_unconfigured`: no reviewed JWKS/issuer/audience exist yet, so internal-JWT operations are denied.
+    """
+    blocked = blocked_reason(op, approvals) or _jwt_unconfigured(op, jwt_unconfigured)
     if released is not None and op["id"] not in released:
         status, reason, code = NOT_RELEASED
         xml = terminal_deny(code, status, reason)
@@ -371,11 +389,11 @@ def _prepare(manifest, openapi_bytes, backend_routes, evidence_dir):
     return ops, {name: verify_approval(manifest, name, ctx) for name in APPROVALS}
 
 
-def _definitions(ops, manifest, approvals, jwks, issuer, audience, suffix, released=None):
+def _definitions(ops, manifest, approvals, jwks, issuer, audience, suffix, released=None, jwt_unconfigured=False):
     policies, definitions = {}, []
     for op in ops:
-        xml = policy_for(op, approvals, jwks, issuer, audience, released)
-        blocked = blocked_reason(op, approvals)
+        xml = policy_for(op, approvals, jwks, issuer, audience, released, jwt_unconfigured)
+        blocked = blocked_reason(op, approvals) or _jwt_unconfigured(op, jwt_unconfigured)
         if released is not None and op["id"] not in released:
             blocked = ("not_in_release_profile", NOT_RELEASED[2])
         policies[op["id"]] = xml
@@ -388,15 +406,23 @@ def _definitions(ops, manifest, approvals, jwks, issuer, audience, suffix, relea
     return policies, definitions
 
 
-def upstream_report(upstream_xml: dict) -> dict:
-    """Validate every supplied scope locally; report which exports are still missing."""
+def upstream_report(upstream_xml: dict, no_product_scope: bool = False) -> dict:
+    """Validate every supplied scope locally; report which exports are still missing.
+
+    `no_product_scope`: the operator verified in Azure that the API belongs to no product, so there is no
+    product scope to export (supplying one anyway is contradictory and refused).
+    """
     upstream_xml = upstream_xml or {}
     if set(upstream_xml) - set(SCOPES):
         raise ValueError("unknown upstream scope")
+    if no_product_scope and "product" in upstream_xml:
+        raise ValueError("a product export contradicts no_product_scope")
     for scope, xml in upstream_xml.items():
         check_upstream(scope, xml)
-    return {"missing_exports": {s: REQUIRED_EXPORTS[s] for s in SCOPES if s not in upstream_xml},
-            "validated": [s for s in SCOPES if s in upstream_xml]}
+    required = [s for s in SCOPES if not (no_product_scope and s == "product")]
+    return {"missing_exports": {s: REQUIRED_EXPORTS[s] for s in required if s not in upstream_xml},
+            "validated": [s for s in SCOPES if s in upstream_xml],
+            "product_scope": "none (operator-verified: API in no product)" if no_product_scope else "exported"}
 
 
 # Placeholders only used to prove the route chain is internally consistent; real hosts are operator inputs.
@@ -447,12 +473,15 @@ def release_bundle(name: str, definitions: list, allowed_origins: list) -> dict:
 
 
 def _result(kind, suffix, index, ops, manifest, approvals, report, jwks, issuer, audience, release=None,
-            allowed_origins=None):
+            allowed_origins=None, jwt_unconfigured=False):
     released = set(release_profile(release)["operations"]) if release else None
-    policies, definitions = _definitions(ops, manifest, approvals, jwks, issuer, audience, suffix, released)
+    policies, definitions = _definitions(ops, manifest, approvals, jwks, issuer, audience, suffix, released,
+                                         jwt_unconfigured)
     result = {"kind": kind, "index_file": index, "azure_validated": False, "deployment_approved": False,
               "local_structure_validated": True, "upstream_scopes_validated_locally": report["validated"],
-              "missing_exports": report["missing_exports"], "approvals_verified": approvals,
+              "missing_exports": report["missing_exports"], "product_scope": report["product_scope"],
+              "internal_jwt": "unconfigured: JWT operations denied" if jwt_unconfigured else "configured",
+              "approvals_verified": approvals,
               "external_evidence_required": EXTERNAL_EVIDENCE, "policies": policies, "definitions": definitions}
     if release:
         bundle = release_bundle(release, definitions, allowed_origins)
@@ -474,16 +503,25 @@ def analyze(manifest, jwks, issuer, audience, upstream_xml=None, openapi=None, b
 
 
 def build_package(manifest, jwks, issuer, audience, upstream_xml=None, openapi=None, backend_routes=None, evidence_dir=None,
-                  release=None, allowed_origins=None) -> dict:
-    """Candidate package (*.candidate.xml) or PackageError. Locally checked only; not Azure-validated or approved."""
+                  release=None, allowed_origins=None, jwt_unconfigured=False, no_product_scope=False) -> dict:
+    """Candidate package (*.candidate.xml) or PackageError. Locally checked only; not Azure-validated or approved.
+
+    `jwt_unconfigured` / `no_product_scope` build a partial staging package (release profile only): they never
+    enable an operation, they only replace a missing input with a terminal deny or a verified absence.
+    """
+    if (jwt_unconfigured or no_product_scope) and not release:
+        raise PackageError("partial staging packages need a release profile")
     ops, approvals = _prepare(manifest, openapi, backend_routes, evidence_dir)
-    report = upstream_report(upstream_xml)
+    report = upstream_report(upstream_xml, no_product_scope)
     if report["missing_exports"]:
         raise PackageError("missing verified upstream policy exports: " + ", ".join(report["missing_exports"]))
-    if jwks is None or not issuer or not audience:
+    if jwt_unconfigured:
+        if jwks is not None or issuer or audience:
+            raise PackageError("jwt_unconfigured contradicts a supplied JWKS, issuer or audience")
+    elif jwks is None or not issuer or not audience:
         raise PackageError("reviewed JWKS snapshot, issuer and audience are required")
     return _result("candidate_package", ".candidate.xml", "operations.candidate.json", ops, manifest, approvals, report,
-                   jwks, issuer, audience, release, allowed_origins)
+                   jwks, issuer, audience, release, allowed_origins, jwt_unconfigured)
 
 
 def write_output(result: dict, output_dir: Path) -> None:
@@ -520,21 +558,30 @@ def main() -> None:
     parser.add_argument("--release", help="release profile from release_profiles.py (narrows the surface)")
     parser.add_argument("--allowed-origin", action="append", default=[],
                         help="exact https SPA origin for the release API-scope CORS (repeatable)")
-    parser.add_argument("--issuer", required=True)
-    parser.add_argument("--audience", required=True)
+    parser.add_argument("--issuer", default="")
+    parser.add_argument("--audience", default="")
+    parser.add_argument("--jwt-unconfigured", action="store_true",
+                        help="package only, with --release: deny every internal-JWT operation (no JWKS/issuer/audience yet)")
+    parser.add_argument("--no-product-scope", action="store_true",
+                        help="package only, with --release: the API is verified to belong to no APIM product")
     for scope in SCOPES:
         parser.add_argument(f"--upstream-{scope}", type=Path, help=f"exported {scope}-scope policy XML")
     parser.add_argument("--output-dir", type=Path, required=True, help="must not exist or be empty")
     args = parser.parse_args()
     try:
+        if args.mode == "analyze" and (args.jwt_unconfigured or args.no_product_scope):
+            raise ValueError("--jwt-unconfigured and --no-product-scope apply to --mode package only")
+        if args.mode == "analyze" and (not args.issuer or not args.audience):
+            raise ValueError("analyze needs --issuer and --audience")
         out = Path(args.output_dir)
         if out.exists() and (not out.is_dir() or any(out.iterdir())):
             raise FileExistsError(f"output directory {out} already exists and is not empty; use a new directory")
         upstream = {s: getattr(args, f"upstream_{s}").read_text() for s in SCOPES if getattr(args, f"upstream_{s}")}
-        result = (build_package if args.mode == "package" else analyze)(
-            json.loads(args.manifest.read_text()), json.loads(args.jwks.read_text()) if args.jwks else None,
-            args.issuer, args.audience, upstream, args.openapi.read_bytes(),
-            json.loads(args.backend_routes.read_text()), args.evidence_dir, args.release, args.allowed_origin)
+        inputs = (json.loads(args.manifest.read_text()), json.loads(args.jwks.read_text()) if args.jwks else None,
+                  args.issuer, args.audience, upstream, args.openapi.read_bytes(),
+                  json.loads(args.backend_routes.read_text()), args.evidence_dir, args.release, args.allowed_origin)
+        result = (build_package(*inputs, jwt_unconfigured=args.jwt_unconfigured, no_product_scope=args.no_product_scope)
+                  if args.mode == "package" else analyze(*inputs))
         write_output(result, out)
     except (ValueError, OSError) as error:  # PackageError is a ValueError
         raise SystemExit(f"refused: {error}")

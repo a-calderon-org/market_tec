@@ -206,7 +206,10 @@ def validate_policy(root: ET.Element, profile: str, scope: str = "own") -> None:
     if root.attrib or (root.text or "").strip():
         raise ValueError(f"{where}: <policies> takes no attributes or text")
     if profile == "upstream":
-        if [c.tag for c in root] != list(SECTIONS):
+        # Azure's default global policy has no <on-error>; at global scope there is nothing to inherit, so an
+        # absent section means no actions. Every other scope must keep all four sections (and their <base />).
+        tags = [c.tag for c in root]
+        if tags != list(SECTIONS) and not (scope == "global" and tags == list(SECTIONS[:-1])):
             raise ValueError(f"{where}: expected sections {SECTIONS} exactly once and in order")
     else:
         tags = [c.tag for c in root]
