@@ -452,3 +452,60 @@ guarda.
 4. Rollback: borrar el entorno `d04` (`az staticwebapp environment delete … --environment-name d04`) y devolver
    `allowed-origins` y el CORS del ámbito API al único origen de producción (instantáneas en el directorio de
    rollback del operador).
+
+## 14. Despliegue de los SHA aprobados de D04 (2026-11-09, 16:00–16:30 UTC)
+
+**SHA desplegados:** ms-users `main@f62201315d4fd3ee0a1aeab0ec47204d158d06f2` (PR #29, CI `ms-users CI` verde) y MarketTec
+`main@19ca47bf72379b26cd4f9edaadbc4dfc533d8c2c` (PR #38). Ambos se construyeron desde checkouts limpios del SHA
+(`git worktree --detach`), sin archivos locales; el único archivo generado es `src/environments/environment.ts`,
+como en CI (`apiBaseUrl` = `https://victorious-beach-0a55f0c1e-d04.westus2.2.azurestaticapps.net/api/users`,
+`googleClientId` = `not-configured`).
+
+### 14.1 Cambios realizados en Azure
+
+| Recurso | Cambio | Rollback |
+| --- | --- | --- |
+| ACR `acrmsusersstg` | Imagen `ms-users:f622013…`, digest `sha256:b383b0d57ff1ffae729acbea58c62ee2a45a2a9f7788cd9149678002bcdcc6e2`, etiqueta `org.opencontainers.image.revision=f622013…` (paso `image` de `ms-users-aca.sh`) | Sin efecto en tráfico; conservar |
+| Container App `ca-ms-users-stg` | Revisión activa `ca-ms-users-stg--rf622013` (imagen por digest, 100 % del tráfico); se añade `USERS_GATEWAY_USER_TOKEN_RELOCATION_ENABLED=false` (14/14 flags `false`). Etiquetas `env`/`service` restauradas tras `--tags` | `az containerapp revision copy -g acalderon-TEC -n ca-ms-users-stg --from-revision ca-ms-users-stg--w8dnrtz` (imagen `f574c71`, digest `sha256:2d8a8747…`, misma sonda y escala) |
+| SWA `markettec`, entorno `d04` | Contenido y Function de `19ca47b` (StaticSitesClient linux-x64 `a58ffd5d`, SHA-256 verificado, `DEPLOYMENT_ENVIRONMENT=d04`) | Volver a desplegar el contenido anterior o borrar `d04` (§13.2) |
+| SWA `d04`, app setting | `MTEC_D04_PROBE=disabled` (antes `enabled`) | `az staticwebapp appsettings set … --environment-name d04 --setting-names MTEC_D04_PROBE=enabled` |
+
+**Sin cambios:** APIM (`markettec-users-v1` y `markettec-api-v1`), Easy Auth de Container Apps, Azure SQL y su firewall,
+Key Vault, producción de SWA (`default`, `index.html` idéntico, última actualización 2026-11-05) y el preview `12`.
+
+**Desviación del script:** no se ejecutó el paso `app` de `ms-users-aca.sh`: su parche de sondas devolvería la sonda
+Startup a `initialDelaySeconds=10`/`periodSeconds=10` y desharía el ajuste 1 s/3 s de §13.1. Se ejecutó solo su
+`az containerapp update` (mismas variables y flags), con la imagen fijada por digest. El script debe alinearse con
+la sonda vigente y conservar las etiquetas existentes antes del próximo uso.
+
+### 14.2 Comprobaciones
+
+| # | Prueba | Resultado |
+| --- | --- | --- |
+| 1 | Políticas APIM almacenadas frente a la generación de `19ca47b` (§11.2 + `--gateway-auth-resource`, ambos orígenes) | **Verificado**: 22 operaciones y ámbito API idénticos (XML canónico); `subscriptionRequired=false`; identidad APIM `5535ce75-…` |
+| 2 | Easy Auth tras el despliegue | **Verificado**: activa, `Return401`, audiencia y `allowedApplications`/`allowedPrincipals` de APIM; directa a rutas protegidas → 401 (incluido `X-MTEC-User-Authorization` falso) |
+| 3 | `/health` y SQL | **Verificado**: 200; registros: token de identidad administrada, Hikari, `DbValidate` de Flyway, sin WARN/ERROR |
+| 4 | Function desde `d04` | **Verificado**: `GET /api/users/v1/auth/session` sin cookie → 404 `ROUTE_NOT_FOUND` de Java con `X-Correlation-ID` idéntico (también en un navegador real); origen ajeno, `Sec-Fetch-Site` cross-site/same-site y origen de producción → 403 `ORIGIN_DENIED`; `DELETE` y `%2e%2e` → 404 sin reenvío |
+| 5 | Denegaciones (APIM y vía Function) | **Verificado**: Google 503 `ADMISSION_DISABLED`, perfil 503 `INTERNAL_JWT_UNCONFIGURED`, no liberadas 404 `OPERATION_NOT_RELEASED`, refresh sin cookie 401 `REFRESH_INVALID`; ninguna lleva el eco de correlación |
+| 6 | Sonda D04 | **Verificado**: `GET`/`POST /api/d04-probe/cookie` → 404 |
+| 7 | Origin inyectado por la Function llega a Java | **No determinado** por tráfico: con los flags apagados Java no comprueba ni registra `Origin` (cubierto por `proxy.test.js`) |
+
+Origen ajeno directo contra APIM: 200 con cuerpo vacío y sin `Access-Control-Allow-Origin` (CORS
+`terminate-unmatched-request`); no llega a Java.
+
+### 14.3 Arranque en frío con SQL serverless pausada
+
+Una muestra (navegador real en `d04`, réplicas en 0, sin sondeos de la aplicación):
+
+* 16:24:21 Azure SQL `sqldb-ms-users-dev` (`GP_S_Gen5`, `autoPauseDelay=60`) se **pausa** (registro de actividad).
+* 16:24:47.8 `GET /auth/session` → réplica programada 16:24:50, contenedor 16:25:05, Hikari 16:25:08.
+* 16:25:26 la Function responde 503 `BACKEND_WARMING` (`Retry-After: 3`) a los 39,3 s, por debajo de 45 s. Solo `GET`:
+  **no se emitió ninguna escritura** (los registros de Java solo muestran `GET`).
+* 16:25:40 el primer JVM termina con `UnsatisfiedDependencyException` (código 1) tras ~31 s esperando conexión a SQL
+  mientras se reanudaba; la plataforma lo reinicia. SQL reanudada 16:25:54; Hikari conecta en ~7 s; listo 16:26:02.
+* Reintento a los 3 s: 404 de Java con el `X-Correlation-ID` idéntico (cabecera y cuerpo), 33,1 s.
+
+Total ~81 s desde la primera petición hasta la respuesta de Java: con SQL pausada, el arranque en frío supera el tope
+de 70 s de Angular V2 (39,3 + 3 + 33,1 s) y el plazo de 38 s del proxy. Con SQL en línea se mantiene lo medido en
+§13.1 (26–45 s). No se cambió `minReplicas`, el `autoPauseDelay` ni el tiempo de espera de Hikari: requieren decisión
+(coste o configuración de SQL) antes de activar sesiones reales.
