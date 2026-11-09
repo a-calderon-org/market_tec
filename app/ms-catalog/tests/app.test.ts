@@ -48,3 +48,9 @@ test('unknown route returns the standard error envelope', async () => {
   assert.equal(body.error.correlationId, response.headers.get('x-correlation-id'));
   assert.equal(typeof body.error.timestamp, 'number');
 });
+
+test('default server does not expose publications without explicit authenticated composition', async () => {
+  const response = await fetch(`${baseUrl}/v1/publicaciones`);
+  assert.equal(response.status, 404);
+  assert.equal((await response.json()).error.code, 'ROUTE_NOT_FOUND');
+});

@@ -5,8 +5,9 @@ import { createErrorHandler, notFoundHandler } from './adapters/in/http/error-ha
 import { requestLogger } from './adapters/in/http/request-logger.js';
 import { createContainer } from './config/container.js';
 import { loadSettings, type Settings } from './config/settings.js';
+import { createPublicationRouter, type PublicationHttpDependencies } from './adapters/in/http/publication-router.js';
 
-export function createApp(settings: Settings = loadSettings()): Express {
+export function createApp(settings: Settings = loadSettings(), publications?: PublicationHttpDependencies): Express {
   const app = express();
   const container = createContainer(settings);
 
@@ -15,6 +16,7 @@ export function createApp(settings: Settings = loadSettings()): Express {
   app.use(correlationId);
   app.use(requestLogger(settings.serviceName, settings.logLevel));
   app.use(createHealthRouter(container.getHealthQuery));
+  if (publications) app.use('/v1/publicaciones', createPublicationRouter(publications));
   app.use(notFoundHandler);
   app.use(createErrorHandler(settings.serviceName, settings.logLevel));
 

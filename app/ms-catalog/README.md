@@ -2,6 +2,9 @@
 
 Servicio de catalogo de MarketTec. Usa Node.js 24 (la version declarada en el `.nvmrc` de la raiz), TypeScript y Express 5. Incluye el nucleo local de publicaciones; solo `/health` esta conectado a HTTP. No contiene chats ni integraciones Azure.
 
+El arranque normal conserva ese alcance. Existe tambien un adaptador HTTP de
+lectura optativo para pruebas, descrito en la seccion MTEC-32 siguiente.
+
 ## Requisitos y ejecucion
 
 ```bash
@@ -80,3 +83,51 @@ validacion completa JSON Schema ni conformidad HTTP de MTEC-32. CI observa tambi
 `contracts/openapi/catalog.json` para ejecutar esta comprobacion ante cambios del
 borrador. Los casos nulos/malformados producen `INVALID_PUBLICATION`, y las
 actualizaciones rechazadas conservan el contenido anterior.
+
+## MTEC-32 — incremento de lectura HTTP en pruebas
+
+**Verificado localmente:** `createApp(settings, dependencies)` admite composicion
+explicita con casos de uso y callback de autenticacion confiable. En esa composicion
+expone `GET /v1/publicaciones` y `GET /v1/publicaciones/:publicationId`.
+Sin dependencias, incluido `npm start`, las rutas de negocio no se montan.
+El callback debe verificar credenciales antes de devolver `userId`; el router no
+valida JWT ni acepta identidad desde headers. Solo las pruebas incluyen fake auth.
+
+Listado: respuesta plana `{items,totalRecords,page,pageSize}` y filtros de MTEC-28.
+Se rechazan parametros desconocidos/repetidos, arrays/objetos, numeros vacios,
+notacion exponencial y limites invalidos. Precios HTTP usan decimal sin signo;
+pagina/tamano usan digitos enteros. Errores de dominio usan envelope correlacionado
+con 400/404; sin principal valido retorna 401 y errores inesperados retornan 500
+sin detalles internos. `X-Correlation-ID` se propaga o genera como en health.
+
+### Pruebas reproducibles antes de integrar
+
+Desde `app/ms-catalog`:
+
+```powershell
+npm run check
+# Solo HTTP de publicaciones (tras compilar):
+node --test dist/tests/publication-http.test.js
+# Prueba manual, datos sinteticos y fake auth, solo escucha en loopback:
+node dist/tests/fixtures/publication-http-preview.js
+```
+
+Con la fixture en ejecucion, en otra terminal:
+
+```powershell
+$testHeaders = @{ Authorization = 'Bearer local-test-only'; 'X-Correlation-ID' = 'manual-catalog' }
+Invoke-RestMethod 'http://127.0.0.1:3100/v1/publicaciones?sortBy=precio&sortDirection=asc&page=2&pageSize=1' -Headers $testHeaders | ConvertTo-Json -Depth 6
+Invoke-RestMethod 'http://127.0.0.1:3100/v1/publicaciones/pub-1' -Headers $testHeaders | ConvertTo-Json -Depth 6
+```
+
+La primera respuesta debe contener total 3, pagina 2, tamano 1 y precio 20.
+Importar `tests/fixtures/publication-read.postman_collection.json` en Postman y
+ejecutar la coleccion contra esa misma fixture: comprueba 200, 400, 401, 404,
+correlacion, paginacion y fechas. Detener con Ctrl+C; los datos no persisten.
+No ejecutar esa fixture en produccion ni usar credenciales reales.
+
+**Pendiente para cerrar MTEC-32:** conformidad del contrato y autenticacion real,
+pruebas JSON Schema completas, CRUD/rutas adicionales segun contratos aprobados,
+201/403 con casos reales y validacion manual de la coleccion Postman. Los tests de
+lectura no certifican APIM, JWT, Cosmos ni conexion de Angular. OpenAPI conserva
+`proposed`, ya que la operacion completa aun no tiene conformidad.

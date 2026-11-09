@@ -1,5 +1,11 @@
 # Flujo de datos
 
+**MTEC-32, Verificado localmente:** en pruebas HTTP aisladas, Express invoca un
+autenticador inyectado antes de consultar `PublicationService` y el repositorio en
+memoria. La respuesta es plana y conserva fechas e IDs de compatibilidad. Este
+flujo no esta conectado a Angular/APIM ni habilitado en el arranque normal; ver
+[fixture y limitaciones](../../app/ms-catalog/README.md#mtec-32--incremento-de-lectura-http-en-pruebas).
+
 ## Autenticación
 
 ```mermaid

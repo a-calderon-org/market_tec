@@ -1,5 +1,13 @@
 # Backend: contratos API
 
+## Adaptador de lectura ms-catalog en pruebas
+
+**Verificado en codigo:** MTEC-32 agrega un router optativo de lectura a
+`app/ms-catalog`, sin modificar `app/backend` ni el arranque normal. Alcance,
+respuestas, limites de autenticacion y pruebas manuales en el
+[README del servicio](../../app/ms-catalog/README.md#mtec-32--incremento-de-lectura-http-en-pruebas).
+El OpenAPI de catalogo sigue Proposed; no hay conformidad productiva.
+
 ## Contrato implementado localmente
 
 ### `GET /api/health`
