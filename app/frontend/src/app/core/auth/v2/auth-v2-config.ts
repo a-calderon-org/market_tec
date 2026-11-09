@@ -73,8 +73,16 @@ export const AUTH_V2_HTTP_API_BASE = new InjectionToken<string | null>('AUTH_V2_
       : null,
 });
 
+/**
+ * Arranque en frío de staging (MTEC-12/D04): ms-users escala a cero y la primera petición tarda 35-47 s
+ * (medido 2026-11-09) en llegar a Java a través de APIM. Un tope menor abortaría el primer
+ * `POST /refresh` mientras Java aún puede rotar el refresh token, perdiendo la rotación. Debe quedar
+ * por debajo de los 240 s de APIM y del ingreso de Container Apps.
+ */
+export const AUTH_V2_COLD_START_BUDGET_MS = 70_000;
+
 /** Tope por petición del adaptador HTTP (las de sesión tienen además el del coordinador). */
 export const AUTH_V2_HTTP_TIMEOUT_MS = new InjectionToken<number>('AUTH_V2_HTTP_TIMEOUT_MS', {
   providedIn: 'root',
-  factory: () => 15_000,
+  factory: () => AUTH_V2_COLD_START_BUDGET_MS,
 });

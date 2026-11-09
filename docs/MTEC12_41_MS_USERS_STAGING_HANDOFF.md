@@ -263,24 +263,18 @@ personalizados (por ejemplo `app.<dominio>` en la SWA y `api.<dominio>` en APIM)
 
 ### 11.6 Acceso directo al Container App
 
-`ca-ms-users-stg` tiene ingreso externo sin restricciones de IP ni autenticación de plataforma, y APIM no tiene
-identidad administrada. Cualquier cliente puede evitar APIM y llamar a ms-users; hoy no hay superficie sensible porque
-los 13 flags están apagados (todas las rutas devuelven 404). **No se deben activar flags mientras siga así.** Opciones
-en el entorno actual (perfil Consumption, sin VNet):
-
-| Opción | Viabilidad |
-| --- | --- |
-| Restricción de IP del ingreso | No fiable: APIM Consumption no tiene IP de salida fija y el ingreso de ACA no admite service tags |
-| Entorno interno + VNet | No viable: APIM Consumption no se integra en VNet |
-| Autenticación de plataforma de ACA (Entra ID) + identidad administrada de APIM con `authentication-managed-identity` | Viable sin cambiar Java ni coste adicional; requiere registrar una aplicación, activar la identidad de APIM y excluir `/health`. **Recomendada**, pendiente de aprobación |
-| Secreto compartido inyectado por APIM o mTLS | Requiere validación en Java (fuera de este incremento) |
+Cerrado el 2026-11-09 (§12). Antes, `ca-ms-users-stg` tenía ingreso externo sin restricciones ni autenticación de
+plataforma y cualquier cliente podía evitar APIM. Alternativas descartadas en Consumption: restricción de IP (APIM
+Consumption no tiene IP de salida fija), entorno interno + VNet (Consumption no se integra en VNet), secreto
+compartido o mTLS (exigen validación propia en Java y gestión de secretos).
 
 ### 11.7 Bloqueos para habilitar Google
 
-1. D-04: dominios personalizados en el mismo *site* y prueba de navegador (§10.8).
-2. Cierre del acceso directo al Container App (§11.6).
+1. D-04: dominio registrable propio, dominios personalizados en el mismo *site* y prueba de navegador (§13).
+2. ~~Cierre del acceso directo al Container App~~: **Verificado** el 2026-11-09 (§12).
 3. JWT interno: configurar en ms-users issuer, audience y claves, y revisar el JWKS publicado; regenerar sin
-   `--jwt-unconfigured`.
+   `--jwt-unconfigured`. Detrás de la autenticación de Container Apps exige además desplegar el filtro de
+   reubicación de ms-users y `USERS_GATEWAY_USER_TOKEN_RELOCATION_ENABLED=true` (§12.3).
 4. `abuse_protection` compatible con Consumption (§7.3), con documento de evidencia real.
 5. B07 / `ms_users_contract` y la discrepancia `apimSubscriptionKey` del OpenAPI (§8).
 6. Repetir CORS con flags activos y el preflight del perfil (§11.4).
@@ -291,4 +285,135 @@ en el entorno actual (perfil Consumption, sin VNet):
   coste fijo; las llamadas se facturan por uso de Consumption (con cuota gratuita mensual). Las pruebas despertaron el
   Container App unas pocas veces (escala 0–1). Sin sondeos periódicos.
 * Rollback: eliminar la API `markettec-users-v1` y el named value `allowed-origins`, o reaplicar `terminal_deny` a las
-  tres operaciones reenviadas. `markettec-api-v1` no depende de nada de lo anterior.
+  tres operaciones reenviadas. `markettec-api-v1` no depende de nada de lo anterior. Rollback de §12: §12.5.
+
+## 12. Autenticación APIM → Container Apps (MTEC-12/D04, 2026-11-09)
+
+### 12.1 Recursos
+
+| Elemento | Valor |
+| --- | --- |
+| App registration (recurso) | `markettec-ms-users-stg-gateway`, appId `9ef55975-8943-4bc4-9e98-21457569d4cc`, `api://9ef55975-…`, single-tenant, tokens v2, **sin secreto ni redirect URI** |
+| Rol | `Gateway.Invoke` (solo `Application`); service principal con `appRoleAssignmentRequired=true`; asignado **solo** a la identidad de APIM |
+| Identidad de APIM | `markettec-api` system-assigned: objectId `5535ce75-2ca8-41c2-b84f-60c6cf21b05e`, appId `45fbf2c1-06ae-498f-a6bf-3d8f111a7415` |
+| Autenticación de Container Apps | `authConfigs/current` de `ca-ms-users-stg`: proveedor Entra, emisor `https://login.microsoftonline.com/<tenant>/v2.0`, audiencia `api://9ef55975-…`, `allowedApplications` = appId de APIM, `allowedPrincipals.identities` = objectId de APIM, `Return401`, `excludedPaths=["/health"]`, token store desactivado |
+| Políticas APIM | `getSessionState`, `refreshSession`, `logoutSession`: al final de `inbound`, `set-header X-MTEC-User-Authorization delete` + `authentication-managed-identity resource="api://9ef55975-…"`. Las 19 restantes, sin cambios (denegaciones terminales: no piden token) |
+| Generación | §11.2 más `--gateway-auth-resource api://9ef55975-8943-4bc4-9e98-21457569d4cc` |
+
+Ambas suscripciones están en el mismo tenant (`bfcf1d9d-…`). No hay VNet, Front Door ni Application Gateway. Coste
+incremental: US$0 (Entra, identidad administrada y autenticación de Container Apps no se facturan; la petición de
+token de APIM se cachea en el gateway).
+
+### 12.2 Dos autorizaciones en la misma petición
+
+La autenticación de Container Apps solo acepta el token Entra en `Authorization: Bearer` y `ms-users` exige
+**exactamente un** `Authorization: Bearer` (`BearerRequests`). No caben ambos en el mismo encabezado, así que:
+
+| Capa | Quién la verifica | Dónde viaja |
+| --- | --- | --- |
+| APIM → Container Apps | sidecar `http-auth` (audiencia, emisor, firma, appId y objectId de APIM) | `Authorization` (puesto por `authentication-managed-identity`, sobrescribe el del cliente) |
+| JWT interno del usuario | `validate-jwt` en APIM y de nuevo `InternalTokenVerifier` en Java | APIM lo copia a `X-MTEC-User-Authorization` **después** de `validate-jwt` y **antes** de sustituir `Authorization`; Java lo lee como `Authorization` mediante `GatewayUserTokenFilter` |
+| Cookies `__Host-` y CSRF | comprobaciones de APIM y Java | `Cookie` y `X-CSRF-Token`, intactos (Easy Auth no los usa; token store y sesiones `/.auth` desactivados) |
+
+`X-MTEC-User-Authorization` no otorga nada por sí mismo: llega a Java solo a través de APIM (todo lo demás recibe 401
+del sidecar) y su valor se verifica criptográficamente igual que antes. En las operaciones sin JWT, APIM elimina
+cualquier copia enviada por el cliente. **Estado del contrato APIM ↔ ms-users para este encabezado: Proposed**
+(requiere aprobación del responsable antes de activar operaciones JWT).
+
+### 12.3 Estado del JWT interno
+
+Hoy ninguna operación JWT llega a Java (`--jwt-unconfigured`, 503 `INTERNAL_JWT_UNCONFIGURED`), por lo que la
+conservación del JWT de extremo a extremo es **No determinada en Azure** y está cubierta por pruebas: generador
+(`GatewayAuthTest`: orden `validate-jwt` → reubicación → identidad) y ms-users (`GatewayUserTokenFilterTest`: el JWT
+reubicado llega al controlador junto al token del gateway; el token del gateway nunca se lee como credencial; sigue
+exigiendo un único Bearer verificado). Para activarlo: desplegar el PR de ms-users, poner
+`USERS_GATEWAY_USER_TOKEN_RELOCATION_ENABLED=true`, regenerar con JWKS/issuer/audience y `--gateway-auth-resource`, y
+repetir una llamada autenticada de prueba.
+
+### 12.4 Pruebas en Azure (2026-11-09)
+
+| # | Petición | Resultado |
+| --- | --- | --- |
+| 1 | Directa sin `Authorization` a `/v1/auth/session` | **Verificado** 401 (sidecar, sin llegar a Java) |
+| 2 | Directa `POST /v1/auth/refresh` con cookie `__Host-mtec-refresh` y CSRF | **Verificado** 401 |
+| 3 | Directa con `X-MS-CLIENT-PRINCIPAL*` falsificados | **Verificado** 401 |
+| 4 | Directa con `X-User-Id`, `X-Authenticated-User`, `X-MTEC-User-Authorization` | **Verificado** 401 |
+| 5 | Directa con token ARM del operador (audiencia distinta) | **Verificado** 401 |
+| 6 | App Entra ajena sin rol pide token para `api://…` | **Verificado** Entra lo niega (`AADSTS501051`) |
+| 7 | App Entra ajena **con** rol `Gateway.Invoke` y audiencia correcta, directa | **Verificado** 403 (`allowedApplications`/`allowedPrincipals`). App y asignación temporales eliminadas |
+| 8 | Directa `/.auth/me`, `/healthx`, `/health/x`, `/health/../v1/...`, `/health%2F..%2F...` | **Verificado** 401 |
+| 9 | Directa `/health` | **Verificado** 200 (excluida). Sondas: contenedor y sidecar `ready`, 0 reinicios |
+| 10 | APIM → 3 operaciones reenviadas | **Verificado** llegan a Java (404 `ROUTE_NOT_FOUND` con `correlationId`, flags apagados) |
+| 11 | APIM con `Authorization` de cliente y `X-MS-*`/`X-MTEC-User-Authorization` falsos | **Verificado** llega a Java con la identidad de APIM (el `Authorization` del cliente se sustituye). La eliminación en Java no es observable con flags apagados: **No determinado** por tráfico |
+| 12 | Denegaciones existentes | **Verificado** `ADMISSION_DISABLED`, `INTERNAL_JWT_UNCONFIGURED`, `OPERATION_NOT_RELEASED`, `REFRESH_INVALID`; origen ajeno sigue cortado por CORS |
+| 13 | Políticas almacenadas | **Verificado** idénticas a la exportación previa salvo las dos líneas nuevas; flags 13/13 `false`; escala 0–1 |
+
+La respuesta 401 del sidecar solo expone `WWW-Authenticate: Bearer realm="<host>"`, `x-ms-middleware-request-id` y HSTS.
+
+### 12.5 Rollback
+
+Instantáneas previas (políticas de las 22 operaciones y del ámbito API, Container App y su `authConfigs` vacío)
+tomadas antes de cambiar nada. Orden inverso, sin cortar tráfico:
+
+1. Container Apps: `az containerapp auth update -n ca-ms-users-stg -g acalderon-TEC --subscription 26db4383-… --enabled false`.
+2. APIM: reaplicar la política exportada de las 3 operaciones (sin las dos líneas nuevas).
+3. Opcional: desactivar la identidad de APIM y borrar `markettec-ms-users-stg-gateway`.
+4. Sonda: reactivar la revisión `ca-ms-users-stg--rf574c71p` (sonda anterior) o reaplicar `initialDelaySeconds=10`,
+   `periodSeconds=10`.
+
+No aplicar el paso 1 sin el 2 al revés: activar la autenticación sin `authentication-managed-identity` en APIM corta
+las tres operaciones (401).
+
+## 13. Arranque en frío y D-04
+
+### 13.1 Arranque en frío (escala 0–1)
+
+APIM no corta la espera: `forward-request` hereda el valor por defecto de 300 s (Azure documenta que más de 240 s
+puede no respetarse) y el ingreso de Container Apps admite 240 s. Medido a través de APIM: 34,6 s y 45,1 s. Línea
+temporal de los registros del sistema (2026-11-09 13:42): ~14 s programación y descarga de imagen, ~10 s creación del
+contenedor, ~6 s Spring Boot, ~4 s de espera de la sonda Startup (`initialDelaySeconds=10`).
+
+El fallo real estaba en Angular V2: el adaptador HTTP cortaba a 15 s y el coordinador de sesión a 10 s. Un corte del
+primer `POST /refresh` mientras Java aún puede procesarlo arriesga perder la rotación del refresh token. Cambios:
+
+* Angular: `AUTH_V2_COLD_START_BUDGET_MS = 70 s` (adaptador) y 75 s (coordinador), con prueba que los mantiene por
+  encima del arranque observado y por debajo de 240 s. V2 sigue deshabilitado.
+* Container App: sonda Startup `initialDelaySeconds 10→1`, `periodSeconds 10→3` (`failureThreshold` 30, ~90 s de
+  margen). Revisión `ca-ms-users-stg--w8dnrtz`, misma imagen, flags y escala.
+* Sin sondeos periódicos ni `minReplicas=1`. **Inferido** (tarifa pública de reposo, no verificada en la factura):
+  una réplica permanente de 0,5 vCPU / 1 GiB costaría ~US$10–12/mes tras la concesión gratuita, casi la mitad del
+  presupuesto de US$25; solo con autorización expresa.
+
+### 13.2 D-04: dominio
+
+**No determinado / bloqueado por dependencia externa.** No existe dominio propio en ninguna de las dos suscripciones:
+sin zonas DNS de Azure, sin dominios App Service, sin dominios personalizados en la SWA `markettec`, APIM ni el entorno
+de Container Apps. No se compró ni se inventó ningún dominio.
+
+Requisitos mínimos: un dominio registrable (eTLD+1) que no esté en la Public Suffix List y cuyo DNS controle el
+equipo (registrador propio o delegación de un subdominio por TI del TEC, p. ej. `markettec.<subdominio>`).
+
+| Registro | Nombre | Valor |
+| --- | --- | --- |
+| CNAME | `app.<dominio>` | `victorious-beach-0a55f0c1e.2.azurestaticapps.net` (validación SWA por CNAME; certificado gestionado gratuito) |
+| CNAME | `api.<dominio>` | `markettec-api.azure-api.net` |
+| TXT | `apimuid.api.<dominio>` | identificador de propiedad de APIM (`getDomainOwnershipIdentifier`), solo con certificado gestionado |
+
+Configuración pendiente (no aplicada):
+
+1. SWA: `az staticwebapp hostname set -n markettec -g markettec-dev --hostname app.<dominio>` (Free admite 2 dominios).
+2. APIM: `hostnameConfigurations` tipo `Proxy` para `api.<dominio>` con certificado gestionado (la suspensión de
+   creación de Microsoft terminó el 2026-06-30; disponibilidad actual en Consumption **No determinada**) o PFX propio
+   (p. ej. Let's Encrypt por DNS-01, renovación cada 90 días). El host `azure-api.net` sigue activo y no rompe
+   `markettec-api-v1`.
+3. Regenerar con `--allowed-origin https://app.<dominio>`; actualizar el named value `allowed-origins`.
+4. `environment.apiBaseUrl = https://api.<dominio>/users`; activar `authCoreV2HttpTopologyVerified` solo tras la
+   prueba de navegador (§10.8): HTTPS válido, preflight con un único `Access-Control-Allow-Origin`, cookies
+   `__Host-` (`Secure`, `Path=/`, sin `Domain`) enviadas a `api.<dominio>` con `withCredentials`, CSRF.
+
+Coste: el dominio (~US$10–15/año en un registrador comercial; US$0 si TI del TEC delega un subdominio). Dominios
+personalizados de SWA Free y APIM Consumption, sin coste adicional.
+
+**Decisión del operador:** elegir y aportar el dominio (comprar uno o solicitar a TI del TEC la delegación de un
+subdominio) y la opción de certificado para APIM.
+

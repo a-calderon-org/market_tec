@@ -75,11 +75,14 @@ SPEC = {
     "audience": {"attrs": {}, "seq": [], "text": "required"},
     "issuers": {"attrs": {}, "seq": [("issuer", 1, None)], "text": "none"},
     "issuer": {"attrs": {}, "seq": [], "text": "required"},
+    # Gateway -> ms-users service authentication (Entra token for the dedicated app registration only).
+    "authentication-managed-identity": {"attrs": {"resource": (True, re.compile(r"api://[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"))},
+                                        "seq": [], "text": "none"},
 }
 # Policies a section may hold, per profile.
 PROFILES = {
     "own": {"inbound": {"base", "cors", "set-header", "set-variable", "choose", "return-response", "validate-jwt",
-                        "rewrite-uri"},
+                        "rewrite-uri", "authentication-managed-identity"},
             "backend": {"base", "forward-request"}, "outbound": {"base", "set-header"},
             "on-error": {"base", "set-header"}},
     # Upstream scopes are deliberately small: anything that could alter credentials, set identity or end
@@ -90,8 +93,8 @@ PROFILES = {
     "upstream": {"inbound": {"base", "cors"}, "backend": {"base", "forward-request"},
                  "outbound": {"base"}, "on-error": {"base"}},
 }
-NESTED_EXCLUDED = {"base", "cors", "validate-jwt", "rewrite-uri"}
-SECTION_MAX_ONE = {"base", "cors", "forward-request", "validate-jwt", "rewrite-uri"}
+NESTED_EXCLUDED = {"base", "cors", "validate-jwt", "rewrite-uri", "authentication-managed-identity"}
+SECTION_MAX_ONE = {"base", "cors", "forward-request", "validate-jwt", "rewrite-uri", "authentication-managed-identity"}
 DYNAMIC = re.compile(r"@\s*[({]|\{\{|\}\}|^\s*@")
 
 

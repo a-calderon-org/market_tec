@@ -27,6 +27,12 @@ without `abuse_protection`). It also writes a candidate keyless API definition (
 (`api-scope.*`) and the resolved Angular → APIM → ms-users chain (`route_check.py`). Nothing is applied to Azure.
 Operator steps: [`docs/MTEC12_41_MS_USERS_STAGING_HANDOFF.md`](../../docs/MTEC12_41_MS_USERS_STAGING_HANDOFF.md).
 
+Gateway authentication (MTEC-12/D04): `--gateway-auth-resource api://<app id>` ends every forwarded operation with
+`authentication-managed-identity` for that resource (Container Apps authentication in front of ms-users). Because that
+replaces `Authorization`, internal-JWT operations first copy the validated user JWT to `X-MTEC-User-Authorization`
+(ms-users `GatewayUserTokenFilter`); other operations delete any client copy. Terminal denials fetch no token.
+Staging resources and tests: handoff §12.
+
 Partial staging package (`--mode package --release …` only): `--jwt-unconfigured` denies every internal-JWT
 operation (503 `INTERNAL_JWT_UNCONFIGURED`) instead of requiring `--jwks/--issuer/--audience`, and
 `--no-product-scope` replaces the product export when Azure shows the API is in no product. Neither enables an

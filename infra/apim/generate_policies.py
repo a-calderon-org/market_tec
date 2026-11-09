@@ -43,6 +43,10 @@ AUTH = {"public", "cookie", "jwt", "jwt_cookie"}
 COOKIE_ERRORS = {"attempt": "AUTH_PROOF_INVALID", "email_attempt": "AUTH_PROOF_INVALID", "refresh": "REFRESH_INVALID"}
 METHODS = {"GET", "POST", "PUT"}
 SPOOFABLE = ("X-User-Id", "X-Session-Id", "X-Authenticated-User")
+# Gateway -> Container Apps authentication (MTEC-12/D04). Container Apps authentication validates the Entra token
+# only in `Authorization`, so the gateway moves the (already validated) internal user JWT to this header first.
+USER_TOKEN_HEADER = "X-MTEC-User-Authorization"
+GATEWAY_RESOURCE = re.compile(r"api://[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 SCOPES = ["global", "product", "api"]
 PATH = re.compile(r"/[A-Za-z0-9._{}/-]*")
 ID = re.compile(r"[A-Za-z][A-Za-z0-9]{2,63}")
@@ -346,11 +350,27 @@ def _jwt_unconfigured(op: dict, jwt_unconfigured: bool):
     return JWT_UNCONFIGURED if jwt_unconfigured and op["auth"] in ("jwt", "jwt_cookie") else None
 
 
+def _gateway_auth(inbound: ET.Element, op: dict, resource: str) -> None:
+    """Last inbound steps of a forwarded operation: relocate the user JWT, then authenticate the gateway.
+
+    `authentication-managed-identity` overwrites `Authorization`; for internal-JWT operations the token was already
+    validated above and is copied to USER_TOKEN_HEADER (any client-supplied copy is overwritten). Every other
+    operation deletes a client-supplied USER_TOKEN_HEADER, so it can never be smuggled to ms-users.
+    """
+    if op["auth"] in ("jwt", "jwt_cookie"):
+        relocate = ET.SubElement(inbound, "set-header", name=USER_TOKEN_HEADER, **{"exists-action": "override"})
+        ET.SubElement(relocate, "value").text = '@(context.Request.Headers.GetValueOrDefault("Authorization", ""))'
+    else:
+        ET.SubElement(inbound, "set-header", name=USER_TOKEN_HEADER, **{"exists-action": "delete"})
+    ET.SubElement(inbound, "authentication-managed-identity", resource=resource)
+
+
 def policy_for(op: dict, approvals: dict, jwks, issuer: str, audience: str, released=None,
-               jwt_unconfigured: bool = False) -> str:
+               jwt_unconfigured: bool = False, gateway_resource=None) -> str:
     """`released`: operation ids of the release profile, or None when no profile narrows the surface.
 
     `jwt_unconfigured`: no reviewed JWKS/issuer/audience exist yet, so internal-JWT operations are denied.
+    `gateway_resource`: Application ID URI the backend's Container Apps authentication expects, or None.
     """
     blocked = blocked_reason(op, approvals) or _jwt_unconfigured(op, jwt_unconfigured)
     if released is not None and op["id"] not in released:
@@ -370,6 +390,8 @@ def policy_for(op: dict, approvals: dict, jwks, issuer: str, audience: str, rele
         for offset, check in enumerate(checks_for(op)):
             inbound.insert(anchor + offset, check)
         ET.SubElement(inbound, "rewrite-uri", template=op["backend_path"], **{"copy-unmatched-params": "true"})
+        if gateway_resource is not None:
+            _gateway_auth(inbound, op, gateway_resource)
         xml = _text(root)
     validate_policy(ET.fromstring(xml), "own")  # never emit our own policy without the local structure check
     return xml
@@ -389,10 +411,11 @@ def _prepare(manifest, openapi_bytes, backend_routes, evidence_dir):
     return ops, {name: verify_approval(manifest, name, ctx) for name in APPROVALS}
 
 
-def _definitions(ops, manifest, approvals, jwks, issuer, audience, suffix, released=None, jwt_unconfigured=False):
+def _definitions(ops, manifest, approvals, jwks, issuer, audience, suffix, released=None, jwt_unconfigured=False,
+                 gateway_resource=None):
     policies, definitions = {}, []
     for op in ops:
-        xml = policy_for(op, approvals, jwks, issuer, audience, released, jwt_unconfigured)
+        xml = policy_for(op, approvals, jwks, issuer, audience, released, jwt_unconfigured, gateway_resource)
         blocked = blocked_reason(op, approvals) or _jwt_unconfigured(op, jwt_unconfigured)
         if released is not None and op["id"] not in released:
             blocked = ("not_in_release_profile", NOT_RELEASED[2])
@@ -473,14 +496,18 @@ def release_bundle(name: str, definitions: list, allowed_origins: list) -> dict:
 
 
 def _result(kind, suffix, index, ops, manifest, approvals, report, jwks, issuer, audience, release=None,
-            allowed_origins=None, jwt_unconfigured=False):
+            allowed_origins=None, jwt_unconfigured=False, gateway_resource=None):
+    if gateway_resource is not None and not GATEWAY_RESOURCE.fullmatch(gateway_resource):
+        raise ValueError("gateway resource must be api://<application id>")
     released = set(release_profile(release)["operations"]) if release else None
     policies, definitions = _definitions(ops, manifest, approvals, jwks, issuer, audience, suffix, released,
-                                         jwt_unconfigured)
+                                         jwt_unconfigured, gateway_resource)
     result = {"kind": kind, "index_file": index, "azure_validated": False, "deployment_approved": False,
               "local_structure_validated": True, "upstream_scopes_validated_locally": report["validated"],
               "missing_exports": report["missing_exports"], "product_scope": report["product_scope"],
               "internal_jwt": "unconfigured: JWT operations denied" if jwt_unconfigured else "configured",
+              "gateway_auth": {"resource": gateway_resource, "user_token_header": USER_TOKEN_HEADER}
+              if gateway_resource else None,
               "approvals_verified": approvals,
               "external_evidence_required": EXTERNAL_EVIDENCE, "policies": policies, "definitions": definitions}
     if release:
@@ -494,16 +521,17 @@ def _result(kind, suffix, index, ops, manifest, approvals, report, jwks, issuer,
 
 
 def analyze(manifest, jwks, issuer, audience, upstream_xml=None, openapi=None, backend_routes=None, evidence_dir=None,
-            release=None, allowed_origins=None) -> dict:
+            release=None, allowed_origins=None, gateway_resource=None) -> dict:
     """Local review output (*.xml.txt). Never a package, whatever the inputs."""
     ops, approvals = _prepare(manifest, openapi, backend_routes, evidence_dir)
     report = upstream_report(upstream_xml)
     return _result("analysis", ".xml.txt", "operations.analysis.json", ops, manifest, approvals, report, jwks, issuer,
-                   audience, release, allowed_origins)
+                   audience, release, allowed_origins, gateway_resource=gateway_resource)
 
 
 def build_package(manifest, jwks, issuer, audience, upstream_xml=None, openapi=None, backend_routes=None, evidence_dir=None,
-                  release=None, allowed_origins=None, jwt_unconfigured=False, no_product_scope=False) -> dict:
+                  release=None, allowed_origins=None, jwt_unconfigured=False, no_product_scope=False,
+                  gateway_resource=None) -> dict:
     """Candidate package (*.candidate.xml) or PackageError. Locally checked only; not Azure-validated or approved.
 
     `jwt_unconfigured` / `no_product_scope` build a partial staging package (release profile only): they never
@@ -521,7 +549,7 @@ def build_package(manifest, jwks, issuer, audience, upstream_xml=None, openapi=N
     elif jwks is None or not issuer or not audience:
         raise PackageError("reviewed JWKS snapshot, issuer and audience are required")
     return _result("candidate_package", ".candidate.xml", "operations.candidate.json", ops, manifest, approvals, report,
-                   jwks, issuer, audience, release, allowed_origins, jwt_unconfigured)
+                   jwks, issuer, audience, release, allowed_origins, jwt_unconfigured, gateway_resource)
 
 
 def write_output(result: dict, output_dir: Path) -> None:
@@ -566,6 +594,8 @@ def main() -> None:
                         help="package only, with --release: the API is verified to belong to no APIM product")
     for scope in SCOPES:
         parser.add_argument(f"--upstream-{scope}", type=Path, help=f"exported {scope}-scope policy XML")
+    parser.add_argument("--gateway-auth-resource",
+                        help="api://<app id> expected by the backend's Container Apps authentication (MTEC-12/D04)")
     parser.add_argument("--output-dir", type=Path, required=True, help="must not exist or be empty")
     args = parser.parse_args()
     try:
@@ -580,8 +610,10 @@ def main() -> None:
         inputs = (json.loads(args.manifest.read_text()), json.loads(args.jwks.read_text()) if args.jwks else None,
                   args.issuer, args.audience, upstream, args.openapi.read_bytes(),
                   json.loads(args.backend_routes.read_text()), args.evidence_dir, args.release, args.allowed_origin)
-        result = (build_package(*inputs, jwt_unconfigured=args.jwt_unconfigured, no_product_scope=args.no_product_scope)
-                  if args.mode == "package" else analyze(*inputs))
+        gateway = args.gateway_auth_resource
+        result = (build_package(*inputs, jwt_unconfigured=args.jwt_unconfigured, no_product_scope=args.no_product_scope,
+                                gateway_resource=gateway)
+                  if args.mode == "package" else analyze(*inputs, gateway_resource=gateway))
         write_output(result, out)
     except (ValueError, OSError) as error:  # PackageError is a ValueError
         raise SystemExit(f"refused: {error}")
