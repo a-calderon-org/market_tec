@@ -1,4 +1,5 @@
 'use strict';
+const crypto = require('node:crypto');
 /**
  * Same-origin proxy (MTEC-12/D04): https://<swa-origin>/api/users/v1/... -> <APIM>/users/v1/...
  *
@@ -10,6 +11,11 @@
  * non-idempotent request (POST/PUT) is therefore forwarded only once ms-users is known to be warm; otherwise the
  * proxy answers 503 BACKEND_WARMING **without sending it**, so the client may retry it safely. A GET that does
  * not finish in time also answers 503 BACKEND_WARMING (reads are safe to repeat).
+ *
+ * "Warm" needs proof that ms-users itself answered, not just APIM: its CorrelationIdFilter echoes any valid
+ * inbound X-Correlation-ID on every response (including its own 4xx), while APIM's terminal denials
+ * (return-response) never carry one. The warm-up therefore sends a fresh nonce and is accepted only when that
+ * exact value comes back with a non-5xx status. Every deadline covers the whole response, body included.
  */
 
 const PATH = /^\/api\/users(\/v1(?:\/[A-Za-z0-9_-][A-Za-z0-9._-]{0,63}){1,6})$/;
@@ -23,6 +29,7 @@ const DEADLINE_MS = 38000; // below the 45 s Static Web Apps limit, leaving room
 const MIN_FORWARD_MS = 8000; // a warm ms-users answers in < 1 s; never start a write with less than this left
 const WARM_TTL_MS = 120000; // well below the 300 s Container Apps scale-in cooldown
 const WARM_PROBE_PATH = '/v1/auth/session'; // idempotent read that reaches ms-users through APIM
+const CORRELATION = /^[A-Za-z0-9._-]{1,128}$/; // what ms-users echoes back unchanged
 
 let warmUntil = 0;
 
@@ -78,13 +85,25 @@ function checkRequest(req, url, config) {
   return null;
 }
 
-function forwardHeaders(req) {
+function forwardHeaders(req, config) {
   const headers = {};
   for (const name of REQUEST_HEADERS) {
     const value = header(req, name);
     if (value !== undefined) headers[name] = value;
   }
+  // Browsers may omit Origin on a same-origin GET, and ms-users answers 403 ORIGIN_DENIED without it. Only a
+  // browser-asserted same-origin read (Sec-Fetch-Site cannot be set by page script) gets the configured origin;
+  // a foreign Origin was already rejected by checkRequest and anything else is forwarded as it came.
+  if (req.method === 'GET' && headers.origin === undefined && header(req, 'sec-fetch-site') === 'same-origin') {
+    headers.origin = config.publicOrigin;
+  }
   return headers;
+}
+
+/** True only when ms-users echoed the correlation id that was sent (APIM denials never carry one). */
+function answeredByBackend(res, sentCorrelationId) {
+  return res.status < 500 && typeof sentCorrelationId === 'string' && CORRELATION.test(sentCorrelationId)
+    && res.headers.get('x-correlation-id') === sentCorrelationId;
 }
 
 /** Set-Cookie -> Azure Functions cookie object. Cookies with Domain are dropped (ms-users never sets one). */
@@ -120,11 +139,23 @@ function parseSetCookie(line) {
   return cookie;
 }
 
+/** Response and full body within `timeoutMs`; rejects on timeout while waiting for headers *or* body. */
 async function callUpstream(fetchImpl, url, init, timeoutMs) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), Math.max(1, timeoutMs));
+  let timer;
+  const expired = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new Error('deadline'));
+    }, Math.max(1, timeoutMs));
+  });
   try {
-    return await fetchImpl(url, { ...init, signal: controller.signal, redirect: 'manual' });
+    const read = (async () => {
+      const res = await fetchImpl(url, { ...init, signal: controller.signal, redirect: 'manual' });
+      return { res, body: Buffer.from(await res.arrayBuffer()) };
+    })();
+    read.catch(() => {}); // settled by `expired` first: its later rejection is not unhandled
+    return await Promise.race([read, expired]);
   } finally {
     clearTimeout(timer);
   }
@@ -132,30 +163,34 @@ async function callUpstream(fetchImpl, url, init, timeoutMs) {
 
 async function ensureWarm(deps, config, remainingMs) {
   if (deps.now() < warmUntil) return true;
+  if (remainingMs <= 0) return false;
+  const nonce = `swa-warmup-${deps.randomId()}`;
   try {
-    const res = await callUpstream(deps.fetch, `${config.upstream}${WARM_PROBE_PATH}`,
-      { method: 'GET', headers: { 'x-mtec-client': 'swa-proxy-warmup' } }, remainingMs);
-    await res.arrayBuffer();
-    if (res.status < 500) warmUntil = deps.now() + WARM_TTL_MS;
-    return res.status < 500;
+    const { res } = await callUpstream(deps.fetch, `${config.upstream}${WARM_PROBE_PATH}`, {
+      method: 'GET',
+      headers: { origin: config.publicOrigin, 'x-mtec-client': 'swa-proxy-warmup', 'x-correlation-id': nonce },
+    }, remainingMs);
+    if (!answeredByBackend(res, nonce)) return false;
+    warmUntil = deps.now() + WARM_TTL_MS;
+    return true;
   } catch {
     return false;
   }
 }
 
-async function toResponse(upstreamRes) {
+function toResponse({ res, body }) {
   const headers = { 'X-Content-Type-Options': 'nosniff' };
   for (const name of RESPONSE_HEADERS) {
-    const value = upstreamRes.headers.get(name);
+    const value = res.headers.get(name);
     if (value !== null) headers[name] = value;
   }
-  const lines = typeof upstreamRes.headers.getSetCookie === 'function' ? upstreamRes.headers.getSetCookie() : [];
+  const lines = typeof res.headers.getSetCookie === 'function' ? res.headers.getSetCookie() : [];
   const cookies = lines.map(parseSetCookie).filter(Boolean);
-  const body = Buffer.from(await upstreamRes.arrayBuffer());
-  return { status: upstreamRes.status, headers, body, cookies, isRaw: true };
+  return { status: res.status, headers, body, cookies, isRaw: true };
 }
 
-const DEFAULT_DEPS = { fetch: globalThis.fetch, now: Date.now, deadlineMs: DEADLINE_MS, minForwardMs: MIN_FORWARD_MS };
+const DEFAULT_DEPS = { fetch: globalThis.fetch, now: Date.now, randomId: () => crypto.randomUUID(),
+  deadlineMs: DEADLINE_MS, minForwardMs: MIN_FORWARD_MS };
 
 async function handle(req, config, overrides = {}) {
   const deps = { ...DEFAULT_DEPS, ...overrides };
@@ -171,7 +206,7 @@ async function handle(req, config, overrides = {}) {
   if (denied) return denied;
 
   const target = `${config.upstream}${PATH.exec(url.pathname)[1]}${url.search}`;
-  const init = { method: req.method, headers: forwardHeaders(req) };
+  const init = { method: req.method, headers: forwardHeaders(req, config) };
   if (req.method !== 'GET') init.body = req.rawBody ?? '';
   const left = () => deps.deadlineMs - (deps.now() - start);
   const warming = json(503, 'BACKEND_WARMING', { 'Retry-After': '3' });
@@ -180,15 +215,15 @@ async function handle(req, config, overrides = {}) {
     const warm = await ensureWarm(deps, config, left() - deps.minForwardMs);
     if (!warm || left() < deps.minForwardMs) return warming; // the write was NOT sent: safe to retry
   }
-  let upstreamRes;
+  let upstream;
   try {
-    upstreamRes = await callUpstream(deps.fetch, target, init, left());
+    upstream = await callUpstream(deps.fetch, target, init, left());
   } catch {
-    // A GET is safe to repeat. A write that times out here may have been processed: never "warming".
+    // A GET is safe to repeat. A write that was sent may have been processed: never "warming", never resent.
     return req.method === 'GET' ? warming : json(504, 'UPSTREAM_TIMEOUT');
   }
-  if (upstreamRes.status < 500) warmUntil = deps.now() + WARM_TTL_MS;
-  return toResponse(upstreamRes);
+  if (answeredByBackend(upstream.res, init.headers['x-correlation-id'])) warmUntil = deps.now() + WARM_TTL_MS;
+  return toResponse(upstream);
 }
 
 /** D-04 browser probe: sets / reports a `__Host-` cookie through the same Set-Cookie translation as the proxy. */

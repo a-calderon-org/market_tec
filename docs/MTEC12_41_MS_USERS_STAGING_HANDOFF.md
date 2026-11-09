@@ -397,17 +397,21 @@ primera parte, solo de host, de la Static Web App: D-04 se cumple sin que interv
 | Capa | Control |
 | --- | --- |
 | Navegador → `/api/users/*` | Mismo origen, sin CORS. `withCredentials` y CSRF funcionan igual que antes |
-| Function (`lib/proxy.js`) | Solo `GET`/`POST`/`PUT` en `/v1/<segmentos simples>`; rechaza `Sec-Fetch-Site` cross-site o same-site y cualquier `Origin` distinto de `MTEC_PUBLIC_ORIGIN`. Reenvía solo `Accept`, `Authorization`, `Content-Type`, `Cookie`, `Origin`, `X-CSRF-Token`, `X-MTEC-Client` y `X-Correlation-ID`, de modo que se descartan `x-ms-client-principal` de SWA y las cabeceras de identidad falsificadas. Devuelve `Set-Cookie` con los mismos atributos y descarta los que traen `Domain` o un `__Host-` mal formado. Sin `Access-Control-*`. Falla cerrado (503 `PROXY_UNCONFIGURED`) sin `MTEC_USERS_UPSTREAM`/`MTEC_PUBLIC_ORIGIN` |
+| Function (`lib/proxy.js`) | Solo `GET`/`POST`/`PUT` en `/v1/<segmentos simples>`; rechaza `Sec-Fetch-Site` cross-site o same-site y cualquier `Origin` distinto de `MTEC_PUBLIC_ORIGIN`. Si un `GET` llega sin `Origin` y con `Sec-Fetch-Site: same-origin` (el navegador puede omitirlo), reenvía `Origin: MTEC_PUBLIC_ORIGIN`; sin esa cabecera no añade nada, y nunca a escrituras. Reenvía solo `Accept`, `Authorization`, `Content-Type`, `Cookie`, `Origin`, `X-CSRF-Token`, `X-MTEC-Client` y `X-Correlation-ID`, de modo que se descartan `x-ms-client-principal` de SWA y las cabeceras de identidad falsificadas. Devuelve `Set-Cookie` con los mismos atributos y descarta los que traen `Domain` o un `__Host-` mal formado. Sin `Access-Control-*`. Falla cerrado (503 `PROXY_UNCONFIGURED`) sin `MTEC_USERS_UPSTREAM`/`MTEC_PUBLIC_ORIGIN` |
 | APIM | Sin cambios de lógica: Origin, cookie, CSRF, CORS, `validate-jwt` e identidad administrada hacia Container Apps (§12). El origen de la SWA debe figurar en `allowed-origins` y en el CORS del ámbito API |
 | Container Apps / Java | Sin cambios (§12) |
 
 **Límite de 45 s de SWA y arranque en frío.** SWA corta toda petición `/api` a los 45 s, y el arranque en frío medido
 es de 26–45 s. El proxy trabaja con un plazo de 38 s:
 
+* El plazo cubre la respuesta completa, cuerpo incluido, no solo las cabeceras.
 * `GET`: si no hay respuesta a tiempo, devuelve 503 `BACKEND_WARMING` (`Retry-After: 3`). Las lecturas pueden repetirse.
 * `POST`/`PUT`: solo se reenvían si ms-users está caliente. Si no lo está, el proxy hace primero un
-  `GET /v1/auth/session` sin credenciales a través de APIM. Si esa petición no termina a tiempo, o deja menos de 8 s
-  para la escritura, el proxy responde 503 `BACKEND_WARMING` **sin haber enviado la escritura**. Una escritura que
+  `GET /v1/auth/session` sin credenciales a través de APIM, con `Origin` de la SWA y un `X-Correlation-ID` nuevo.
+  ms-users solo cuenta como caliente si la respuesta (no 5xx) devuelve ese mismo `X-Correlation-ID`: el
+  `CorrelationIdFilter` de Java lo repite en toda respuesta, mientras que las denegaciones terminales de APIM
+  (`return-response`, p. ej. 401 `REFRESH_INVALID`) no lo llevan. Si esa evidencia falta, la petición no termina a
+  tiempo o deja menos de 8 s para la escritura, el proxy responde 503 `BACKEND_WARMING` **sin haber enviado la escritura**. Una escritura que
   agota el plazo después de enviarse devuelve 504 `UPSTREAM_TIMEOUT`, que nunca se reintenta. El estado «caliente»
   dura 120 s, por debajo del enfriamiento de 300 s de Container Apps.
 * Angular V2 repite solo 503 `BACKEND_WARMING`, cada 3 s, dentro de su tope total de 70 s. No reintenta ningún otro
