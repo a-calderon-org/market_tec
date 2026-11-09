@@ -435,6 +435,7 @@ guarda.
 | 5 | `POST /refresh` sin cookie / con cookie sin CSRF / con cookie y CSRF | **Verificado**: 401 `REFRESH_INVALID`, 403 `CSRF_INVALID` (APIM) y 404 de Java. La cookie y el CSRF llegan a APIM |
 | 6 | Denegaciones | **Verificado**: `ADMISSION_DISABLED`, `INTERNAL_JWT_UNCONFIGURED`, `OPERATION_NOT_RELEASED`; `%2e%2e` y `DELETE` → 404 sin reenvío |
 | 7 | Origen ajeno, `Sec-Fetch-Site: cross-site`, origen de producción contra el preview | **Verificado**: 403 en el proxy |
+| 8 | Arranque en frío: `POST /logout` desde el navegador con ms-users a cero réplicas | **Verificado**: 404 de Java en 30,0 s (por debajo de 45 s). Los registros de Java muestran el `GET` de calentamiento (14:42:31.59) y **un único** `POST` 123 ms después. La rama `BACKEND_WARMING` (arranque > 30 s) solo está cubierta por pruebas unitarias |
 
 **Pendiente para habilitar las cookies reales:**
 
