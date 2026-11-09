@@ -255,6 +255,14 @@ class HeadersCorsTest(unittest.TestCase):
         self.assertNotIn("*", xml)
         gp.check_upstream("api", xml)
 
+    def test_api_cors_precedes_inherited_global_cors(self):
+        origin = "https://staging.example.com"
+        xml = release(origins=[origin])["extra_files"]["api-scope.candidate.xml"]
+        inbound = ET.fromstring(xml).find("inbound")
+        inherited = ET.fromstring(UPSTREAM["global"]).find("inbound")
+        effective = [node for policy in inbound for node in (inherited if policy.tag == "base" else [policy])]
+        self.assertEqual([origin, ORIGINS[0]], [node.findtext("allowed-origins/origin") for node in effective])
+
     def test_wildcard_or_unsafe_origins_rejected(self):
         for origins in ([], None, ["*"], ["http://app.example.com"], ["https://app.example.com/path"],
                         ["https://user@app.example.com"], ORIGINS * 2, ["{{allowed-origins}}"]):

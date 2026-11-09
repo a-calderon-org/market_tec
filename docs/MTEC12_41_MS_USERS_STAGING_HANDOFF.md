@@ -93,8 +93,9 @@ resuelto** hasta verificar en Azure la API sin clave, las denegaciones y la rota
   elimina ni reescribe `Origin`, `Cookie`, `Set-Cookie`, `X-CSRF-Token`, `X-MTEC-Client` ni `Authorization`.
 * La política de API declara CORS con credenciales y orígenes HTTPS literales (nunca `*`), métodos GET/POST/PUT y
   cabeceras `Content-Type`, `Authorization`, `X-CSRF-Token`, `X-MTEC-Client`, `X-Correlation-ID`.
-* **No determinado:** ms-users también emite cabeceras CORS. Debe comprobarse en el gateway que cada respuesta lleve
-  un único `Access-Control-Allow-Origin` y que el CORS global no contradiga al de la API.
+  `<cors>` precede a `<base />` para que se evalúe antes del CORS heredado. La política conserva la herencia.
+* **No determinado:** ms-users también emite cabeceras CORS. Debe comprobarse en el gateway el orden de la política
+  efectiva y que cada respuesta a un origen permitido lleve un único `Access-Control-Allow-Origin` con ese origen.
 
 **Requisitos D-04 (pendientes):** SPA y APIM en hosts HTTPS del mismo *site* registrable; cookies `__Host-`
 (`Secure`, `Path=/`, sin `Domain`). Los hostnames no se inventan aquí.

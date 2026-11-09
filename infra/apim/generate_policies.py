@@ -405,13 +405,12 @@ PLACEHOLDER_USERS = "https://ms-users.invalid"
 
 
 def api_scope_policy(spec: dict, allowed_origins: list) -> str:
-    """API-scope policy of the separate ms-users API: inherit, then credentialed CORS for explicit origins."""
+    """Apply the ms-users API's credentialed CORS before inheriting parent policies."""
     if not allowed_origins or len(set(allowed_origins)) != len(allowed_origins) or not all(
             isinstance(o, str) and valid_https_origin(o) for o in allowed_origins):
         raise ValueError("release needs explicit, distinct https origins (no *, paths or credentials)")
     root = ET.Element("policies")
     inbound = ET.SubElement(root, "inbound")
-    ET.SubElement(inbound, "base")
     cors = ET.SubElement(inbound, "cors", **{"allow-credentials": "true", "terminate-unmatched-request": "true"})
     origins = ET.SubElement(cors, "allowed-origins")
     for origin in allowed_origins:
@@ -422,6 +421,7 @@ def api_scope_policy(spec: dict, allowed_origins: list) -> str:
     headers = ET.SubElement(cors, "allowed-headers")
     for header in spec["cors_allowed_headers"]:
         ET.SubElement(headers, "header").text = header
+    ET.SubElement(inbound, "base")
     for section in ("backend", "outbound", "on-error"):
         ET.SubElement(root, section).append(ET.Element("base"))
     xml = _text(root)
