@@ -12,6 +12,7 @@ import {
 } from './business-transport';
 import { AuthRequiredError } from './auth-contract';
 import { AuthSessionService } from './auth-session.service';
+import { bearerHeaderName } from './auth-v2-config';
 
 /**
  * Interceptor del núcleo v2 (flag `authCoreV2`), política D-11:
@@ -107,7 +108,7 @@ export const authCoreV2Interceptor: HttpInterceptorFn = (req, next) => {
         return throwError(() => new AuthRequiredError(reason));
       }
 
-      return next(req.clone({ setHeaders: { Authorization: `Bearer ${token}` } })).pipe(
+      return next(req.clone({ setHeaders: { [bearerHeaderName(environment.apiBaseUrl)]: `Bearer ${token}` } })).pipe(
         catchError((error: unknown) => {
           if (error instanceof HttpErrorResponse && error.status === 401) {
             session.handleBusinessUnauthorized(token);

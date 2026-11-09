@@ -59,7 +59,8 @@ test('forwards only allow-listed headers to the APIM users API, keeping cookie, 
   await handle(req('POST', '/api/users/v1/auth/refresh', { origin: ORIGIN }), CONFIG, up.deps); // warm-up only
   const res = await handle(req('POST', '/api/users/v1/auth/refresh', {
     origin: ORIGIN, cookie: '__Host-mtec-refresh=x', 'x-csrf-token': 'c', 'content-type': 'application/json',
-    authorization: 'Bearer user.jwt', 'x-ms-client-principal': 'forged', 'x-user-id': '1',
+    authorization: 'Bearer swa-platform-token', 'x-mtec-authorization': 'Bearer user.jwt',
+    'x-ms-client-principal': 'forged', 'x-user-id': '1',
     'x-mtec-user-authorization': 'Bearer smuggled', 'x-forwarded-for': '1.2.3.4', 'sec-fetch-site': 'same-origin',
   }, '{"mode":"rotate"}'), CONFIG, up.deps);
   assert.equal(res.status, 200);
@@ -71,6 +72,16 @@ test('forwards only allow-listed headers to the APIM users API, keeping cookie, 
   assert.equal(sent.init.body, '{"mode":"rotate"}');
   assert.equal(sent.init.redirect, 'manual');
 });
+
+test('never forwards the Authorization that Static Web Apps injects; without X-MTEC-Authorization none is sent',
+  async () => {
+    const up = upstream(() => ({ status: 401, body: '{}', java: true }));
+    await handle(req('GET', '/api/users/v1/me/profile', {
+      authorization: 'Bearer swa-platform-token', 'sec-fetch-site': 'same-origin',
+    }), CONFIG, up.deps);
+    assert.equal(up.calls.at(-1).init.headers.authorization, undefined);
+    assert.equal(up.calls.at(-1).init.headers['x-mtec-authorization'], undefined);
+  });
 
 test('returns __Host- cookies as host-only first-party cookies of the SPA origin', async () => {
   const up = upstream(() => ({ status: 200, setCookies: [REFRESH, 'other=1; Domain=evil.example; Path=/'],
