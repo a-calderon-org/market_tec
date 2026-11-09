@@ -1,5 +1,12 @@
 # Backend: dependencias
 
+## ms-catalog (servicio independiente)
+
+**Verificado:** `app/ms-catalog` usa Ajv 8.20.0 y ajv-formats 3.0.1 como
+dependencias de desarrollo fijadas en package-lock para validar respuestas HTTP
+contra JSON Schema Draft 2020-12. No se agregan dependencias productivas.
+Las secciones siguientes describen exclusivamente el auxiliar `app/backend`.
+
 ## Producción
 
 - `express` 5: servidor HTTP.

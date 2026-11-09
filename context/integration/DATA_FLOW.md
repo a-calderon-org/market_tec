@@ -1,5 +1,11 @@
 # Flujo de datos
 
+**Extension local MTEC-32:** para POST/PUT el router autentica, parsea JSON acotado,
+rechaza campos de identidad y resuelve snapshot confiable del mismo userId antes
+de invocar los casos de uso. El repositorio y puerto de imagenes son inyectados.
+Las pruebas simulan dos usuarios y verifican 201/403 y respuestas JSON Schema;
+no acreditan un flujo real con JWT/APIM/ms-users.
+
 **MTEC-32, Verificado localmente:** en pruebas HTTP aisladas, Express invoca un
 autenticador inyectado antes de consultar `PublicationService` y el repositorio en
 memoria. La respuesta es plana y conserva fechas e IDs de compatibilidad. Este

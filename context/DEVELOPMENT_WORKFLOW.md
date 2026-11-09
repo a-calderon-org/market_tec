@@ -8,6 +8,12 @@
 
 ## Comandos
 
+Para `app/ms-catalog`, `npm ci` instala dependencias fijadas y `npm run check`
+comprueba tipos, compila y ejecuta pruebas, incluidas respuestas HTTP verificadas
+con Ajv/ajv-formats. Prueba manual y coleccion Postman en
+[README de catalogo](../app/ms-catalog/README.md). Esto no cambia el flujo Git ni
+los workflows de CI/despliegue existentes.
+
 | Área | Comando (desde su directorio) | Estado 2026-10-13 |
 |---|---|---|
 | Backend | `npm run build` | Exitoso |

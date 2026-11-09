@@ -8,6 +8,12 @@ respuestas, limites de autenticacion y pruebas manuales en el
 [README del servicio](../../app/ms-catalog/README.md#mtec-32--incremento-de-lectura-http-en-pruebas).
 El OpenAPI de catalogo sigue Proposed; no hay conformidad productiva.
 
+**Extension local MTEC-32:** la composicion optativa incorpora POST/PUT de
+publicaciones, aprobados como interfaces el 2026-11-09 y descritos en Catalog
+OpenAPI 0.2.0-draft. Pruebas HTTP verifican permisos y JSON Schema; autenticacion
+real y conformidad completa siguen pendientes. El arranque normal no habilita
+estos adaptadores sin composicion explicita.
+
 ## Contrato implementado localmente
 
 ### `GET /api/health`

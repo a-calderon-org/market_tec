@@ -126,8 +126,43 @@ ejecutar la coleccion contra esa misma fixture: comprueba 200, 400, 401, 404,
 correlacion, paginacion y fechas. Detener con Ctrl+C; los datos no persisten.
 No ejecutar esa fixture en produccion ni usar credenciales reales.
 
-**Pendiente para cerrar MTEC-32:** conformidad del contrato y autenticacion real,
-pruebas JSON Schema completas, CRUD/rutas adicionales segun contratos aprobados,
-201/403 con casos reales y validacion manual de la coleccion Postman. Los tests de
-lectura no certifican APIM, JWT, Cosmos ni conexion de Angular. OpenAPI conserva
-`proposed`, ya que la operacion completa aun no tiene conformidad.
+### Extension de escritura — interfaces aprobadas 2026-11-09
+
+La composicion optativa acepta `writes` con los casos de uso `create`/`update`
+y `resolveActor(userId)`, que obtiene un snapshot confiable sin consultar la DB de
+ms-users. El resultado debe corresponder al principal ya autenticado. El body
+nunca proporciona propietario, vendedor, ID o fecha; campos desconocidos se rechazan.
+
+- `POST /v1/publicaciones`: 201, detalle creado y `Location` relativa.
+- `PUT /v1/publicaciones/{publicationId}`: 200, detalle actualizado; solo propietario.
+- Cuerpo JSON completo: categoria, subcategoria, titulo, descripcion, precio,
+  condicion (string o null) y ubicacion. `imagenes` es opcional; omitirlo implica
+  `[]`, tambien en PUT. No hay actualizaciones parciales ni eliminacion.
+- Errores 400/401/403/404/409; limite 1 MiB con 413; errores inesperados 500.
+  Se autentica antes de parsear JSON. Un fallo de snapshot/imagenes no habilita
+  fallback ni escritura parcial. Las URLs se limitan a HTTP(S) sin credenciales.
+
+La fixture manual anterior ahora incluye POST/PUT y un segundo principal de
+prueba con `Bearer local-test-other`. La coleccion agrega alta, actualizacion,
+403 y rechazo de propietario en body; ejecutar en orden, pues guarda `createdId`.
+Ajv 8 y ajv-formats son dependencias exclusivas de desarrollo para validar los
+schemas Draft 2020-12 de respuestas reales en `publication-write-http.test.ts`.
+
+**Verificado 2026-11-09:** `npm run check` pasa 69 pruebas; la suite contractual
+general `python -m unittest discover -s contracts/tests -p test_contracts.py`
+pasa 8 pruebas. La coleccion Postman se ejecuto con Newman 6 contra una fixture
+limpia: 9 requests y 24 assertions, sin fallos. Esa ejecucion valida el adaptador
+local con fake auth; no es evidencia de interoperabilidad JWT o Azure.
+
+```powershell
+# Ejecutar toda la validacion, incluidos JSON Schema y permisos HTTP:
+npm run check
+# Solo escritura HTTP, tras compilar:
+node --test dist/tests/publication-write-http.test.js
+```
+
+**Pendiente para cerrar MTEC-32:** integracion y conformidad de autenticacion real,
+incluyendo perfil por entorno, confianza de claves y composicion del snapshot de
+vendedor; revision contractual final. Los tests aislados no certifican APIM, JWT,
+Cosmos ni conexion Angular. OpenAPI 0.2.0-draft conserva `proposed`; la aprobacion
+de las interfaces POST/PUT no aprueba parametros de seguridad ni otras interfaces.
