@@ -5,11 +5,17 @@ on:
     paths:
       - 'infra/apim/**'
       - 'contracts/openapi/users.json'
+      - 'app/frontend/src/app/core/api/api-url.ts'
+      - 'app/frontend/src/app/core/auth/v2/http-auth-api.adapter.ts'
+      - 'app/frontend/src/app/features/profile/services/user.service.ts'
       - '.github/workflows/ci-apim.yml'
   pull_request:
     paths:
       - 'infra/apim/**'
       - 'contracts/openapi/users.json'
+      - 'app/frontend/src/app/core/api/api-url.ts'
+      - 'app/frontend/src/app/core/auth/v2/http-auth-api.adapter.ts'
+      - 'app/frontend/src/app/features/profile/services/user.service.ts'
       - '.github/workflows/ci-apim.yml'
 
 permissions:

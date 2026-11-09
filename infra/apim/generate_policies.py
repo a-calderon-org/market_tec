@@ -14,6 +14,9 @@ Fail-closed rules:
   backend section, so neither inherited actions nor the backend are reachable.
 * Cookies are only checked for presence/format; they never authenticate. Session and CSRF
   verification belong to ms-users.
+* A release profile (release_profiles.py, reviewed code) only narrows: operations outside it get a
+  terminal deny, operations inside it still need their approvals. It adds a candidate API definition
+  (no subscription key) and an API-scope CORS policy with explicit origins, never `*`.
 """
 import argparse
 import hashlib
@@ -26,7 +29,9 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from build_jwt_policy import build as build_jwt
-from policy_schema import validate_policy
+from policy_schema import valid_https_origin, validate_policy
+from release_profiles import NOT_RELEASED, profile as release_profile
+from route_check import resolve as resolve_routes
 from security_reference import COOKIE_NAMES, SECURITY_REFERENCE
 
 HERE = Path(__file__).parent
@@ -317,19 +322,23 @@ def blocked_reason(op: dict, approvals: dict):
     return None
 
 
-def terminal_deny(code: str) -> str:
+def terminal_deny(code: str, status: int = 503, reason: str = "Service Unavailable") -> str:
     """No <base /> in inbound/backend/outbound: parent scopes and the backend are unreachable."""
     root = ET.Element("policies")
-    ET.SubElement(root, "inbound").append(_deny(503, "Service Unavailable", code))
+    ET.SubElement(root, "inbound").append(_deny(status, reason, code))
     ET.SubElement(root, "backend")
     ET.SubElement(root, "outbound")
     ET.SubElement(root, "on-error")
     return _text(root)
 
 
-def policy_for(op: dict, approvals: dict, jwks, issuer: str, audience: str) -> str:
+def policy_for(op: dict, approvals: dict, jwks, issuer: str, audience: str, released=None) -> str:
+    """`released`: operation ids of the release profile, or None when no profile narrows the surface."""
     blocked = blocked_reason(op, approvals)
-    if blocked:
+    if released is not None and op["id"] not in released:
+        status, reason, code = NOT_RELEASED
+        xml = terminal_deny(code, status, reason)
+    elif blocked:
         xml = terminal_deny(blocked[1])
     else:
         if op["auth"] in ("jwt", "jwt_cookie"):
@@ -362,11 +371,13 @@ def _prepare(manifest, openapi_bytes, backend_routes, evidence_dir):
     return ops, {name: verify_approval(manifest, name, ctx) for name in APPROVALS}
 
 
-def _definitions(ops, manifest, approvals, jwks, issuer, audience, suffix):
+def _definitions(ops, manifest, approvals, jwks, issuer, audience, suffix, released=None):
     policies, definitions = {}, []
     for op in ops:
-        xml = policy_for(op, approvals, jwks, issuer, audience)
+        xml = policy_for(op, approvals, jwks, issuer, audience, released)
         blocked = blocked_reason(op, approvals)
+        if released is not None and op["id"] not in released:
+            blocked = ("not_in_release_profile", NOT_RELEASED[2])
         policies[op["id"]] = xml
         definitions.append({
             "id": op["id"], "method": op["method"], "url_template": op["public_path"],
@@ -388,22 +399,82 @@ def upstream_report(upstream_xml: dict) -> dict:
             "validated": [s for s in SCOPES if s in upstream_xml]}
 
 
-def _result(kind, suffix, index, ops, manifest, approvals, report, jwks, issuer, audience):
-    policies, definitions = _definitions(ops, manifest, approvals, jwks, issuer, audience, suffix)
-    return {"kind": kind, "index_file": index, "azure_validated": False, "deployment_approved": False,
-            "local_structure_validated": True, "upstream_scopes_validated_locally": report["validated"],
-            "missing_exports": report["missing_exports"], "approvals_verified": approvals,
-            "external_evidence_required": EXTERNAL_EVIDENCE, "policies": policies, "definitions": definitions}
+# Placeholders only used to prove the route chain is internally consistent; real hosts are operator inputs.
+PLACEHOLDER_GATEWAY = "https://apim-gateway.invalid"
+PLACEHOLDER_USERS = "https://ms-users.invalid"
 
 
-def analyze(manifest, jwks, issuer, audience, upstream_xml=None, openapi=None, backend_routes=None, evidence_dir=None) -> dict:
+def api_scope_policy(spec: dict, allowed_origins: list) -> str:
+    """API-scope policy of the separate ms-users API: inherit, then credentialed CORS for explicit origins."""
+    if not allowed_origins or len(set(allowed_origins)) != len(allowed_origins) or not all(
+            isinstance(o, str) and valid_https_origin(o) for o in allowed_origins):
+        raise ValueError("release needs explicit, distinct https origins (no *, paths or credentials)")
+    root = ET.Element("policies")
+    inbound = ET.SubElement(root, "inbound")
+    ET.SubElement(inbound, "base")
+    cors = ET.SubElement(inbound, "cors", **{"allow-credentials": "true", "terminate-unmatched-request": "true"})
+    origins = ET.SubElement(cors, "allowed-origins")
+    for origin in allowed_origins:
+        ET.SubElement(origins, "origin").text = origin
+    methods = ET.SubElement(cors, "allowed-methods", **{"preflight-result-max-age": "600"})
+    for method in spec["cors_allowed_methods"]:
+        ET.SubElement(methods, "method").text = method
+    headers = ET.SubElement(cors, "allowed-headers")
+    for header in spec["cors_allowed_headers"]:
+        ET.SubElement(headers, "header").text = header
+    for section in ("backend", "outbound", "on-error"):
+        ET.SubElement(root, section).append(ET.Element("base"))
+    xml = _text(root)
+    check_upstream("api", xml)  # same literal-only rules as any inherited API scope
+    return xml
+
+
+def release_bundle(name: str, definitions: list, allowed_origins: list) -> dict:
+    """Candidate API definition + API-scope policy + resolved route chain for a release profile."""
+    spec = release_profile(name)
+    released = set(spec["operations"])
+    enabled = [d for d in definitions if d["id"] in released]
+    api = dict(spec["api"])
+    if api["subscriptionRequired"] is not False or api["protocols"] != ["https"] or api["service_url_path"]:
+        raise ValueError("release API must be https-only, keyless and forward to the bare ms-users origin")
+    chain = resolve_routes(f"{PLACEHOLDER_GATEWAY}/{api['path'].strip('/').rsplit('/v1', 1)[0]}", PLACEHOLDER_GATEWAY,
+                           api["path"], enabled, {d["id"]: PLACEHOLDER_USERS for d in enabled}, PLACEHOLDER_USERS)
+    return {"profile": name, "operations": sorted(released),
+            "api_definition": {**api, "serviceUrl": None, "applied_in_azure": False,
+                               "note": "candidate; serviceUrl is the bare ms-users origin supplied by the operator"},
+            "route_chain_placeholders": {"gateway": PLACEHOLDER_GATEWAY, "ms_users": PLACEHOLDER_USERS},
+            "route_chain": chain, "api_scope_policy": api_scope_policy(spec, allowed_origins)}
+
+
+def _result(kind, suffix, index, ops, manifest, approvals, report, jwks, issuer, audience, release=None,
+            allowed_origins=None):
+    released = set(release_profile(release)["operations"]) if release else None
+    policies, definitions = _definitions(ops, manifest, approvals, jwks, issuer, audience, suffix, released)
+    result = {"kind": kind, "index_file": index, "azure_validated": False, "deployment_approved": False,
+              "local_structure_validated": True, "upstream_scopes_validated_locally": report["validated"],
+              "missing_exports": report["missing_exports"], "approvals_verified": approvals,
+              "external_evidence_required": EXTERNAL_EVIDENCE, "policies": policies, "definitions": definitions}
+    if release:
+        bundle = release_bundle(release, definitions, allowed_origins)
+        stem = "candidate" if kind == "candidate_package" else "analysis"
+        scope_file = f"api-scope.{stem}.xml" if stem == "candidate" else "api-scope.xml.txt"
+        result["extra_files"] = {scope_file: bundle.pop("api_scope_policy"),
+                                 f"api-definition.{stem}.json": json.dumps(bundle["api_definition"], indent=2) + "\n"}
+        result["release"] = bundle
+    return result
+
+
+def analyze(manifest, jwks, issuer, audience, upstream_xml=None, openapi=None, backend_routes=None, evidence_dir=None,
+            release=None, allowed_origins=None) -> dict:
     """Local review output (*.xml.txt). Never a package, whatever the inputs."""
     ops, approvals = _prepare(manifest, openapi, backend_routes, evidence_dir)
     report = upstream_report(upstream_xml)
-    return _result("analysis", ".xml.txt", "operations.analysis.json", ops, manifest, approvals, report, jwks, issuer, audience)
+    return _result("analysis", ".xml.txt", "operations.analysis.json", ops, manifest, approvals, report, jwks, issuer,
+                   audience, release, allowed_origins)
 
 
-def build_package(manifest, jwks, issuer, audience, upstream_xml=None, openapi=None, backend_routes=None, evidence_dir=None) -> dict:
+def build_package(manifest, jwks, issuer, audience, upstream_xml=None, openapi=None, backend_routes=None, evidence_dir=None,
+                  release=None, allowed_origins=None) -> dict:
     """Candidate package (*.candidate.xml) or PackageError. Locally checked only; not Azure-validated or approved."""
     ops, approvals = _prepare(manifest, openapi, backend_routes, evidence_dir)
     report = upstream_report(upstream_xml)
@@ -411,7 +482,8 @@ def build_package(manifest, jwks, issuer, audience, upstream_xml=None, openapi=N
         raise PackageError("missing verified upstream policy exports: " + ", ".join(report["missing_exports"]))
     if jwks is None or not issuer or not audience:
         raise PackageError("reviewed JWKS snapshot, issuer and audience are required")
-    return _result("candidate_package", ".candidate.xml", "operations.candidate.json", ops, manifest, approvals, report, jwks, issuer, audience)
+    return _result("candidate_package", ".candidate.xml", "operations.candidate.json", ops, manifest, approvals, report,
+                   jwks, issuer, audience, release, allowed_origins)
 
 
 def write_output(result: dict, output_dir: Path) -> None:
@@ -425,7 +497,9 @@ def write_output(result: dict, output_dir: Path) -> None:
         by_id = {d["id"]: d["policy_file"] for d in result["definitions"]}
         for name, xml in result["policies"].items():
             (staging / by_id[name]).write_text(xml)
-        meta = {k: v for k, v in result.items() if k not in ("policies", "index_file")}
+        for name, text in result.get("extra_files", {}).items():
+            (staging / name).write_text(text)
+        meta = {k: v for k, v in result.items() if k not in ("policies", "index_file", "extra_files")}
         (staging / result["index_file"]).write_text(json.dumps(meta, indent=2) + "\n")
         if out.exists():
             out.rmdir()
@@ -443,6 +517,9 @@ def main() -> None:
     parser.add_argument("--backend-routes", type=Path, default=HERE / "backend-routes.json")
     parser.add_argument("--evidence-dir", type=Path, default=EVIDENCE_DIR)
     parser.add_argument("--jwks", type=Path)
+    parser.add_argument("--release", help="release profile from release_profiles.py (narrows the surface)")
+    parser.add_argument("--allowed-origin", action="append", default=[],
+                        help="exact https SPA origin for the release API-scope CORS (repeatable)")
     parser.add_argument("--issuer", required=True)
     parser.add_argument("--audience", required=True)
     for scope in SCOPES:
@@ -457,7 +534,7 @@ def main() -> None:
         result = (build_package if args.mode == "package" else analyze)(
             json.loads(args.manifest.read_text()), json.loads(args.jwks.read_text()) if args.jwks else None,
             args.issuer, args.audience, upstream, args.openapi.read_bytes(),
-            json.loads(args.backend_routes.read_text()), args.evidence_dir)
+            json.loads(args.backend_routes.read_text()), args.evidence_dir, args.release, args.allowed_origin)
         write_output(result, out)
     except (ValueError, OSError) as error:  # PackageError is a ValueError
         raise SystemExit(f"refused: {error}")

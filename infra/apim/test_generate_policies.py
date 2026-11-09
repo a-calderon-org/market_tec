@@ -96,7 +96,7 @@ class RoutesTest(unittest.TestCase):
     def test_manifest_matches_openapi_controllers_and_reference(self):
         verify_sources(MANIFEST, OPENAPI, ROUTES)
         self.assertEqual(22, len(MANIFEST["operations"]))
-        self.assertEqual("20898978d7f49c38e21b49187250bdd1821c370f", ROUTES["sha"])
+        self.assertEqual("08ccf056c975f6ec5d918c4cf76143fb04def7b2", ROUTES["sha"])
 
     def test_public_paths_follow_x_public_apim_path(self):
         self.assertEqual("/auth/google", OPS["exchangeGoogleCredential"]["public_path"])
