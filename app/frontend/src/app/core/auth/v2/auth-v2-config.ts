@@ -102,3 +102,26 @@ export const AUTH_V2_MIN_WRITE_START_MS = new InjectionToken<number>('AUTH_V2_MI
   providedIn: 'root',
   factory: () => 10_000,
 });
+
+/**
+ * Cabecera del JWT interno. Static Web Apps SUSTITUYE `Authorization` antes de entregar la petición a la Function
+ * administrada (verificado 2026-11-09: llega siempre su propio token de 372 caracteres), así que hacia el proxy
+ * same-origin (`https://<swa>/api/...`) el JWT viaja en `X-MTEC-Authorization` y el proxy lo entrega a APIM como
+ * `Authorization`. Hacia cualquier otra API base se usa `Authorization`.
+ */
+export const SAME_ORIGIN_PROXY_AUTHORIZATION_HEADER = 'X-MTEC-Authorization';
+
+export function bearerHeaderName(
+  apiBaseUrl: unknown,
+  documentOrigin: string | undefined = globalThis.location?.origin,
+): string {
+  if (typeof apiBaseUrl !== 'string') return 'Authorization';
+  try {
+    const url = new URL(apiBaseUrl);
+    return url.origin === documentOrigin && /^\/api(\/|$)/.test(url.pathname)
+      ? SAME_ORIGIN_PROXY_AUTHORIZATION_HEADER
+      : 'Authorization';
+  } catch {
+    return 'Authorization';
+  }
+}

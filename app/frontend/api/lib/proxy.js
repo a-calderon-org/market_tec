@@ -30,8 +30,11 @@ const crypto = require('node:crypto');
 const PATH = /^\/api\/users(\/v1(?:\/[A-Za-z0-9_-][A-Za-z0-9._-]{0,63}){1,6})$/;
 const QUERY = /^\?[A-Za-z0-9=&._-]{1,256}$/;
 const METHODS = new Set(['GET', 'POST', 'PUT']);
-const REQUEST_HEADERS = ['accept', 'authorization', 'content-type', 'cookie', 'origin', 'x-csrf-token',
-  'x-mtec-client', 'x-correlation-id'];
+// `authorization` is NOT forwarded: Static Web Apps replaces it with its own platform token before the Function
+// runs. The SPA sends the internal JWT in X-MTEC-Authorization and the proxy hands it to APIM as Authorization.
+const REQUEST_HEADERS = ['accept', 'content-type', 'cookie', 'origin', 'x-csrf-token', 'x-mtec-client',
+  'x-correlation-id'];
+const USER_AUTHORIZATION_HEADER = 'x-mtec-authorization';
 const RESPONSE_HEADERS = ['content-type', 'cache-control', 'www-authenticate', 'retry-after', 'x-correlation-id',
   'vary'];
 const DEADLINE_MS = 38000; // below the 45 s Static Web Apps limit, leaving room for the function itself
@@ -103,6 +106,8 @@ function forwardHeaders(req, config) {
     const value = header(req, name);
     if (value !== undefined) headers[name] = value;
   }
+  const userAuthorization = header(req, USER_AUTHORIZATION_HEADER);
+  if (userAuthorization !== undefined) headers.authorization = userAuthorization;
   // Browsers may omit Origin on a same-origin GET, and ms-users answers 403 ORIGIN_DENIED without it. Only a
   // browser-asserted same-origin read (Sec-Fetch-Site cannot be set by page script) gets the configured origin;
   // a foreign Origin was already rejected by checkRequest and anything else is forwarded as it came.
