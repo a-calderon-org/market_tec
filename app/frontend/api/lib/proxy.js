@@ -16,6 +16,11 @@ const crypto = require('node:crypto');
  * inbound X-Correlation-ID on every response (including its own 4xx), while APIM's terminal denials
  * (return-response) never carry one. The warm-up therefore sends a fresh nonce and is accepted only when that
  * exact value comes back with a non-5xx status. Every deadline covers the whole response, body included.
+ *
+ * MTEC-37: the SPA sends its remaining budget in X-MTEC-Client-Budget-Ms. The proxy never works past it (minus a
+ * transit margin), so a write is never forwarded after the browser has already given up on it: when the budget
+ * cannot cover the warm-up plus the write, the answer is 503 BACKEND_WARMING and the write was NOT sent. The header
+ * is read here only and never forwarded to APIM.
  */
 
 const PATH = /^\/api\/users(\/v1(?:\/[A-Za-z0-9_-][A-Za-z0-9._-]{0,63}){1,6})$/;
@@ -30,6 +35,9 @@ const MIN_FORWARD_MS = 8000; // a warm ms-users answers in < 1 s; never start a 
 const WARM_TTL_MS = 120000; // well below the 300 s Container Apps scale-in cooldown
 const WARM_PROBE_PATH = '/v1/auth/session'; // idempotent read that reaches ms-users through APIM
 const CORRELATION = /^[A-Za-z0-9._-]{1,128}$/; // what ms-users echoes back unchanged
+const CLIENT_BUDGET_HEADER = 'x-mtec-client-budget-ms';
+const CLIENT_BUDGET = /^[0-9]{1,7}$/;
+const CLIENT_MARGIN_MS = 2000; // browser <-> function transit and response delivery inside the client budget
 
 let warmUntil = 0;
 
@@ -190,7 +198,14 @@ function toResponse({ res, body }) {
 }
 
 const DEFAULT_DEPS = { fetch: globalThis.fetch, now: Date.now, randomId: () => crypto.randomUUID(),
-  deadlineMs: DEADLINE_MS, minForwardMs: MIN_FORWARD_MS };
+  deadlineMs: DEADLINE_MS, minForwardMs: MIN_FORWARD_MS, clientMarginMs: CLIENT_MARGIN_MS };
+
+/** The proxy's own deadline, capped by what the client said it will still wait (when it said so validly). */
+function effectiveDeadline(req, deps) {
+  const budget = header(req, CLIENT_BUDGET_HEADER);
+  if (budget === undefined || !CLIENT_BUDGET.test(budget)) return deps.deadlineMs;
+  return Math.min(deps.deadlineMs, Number(budget) - deps.clientMarginMs);
+}
 
 async function handle(req, config, overrides = {}) {
   const deps = { ...DEFAULT_DEPS, ...overrides };
@@ -208,13 +223,15 @@ async function handle(req, config, overrides = {}) {
   const target = `${config.upstream}${PATH.exec(url.pathname)[1]}${url.search}`;
   const init = { method: req.method, headers: forwardHeaders(req, config) };
   if (req.method !== 'GET') init.body = req.rawBody ?? '';
-  const left = () => deps.deadlineMs - (deps.now() - start);
+  const deadlineMs = effectiveDeadline(req, deps);
+  const left = () => deadlineMs - (deps.now() - start);
   const warming = json(503, 'BACKEND_WARMING', { 'Retry-After': '3' });
 
   if (req.method !== 'GET') {
     const warm = await ensureWarm(deps, config, left() - deps.minForwardMs);
     if (!warm || left() < deps.minForwardMs) return warming; // the write was NOT sent: safe to retry
   }
+  if (left() <= 0) return warming; // the client already gave up: nothing is sent
   let upstream;
   try {
     upstream = await callUpstream(deps.fetch, target, init, left());
@@ -245,4 +262,5 @@ function resetWarmState() {
   warmUntil = 0;
 }
 
-module.exports = { handle, probe, parseSetCookie, configFromEnv, resetWarmState, DEADLINE_MS, MIN_FORWARD_MS };
+module.exports = { handle, probe, parseSetCookie, configFromEnv, resetWarmState, DEADLINE_MS, MIN_FORWARD_MS,
+  CLIENT_MARGIN_MS };

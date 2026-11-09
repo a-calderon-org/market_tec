@@ -32,6 +32,13 @@ import { SESSION_LOCK_NAME, SessionLock } from './session-lock';
 const INVALID = Symbol('invalid');
 type Parsed<T> = T | typeof INVALID;
 
+/**
+ * Presupuesto restante de esta petición (ms), solo hacia el proxy same-origin (MTEC-37): el proxy nunca envía una
+ * escritura que no pueda terminar dentro de él y contesta `BACKEND_WARMING` sin enviarla. No se manda a un origen
+ * ajeno: sería un encabezado no permitido por CORS y el proxy es el único que lo lee.
+ */
+export const CLIENT_BUDGET_HEADER = 'X-MTEC-Client-Budget-Ms';
+
 const HEX_32 = /^[0-9a-f]{32}$/;
 const HEX_64 = /^[0-9a-f]{64}$/;
 
@@ -50,7 +57,8 @@ const HEX_64 = /^[0-9a-f]{64}$/;
  * - `X-MTEC-Client: web` en todas; `X-CSRF-Token` en intercambio Google (CSRF del
  *   intento), refresh y logout (CSRF de sesión, si existe). `Origin` lo pone el
  *   navegador; no se fija a mano.
- * - Sin reintentos: cada llamada emite como máximo una petición.
+ * - Solo se repite `503 BACKEND_WARMING` (el proxy garantiza que no envió nada), dentro del tope total;
+ *   cualquier otro error, incluido TIMEOUT, se propaga sin reintento.
  * - Errores: `AuthApiError(status, code)` con el `error.code` del sobre Java;
  *   `status 0` con `NETWORK`, `TIMEOUT`, `ABORTED` o `INVALID_RESPONSE`.
  */
@@ -58,6 +66,7 @@ const HEX_64 = /^[0-9a-f]{64}$/;
 export class HttpAuthApiAdapter extends AuthApiPort {
   private readonly http = new HttpClient(inject(HttpBackend));
   private readonly baseUrl: string;
+  private readonly sendsClientBudget: boolean;
   private readonly timeoutMs = inject(AUTH_V2_HTTP_TIMEOUT_MS);
   private readonly warmingRetryMs = inject(AUTH_V2_WARMING_RETRY_MS);
   private readonly lock = inject(SessionLock);
@@ -71,6 +80,7 @@ export class HttpAuthApiAdapter extends AuthApiPort {
     }
 
     this.baseUrl = base;
+    this.sendsClientBudget = isSameOrigin(base);
   }
 
   createGoogleAttempt(
@@ -190,6 +200,9 @@ export class HttpAuthApiAdapter extends AuthApiPort {
       let headers = new HttpHeaders({ 'X-MTEC-Client': 'web' });
       if (options.body !== undefined) headers = headers.set('Content-Type', 'application/json');
       if (options.csrfToken) headers = headers.set('X-CSRF-Token', options.csrfToken);
+      if (this.sendsClientBudget) {
+        headers = headers.set(CLIENT_BUDGET_HEADER, String(Math.max(0, Math.floor(budgetMs))));
+      }
 
       const request$: Observable<HttpResponse<unknown>> = this.http
         .request<unknown>(method, versionedApiUrl(this.baseUrl, versionlessPath), {
@@ -231,6 +244,14 @@ export class HttpAuthApiAdapter extends AuthApiPort {
 
       signal?.addEventListener('abort', onAbort, { once: true });
     });
+  }
+}
+
+function isSameOrigin(base: string): boolean {
+  try {
+    return typeof location !== 'undefined' && new URL(base).origin === location.origin;
+  } catch {
+    return false;
   }
 }
 
