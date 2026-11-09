@@ -1,5 +1,10 @@
 # Integración frontend-backend
 
+**MTEC-32, Verificado localmente:** existe un adaptador optativo de listado/detalle
+en ms-catalog con composicion de prueba. No cambia `apiBaseUrl`, Angular ni APIM.
+La autenticacion real y la conformidad contractual siguen pendientes; ver
+[alcance y pruebas](../../app/ms-catalog/README.md#mtec-32--incremento-de-lectura-http-en-pruebas).
+
 ## Topología real
 
 La SPA no apunta automáticamente a `app/backend`. Todas las peticiones feature usan `environment.apiBaseUrl`; CI lo obtiene de `MARKET_TEC_API_URL`. El backend local solo tiene `/api/health` y no participa en esas llamadas.

@@ -1,0 +1,161 @@
+{
+  "info": {
+    "name": "MTEC-32 — lectura local (fixture de pruebas)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Solo para tests/fixtures/publication-http-preview.ts en localhost. Credencial sintética sin validación JWT. No usar con APIM o producción."
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:3100"
+    }
+  ],
+  "item": [
+    {
+      "name": "Listado paginado",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Correlation-ID",
+            "value": "postman-catalog"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer local-test-only"
+          }
+        ],
+        "url": "{{baseUrl}}/v1/publicaciones?sortBy=precio&sortDirection=asc&page=2&pageSize=1"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Correlación\", () => pm.expect(pm.response.headers.get(\"X-Correlation-ID\")).to.eql(\"postman-catalog\"));",
+              "pm.test(\"Página plana\", () => { const b = pm.response.json(); pm.expect(b.totalRecords).to.eql(3); pm.expect(b.items[0].precio).to.eql(20); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Detalle",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Correlation-ID",
+            "value": "postman-catalog"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer local-test-only"
+          }
+        ],
+        "url": "{{baseUrl}}/v1/publicaciones/pub-1"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Correlación\", () => pm.expect(pm.response.headers.get(\"X-Correlation-ID\")).to.eql(\"postman-catalog\"));",
+              "pm.test(\"Fecha e ID compatibles\", () => { const b = pm.response.json(); pm.expect(b.id).to.eql(\"pub-1\"); pm.expect(Date.parse(b.fechaPublicacion)).to.eql(b.createdAt * 1000); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Parámetro repetido",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Correlation-ID",
+            "value": "postman-catalog"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer local-test-only"
+          }
+        ],
+        "url": "{{baseUrl}}/v1/publicaciones?page=1&page=2"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+              "pm.test(\"Correlación\", () => pm.expect(pm.response.headers.get(\"X-Correlation-ID\")).to.eql(\"postman-catalog\"));",
+              "pm.test(\"Error de validación\", () => pm.expect(pm.response.json().error.code).to.eql(\"INVALID_PUBLICATION\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sin autenticación",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Correlation-ID",
+            "value": "postman-catalog"
+          }
+        ],
+        "url": "{{baseUrl}}/v1/publicaciones"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));",
+              "pm.test(\"Correlación\", () => pm.expect(pm.response.headers.get(\"X-Correlation-ID\")).to.eql(\"postman-catalog\"));",
+              "pm.test(\"No autenticado\", () => pm.expect(pm.response.json().error.code).to.eql(\"UNAUTHENTICATED\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Publicación inexistente",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Correlation-ID",
+            "value": "postman-catalog"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer local-test-only"
+          }
+        ],
+        "url": "{{baseUrl}}/v1/publicaciones/missing"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));",
+              "pm.test(\"Correlación\", () => pm.expect(pm.response.headers.get(\"X-Correlation-ID\")).to.eql(\"postman-catalog\"));",
+              "pm.test(\"Recurso inexistente\", () => pm.expect(pm.response.json().error.code).to.eql(\"PUBLICATION_NOT_FOUND\"));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
