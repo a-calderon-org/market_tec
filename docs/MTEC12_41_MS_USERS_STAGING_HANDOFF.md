@@ -423,6 +423,15 @@ es de 26–45 s. El proxy trabaja con un plazo de 38 s:
   Angular no lo envía a un origen ajeno. Con un arranque de más de 70 s, el `GET /session` inicial termina en
   `unavailable` sin `POST` y la sesión local se conserva. Los `GET` de calentamiento ya han despertado ms-users, así
   que la siguiente demanda de token se recupera.
+* MTEC-37 (plazo compartido): cada operación del coordinador (`GET /session`, `POST /refresh` o un logout completo)
+  tiene **un único** plazo absoluto. Va asociado a su `AbortSignal` (`request-deadline.ts`). El adaptador usa el
+  menor entre ese plazo y su propio tope de 70 s para todas las peticiones de la operación, y lo declara al proxy.
+  Antes, el logout gastaba 69 s en `GET /session` y luego enviaba `POST /logout` con 70 s nuevos aunque al
+  coordinador le quedaran 6 s. Un `POST` no empieza si el signal abortó o si quedan menos de 10 s (2 s de margen
+  del proxy + 8 s de `MIN_FORWARD_MS`). Una escritura enviada con resultado incierto nunca se repite. El proxy
+  ya no retiene una escritura durante el calentamiento: si al llegar no sabe que ms-users está caliente, calienta y
+  contesta `BACKEND_WARMING` sin enviarla. Solo el reintento del navegador, que sigue esperando, la lleva. Así una
+  cancelación del navegador durante esa espera, que el proxy no puede ver, no termina en una escritura tardía.
 
 **Entorno de verificación:** entorno de preview `d04` de la SWA `markettec`
 (`https://victorious-beach-0a55f0c1e-d04.westus2.2.azurestaticapps.net`), desplegado desde esta rama con app settings

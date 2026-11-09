@@ -25,7 +25,13 @@ import {
   TIMEOUT_ERROR_CODE,
   BACKEND_WARMING_ERROR_CODE,
 } from './auth-contract';
-import { AUTH_V2_HTTP_API_BASE, AUTH_V2_HTTP_TIMEOUT_MS, AUTH_V2_WARMING_RETRY_MS } from './auth-v2-config';
+import {
+  AUTH_V2_HTTP_API_BASE,
+  AUTH_V2_HTTP_TIMEOUT_MS,
+  AUTH_V2_MIN_WRITE_START_MS,
+  AUTH_V2_WARMING_RETRY_MS,
+} from './auth-v2-config';
+import { deadlineOf } from './request-deadline';
 import { SESSION_LOCK_NAME, SessionLock } from './session-lock';
 
 /** Marca de cuerpo inutilizable devuelta por los validadores. */
@@ -59,6 +65,9 @@ const HEX_64 = /^[0-9a-f]{64}$/;
  *   navegador; no se fija a mano.
  * - Solo se repite `503 BACKEND_WARMING` (el proxy garantiza que no envió nada), dentro del tope total;
  *   cualquier otro error, incluido TIMEOUT, se propaga sin reintento.
+ * - MTEC-37: el tope de una operación es el MENOR entre el propio (`AUTH_V2_HTTP_TIMEOUT_MS`) y el plazo que el
+ *   coordinador asoció a su signal, y es uno solo para todas sus peticiones (logout no estrena presupuesto tras el
+ *   GET). Un POST no empieza si el signal ya abortó o si quedan menos de `AUTH_V2_MIN_WRITE_START_MS`.
  * - Errores: `AuthApiError(status, code)` con el `error.code` del sobre Java;
  *   `status 0` con `NETWORK`, `TIMEOUT`, `ABORTED` o `INVALID_RESPONSE`.
  */
@@ -69,6 +78,7 @@ export class HttpAuthApiAdapter extends AuthApiPort {
   private readonly sendsClientBudget: boolean;
   private readonly timeoutMs = inject(AUTH_V2_HTTP_TIMEOUT_MS);
   private readonly warmingRetryMs = inject(AUTH_V2_WARMING_RETRY_MS);
+  private readonly minWriteStartMs = inject(AUTH_V2_MIN_WRITE_START_MS);
   private readonly lock = inject(SessionLock);
 
   constructor() {
@@ -134,28 +144,38 @@ export class HttpAuthApiAdapter extends AuthApiPort {
   async logout(csrfToken: string | null, signal?: AbortSignal, sessionId?: string): Promise<void> {
     if (!sessionId) return;
 
+    // Un solo plazo para la espera del lock, el GET y el POST (MTEC-37).
+    const deadline = this.deadlineFor(signal);
     const result = await this.lock.run(SESSION_LOCK_NAME, async () => {
       // El CSRF de memoria puede corresponder a una generación anterior de la cookie.
-      const current = await this.getSession(signal);
+      const current = await this.send('GET', '/auth/session', {}, parseSessionResponse, signal, deadline);
       if (current.session.sessionId === sessionId) {
-        await this.postLogout(current.csrfToken, signal);
+        await this.postLogout(current.csrfToken, signal, deadline);
       }
     }, signal);
 
     // Sin Web Locks no se rota. El servidor solo acepta el par cookie/CSRF exacto.
     if (result.kind === 'unavailable' && csrfToken) {
-      await this.postLogout(csrfToken, signal);
+      await this.postLogout(csrfToken, signal, deadline);
     }
   }
 
-  private postLogout(csrfToken: string, signal?: AbortSignal): Promise<void> {
+  private postLogout(csrfToken: string, signal: AbortSignal | undefined, deadline: number): Promise<void> {
     return this.send(
       'POST',
       '/auth/logout',
       { body: { scope: 'current' }, csrfToken },
       () => undefined,
       signal,
+      deadline,
     );
+  }
+
+  /** Plazo absoluto de una operación: el propio del adaptador, nunca más allá del que fijó el coordinador. */
+  private deadlineFor(signal?: AbortSignal): number {
+    const own = Date.now() + this.timeoutMs;
+    const shared = deadlineOf(signal);
+    return shared === undefined ? own : Math.min(own, shared);
   }
 
   /**
@@ -168,16 +188,24 @@ export class HttpAuthApiAdapter extends AuthApiPort {
     options: { body?: object; csrfToken?: string | null },
     parse: (body: unknown) => Parsed<T>,
     signal?: AbortSignal,
+    deadline: number = this.deadlineFor(signal),
   ): Promise<T> {
-    const deadline = Date.now() + this.timeoutMs;
+    let notSent: AuthApiError = new AuthApiError(0, TIMEOUT_ERROR_CODE);
 
     for (;;) {
+      // Antes de CADA intento, con el plazo compartido: un POST nunca empieza tras cancelar ni sin tiempo para
+      // terminar. No se envió nada: TIMEOUT, o el BACKEND_WARMING anterior si el último intento fue rechazado así.
+      if (signal?.aborted) throw new AuthApiError(0, ABORTED_ERROR_CODE);
+      const remaining = deadline - Date.now();
+      if (remaining <= 0 || (method === 'POST' && remaining < this.minWriteStartMs)) throw notSent;
       try {
-        return await this.sendOnce(method, versionlessPath, options, parse, deadline - Date.now(), signal);
+        return await this.sendOnce(method, versionlessPath, options, parse, remaining, signal);
       } catch (error) {
         const warming =
           error instanceof AuthApiError && error.status === 503 && error.code === BACKEND_WARMING_ERROR_CODE;
+        // Enviado con resultado incierto (TIMEOUT, red, 504...): nunca se repite.
         if (!warming || deadline - Date.now() <= this.warmingRetryMs) throw error;
+        notSent = error;
         await waitOrAbort(this.warmingRetryMs, signal);
       }
     }

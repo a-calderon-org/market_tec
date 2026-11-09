@@ -15,6 +15,7 @@ import { MOCK_USER, MockAuthBackend } from './mock-auth-api.adapter';
 import { AUTH_V2_COLD_START_BUDGET_MS, AUTH_V2_HTTP_TIMEOUT_MS } from './auth-v2-config';
 import { SESSION_COORDINATOR_CONFIG, SessionCoordinator } from './session-coordinator';
 import { SessionLock } from './session-lock';
+import { deadlineOf } from './request-deadline';
 
 /*
  * Estas pruebas SIMULAN pestañas con instancias independientes sobre un backend
@@ -426,6 +427,23 @@ describe('SessionCoordinator (D-07, política C) — pestañas simuladas', () =>
       expect(await a.coordinator.ensureAccessToken()).toEqual({ kind: 'cancelled' });
       expect(backend.stats.sessionGets).toBe(gets);
       expect(backend.hasSession).toBe(false);
+    });
+
+    it('MTEC-37: el logout recibe un único plazo absoluto en su signal, el del tope del coordinador', async () => {
+      backend.startSession();
+      const a = tab('A', new InMemoryLock());
+      await a.coordinator.ensureAccessToken();
+      let seen: number | undefined;
+      const before = Date.now();
+      a.adapter.logout = (_csrf, signal) => {
+        seen = deadlineOf(signal);
+        return Promise.resolve();
+      };
+
+      await a.coordinator.logout();
+
+      expect(seen).toBeGreaterThanOrEqual(before + 75_000);
+      expect(seen).toBeLessThanOrEqual(Date.now() + 75_000);
     });
 
     it('logout con el servidor caído igualmente deja la sesión local cerrada', async () => {

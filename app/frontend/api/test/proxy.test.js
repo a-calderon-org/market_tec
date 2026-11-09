@@ -56,6 +56,7 @@ test.beforeEach(() => resetWarmState());
 
 test('forwards only allow-listed headers to the APIM users API, keeping cookie, CSRF and user JWT', async () => {
   const up = upstream(() => ({ status: 200, body: '{"ok":true}', java: true }));
+  await handle(req('POST', '/api/users/v1/auth/refresh', { origin: ORIGIN }), CONFIG, up.deps); // warm-up only
   const res = await handle(req('POST', '/api/users/v1/auth/refresh', {
     origin: ORIGIN, cookie: '__Host-mtec-refresh=x', 'x-csrf-token': 'c', 'content-type': 'application/json',
     authorization: 'Bearer user.jwt', 'x-ms-client-principal': 'forged', 'x-user-id': '1',
@@ -122,8 +123,13 @@ test('fails closed without a valid upstream or public origin', async () => {
   assert.equal(up.calls.length, 0);
 });
 
-test('cold start: a write is held until ms-users is warm, then sent exactly once', async () => {
+test('cold start: a write is never held for the warm-up; it is sent exactly once on the retry, once warm', async () => {
   const up = upstream((url, init, n) => (n === 1 ? { status: 404, delayMs: 200, java: true } : { status: 200 }));
+  const cold = await handle(req('POST', '/api/users/v1/auth/refresh', { origin: ORIGIN }), CONFIG, up.deps);
+  // MTEC-37: the warm-up succeeded, but the browser may have cancelled meanwhile: the write is NOT sent.
+  assert.equal(cold.status, 503);
+  assert.equal(JSON.parse(cold.body).error.code, 'BACKEND_WARMING');
+  assert.deepEqual(up.calls.map((c) => c.init.method), ['GET']);
   const res = await handle(req('POST', '/api/users/v1/auth/refresh', { origin: ORIGIN }), CONFIG, up.deps);
   assert.equal(res.status, 200);
   assert.deepEqual(up.calls.map((c) => [c.init.method, c.url.replace(CONFIG.upstream, '')]),
@@ -162,6 +168,8 @@ test('once warm, writes skip the warm-up until the TTL expires', async () => {
   await handle(req('POST', '/api/users/v1/auth/refresh', { origin: ORIGIN }), CONFIG, up.deps);
   assert.deepEqual(up.calls.map((c) => c.init.method), ['GET', 'POST']);
   up.advance(121000);
+  const expired = await handle(req('POST', '/api/users/v1/auth/refresh', { origin: ORIGIN }), CONFIG, up.deps);
+  assert.equal(JSON.parse(expired.body).error.code, 'BACKEND_WARMING'); // warmed again, write not sent
   await handle(req('POST', '/api/users/v1/auth/refresh', { origin: ORIGIN }), CONFIG, up.deps);
   assert.deepEqual(up.calls.map((c) => c.init.method), ['GET', 'POST', 'GET', 'POST']);
 });
@@ -172,6 +180,7 @@ test('a GET that outlives the deadline answers BACKEND_WARMING; a write timing o
   assert.equal(JSON.parse(res.body).error.code, 'BACKEND_WARMING');
   up = upstream((url, init, n) => (n === 1 ? { status: 404, java: true } : { hang: true }));
   resetWarmState();
+  await handle(req('POST', '/api/users/v1/auth/refresh', { origin: ORIGIN }), CONFIG, up.deps); // warms, not sent
   res = await handle(req('POST', '/api/users/v1/auth/refresh', { origin: ORIGIN }), CONFIG, up.deps);
   assert.equal(res.status, 504);
   assert.equal(JSON.parse(res.body).error.code, 'UPSTREAM_TIMEOUT'); // never "safe to retry"
@@ -182,16 +191,11 @@ const BUDGET = 'x-mtec-client-budget-ms';
 const scaled = (up) => ({ ...up.deps, clientMarginMs: 20 });
 
 test('a write is never forwarded after the client budget: warm backend found too late answers BACKEND_WARMING', async () => {
-  // ms-users answers the warm-up after 200 ms. Without a client budget the proxy (300 ms) still sends the write;
-  // a browser with only 150 ms left would already have given up, so with its budget the write is NOT sent.
-  let up = upstream((url, init, n) => (n === 1 ? { status: 404, delayMs: 200, java: true } : { status: 200, java: true }));
-  let res = await handle(req('POST', '/api/users/v1/auth/refresh', { origin: ORIGIN }), CONFIG, scaled(up));
-  assert.equal(res.status, 200);
-  assert.deepEqual(up.calls.map((c) => c.init.method), ['GET', 'POST']);
-
-  resetWarmState();
-  up = upstream((url, init, n) => (n === 1 ? { status: 404, delayMs: 200, java: true } : { status: 200, java: true }));
-  res = await handle(req('POST', '/api/users/v1/auth/refresh', { origin: ORIGIN, [BUDGET]: '150' }), CONFIG, scaled(up));
+  // ms-users answers the warm-up after 200 ms; a browser with only 150 ms left has already given up. The write is
+  // NOT sent (and, since MTEC-37, it is not sent after any warm-up wait, with or without a budget).
+  const up = upstream((url, init, n) => (n === 1 ? { status: 404, delayMs: 200, java: true } : { status: 200, java: true }));
+  const res = await handle(req('POST', '/api/users/v1/auth/refresh', { origin: ORIGIN, [BUDGET]: '150' }), CONFIG,
+    scaled(up));
   assert.equal(res.status, 503);
   assert.equal(JSON.parse(res.body).error.code, 'BACKEND_WARMING');
   assert.deepEqual(up.calls.map((c) => c.init.method), ['GET']); // the write was not sent: safe to retry
@@ -218,8 +222,8 @@ test('a budget too small for any write answers BACKEND_WARMING without contactin
 
 test('the client budget is never forwarded and a malformed one falls back to the proxy deadline', async () => {
   const up = upstream(() => ({ status: 200, java: true }));
+  await handle(req('GET', '/api/users/v1/auth/session', { 'x-correlation-id': 'c-1' }), CONFIG, scaled(up)); // warm
   for (const value of ['5000', '-1', '1e9', '12345678', 'abc']) {
-    resetWarmState();
     const res = await handle(req('POST', '/api/users/v1/auth/refresh', { origin: ORIGIN, [BUDGET]: value }), CONFIG,
       scaled(up));
     assert.equal(res.status, 200, value);
@@ -229,6 +233,7 @@ test('the client budget is never forwarded and a malformed one falls back to the
 
 test('a write still timing out inside the client budget answers UPSTREAM_TIMEOUT and is not marked retryable', async () => {
   const up = upstream((url, init, n) => (n === 1 ? { status: 404, java: true } : { hang: true }));
+  await handle(req('POST', '/api/users/v1/auth/refresh', { origin: ORIGIN, [BUDGET]: '200' }), CONFIG, scaled(up));
   const res = await handle(req('POST', '/api/users/v1/auth/refresh', { origin: ORIGIN, [BUDGET]: '200' }), CONFIG,
     scaled(up));
   assert.equal(res.status, 504);
@@ -287,6 +292,8 @@ test('Origin is only supplied for browser-asserted same-origin GETs; a foreign O
   // Writes never get an Origin added: without one APIM/Java keep denying them.
   const write = upstream(() => ({ status: 200, java: true }));
   await handle(req('POST', '/api/users/v1/auth/logout', { 'sec-fetch-site': 'same-origin' }), CONFIG, write.deps);
+  await handle(req('POST', '/api/users/v1/auth/logout', { 'sec-fetch-site': 'same-origin' }), CONFIG, write.deps);
+  assert.equal(write.calls.at(-1).init.method, 'POST');
   assert.equal(write.calls.at(-1).init.headers.origin, undefined);
 });
 
@@ -341,6 +348,7 @@ test('a write that was sent is never repeated when its result is unknown', async
   for (const second of [{ hang: true }, { status: 200, slowBody: true, java: true }]) {
     resetWarmState();
     const up = upstream((url, init, n) => (n === 1 ? { status: 404, java: true } : second));
+    await handle(req('POST', '/api/users/v1/auth/refresh', { origin: ORIGIN }), CONFIG, up.deps); // warms only
     const res = await handle(req('POST', '/api/users/v1/auth/refresh', { origin: ORIGIN }), CONFIG, up.deps);
     assert.equal(res.status, 504);
     assert.equal(JSON.parse(res.body).error.code, 'UPSTREAM_TIMEOUT');
@@ -351,5 +359,20 @@ test('a write that was sent is never repeated when its result is unknown', async
 test('MTEC_D04_PROBE stays disabled unless set to exactly "enabled"', () => {
   for (const value of [undefined, '', 'true', '1', 'Enabled']) {
     assert.equal(probe(req('GET', '/api/d04-probe/cookie'), { MTEC_D04_PROBE: value }).status, 404);
+  }
+});
+
+test('MTEC-37: a write cancelled by the browser during the warm-up is never forwarded afterwards', async () => {
+  // The proxy cannot observe the browser aborting. Whatever the warm-up outcome, the write that arrived cold is
+  // answered BACKEND_WARMING; only a NEW request from a client that is still waiting can carry the write.
+  for (const script of [() => ({ status: 404, java: true, delayMs: 10 }), () => ({ status: 200, java: true })]) {
+    resetWarmState();
+    const up = upstream(script);
+    for (const [method, path] of [['POST', '/api/users/v1/auth/logout'], ['PUT', '/api/users/v1/me/profile']]) {
+      resetWarmState();
+      const res = await handle(req(method, path, { origin: ORIGIN, [BUDGET]: '250' }, '{}'), CONFIG, scaled(up));
+      assert.equal(JSON.parse(res.body).error.code, 'BACKEND_WARMING');
+    }
+    assert.deepEqual(up.calls.map((c) => c.init.method), ['GET', 'GET']);
   }
 });
