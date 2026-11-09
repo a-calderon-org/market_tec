@@ -1,6 +1,6 @@
 # APIM policies as code (MTEC-12)
 
-Nothing here is validated by Azure, imported, or approved for deployment.
+Policies are validated by Azure only where the handoff (§11) records it; nothing here is approved for production.
 
 `operations.json` is editable data. `security_reference.py` is the reviewed security reference:
 the generator rejects any manifest whose auth class, cookies, Origin, CSRF, admission or contract
@@ -26,6 +26,11 @@ without `abuse_protection`). It also writes a candidate keyless API definition (
 `subscriptionRequired=false`, separate from `markettec-api-v1`), an API-scope CORS policy with explicit origins
 (`api-scope.*`) and the resolved Angular → APIM → ms-users chain (`route_check.py`). Nothing is applied to Azure.
 Operator steps: [`docs/MTEC12_41_MS_USERS_STAGING_HANDOFF.md`](../../docs/MTEC12_41_MS_USERS_STAGING_HANDOFF.md).
+
+Partial staging package (`--mode package --release …` only): `--jwt-unconfigured` denies every internal-JWT
+operation (503 `INTERNAL_JWT_UNCONFIGURED`) instead of requiring `--jwks/--issuer/--audience`, and
+`--no-product-scope` replaces the product export when Azure shows the API is in no product. Neither enables an
+operation; both are recorded in `operations.candidate.json`. Staging deployment of 2026-11-09: handoff §11.
 
 ## Approvals
 
