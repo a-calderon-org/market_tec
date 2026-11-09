@@ -66,6 +66,10 @@ jobs:
         working-directory: ./app/frontend
         run: npm test -- --watch=false
 
+      - name: Test same-origin API proxy
+        working-directory: ./app/frontend/api
+        run: npm test
+
       - name: Build Angular application
         working-directory: ./app/frontend
         run: npm run build
@@ -152,6 +156,6 @@ jobs:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_VICTORIOUS_BEACH_0A55F0C1E }}
           action: "upload"
           app_location: "./app/frontend/dist/market-tec-frontend/browser"
-          api_location: ""
+          api_location: "./app/frontend/api"
           output_location: ""
           skip_app_build: true

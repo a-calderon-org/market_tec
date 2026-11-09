@@ -258,7 +258,7 @@ aplicó una denegación terminal. Procedimiento: crear cada operación e inmedia
 `azure-api.net` y `2.azurestaticapps.net` figuran en la Public Suffix List (comprobado 2026-11-09): SPA
 (`victorious-beach-0a55f0c1e.2.azurestaticapps.net`) y APIM (`markettec-api.azure-api.net`) son *sites* distintos, así
 que las cookies `__Host-` de APIM serían de terceros para la SPA y el bloqueo de cookies de terceros las descartaría.
-**D-04 no se cumple** con los hosts por defecto. Se necesita un dominio registrable propio con dos dominios
+**D-04 no se cumple** con hosts separados por defecto (alternativa adoptada: same-origin, §13.2). Con dominio propio harían falta dos dominios
 personalizados (por ejemplo `app.<dominio>` en la SWA y `api.<dominio>` en APIM). La autenticación sigue cerrada.
 
 ### 11.6 Acceso directo al Container App
@@ -270,7 +270,7 @@ compartido o mTLS (exigen validación propia en Java y gestión de secretos).
 
 ### 11.7 Bloqueos para habilitar Google
 
-1. D-04: dominio registrable propio, dominios personalizados en el mismo *site* y prueba de navegador (§13).
+1. D-04: same-origin por la Function de SWA (§13.2), verificado en navegador con flags apagados; falta repetir la prueba con cookies emitidas por Java.
 2. ~~Cierre del acceso directo al Container App~~: **Verificado** el 2026-11-09 (§12).
 3. JWT interno: configurar en ms-users issuer, audience y claves, y revisar el JWKS publicado; regenerar sin
    `--jwt-unconfigured`. Detrás de la autenticación de Container Apps exige además desplegar el filtro de
@@ -386,36 +386,64 @@ primer `POST /refresh` mientras Java aún puede procesarlo arriesga perder la ro
   una réplica permanente de 0,5 vCPU / 1 GiB costaría ~US$10–12/mes tras la concesión gratuita, casi la mitad del
   presupuesto de US$25; solo con autorización expresa.
 
-### 13.2 D-04: dominio
+### 13.2 D-04: same-origin sin dominio propio (SWA Free + Functions administradas)
 
-**No determinado / bloqueado por dependencia externa.** No existe dominio propio en ninguna de las dos suscripciones:
-sin zonas DNS de Azure, sin dominios App Service, sin dominios personalizados en la SWA `markettec`, APIM ni el entorno
-de Container Apps. No se compró ni se inventó ningún dominio.
+No hay dominio propio y el operador no puede adquirirlo ni solicitarlo (2026-11-09). En su lugar, la SPA y su API
+comparten **un mismo origen**: la Function administrada `app/frontend/api` expone `https://<swa>/api/users/v1/...` y
+reenvía a `https://markettec-api.azure-api.net/users/v1/...`. Las cookies `__Host-` que fija ms-users son cookies de
+primera parte, solo de host, de la Static Web App: D-04 se cumple sin que intervenga la Public Suffix List. Coste: US$0
+(SWA Free con Functions administradas, sin cambiar de plan).
 
-Requisitos mínimos: un dominio registrable (eTLD+1) que no esté en la Public Suffix List y cuyo DNS controle el
-equipo (registrador propio o delegación de un subdominio por TI del TEC, p. ej. `markettec.<subdominio>`).
+| Capa | Control |
+| --- | --- |
+| Navegador → `/api/users/*` | Mismo origen, sin CORS. `withCredentials` y CSRF funcionan igual que antes |
+| Function (`lib/proxy.js`) | Solo `GET`/`POST`/`PUT` en `/v1/<segmentos simples>`; rechaza `Sec-Fetch-Site` cross-site o same-site y cualquier `Origin` distinto de `MTEC_PUBLIC_ORIGIN`. Reenvía solo `Accept`, `Authorization`, `Content-Type`, `Cookie`, `Origin`, `X-CSRF-Token`, `X-MTEC-Client` y `X-Correlation-ID`, de modo que se descartan `x-ms-client-principal` de SWA y las cabeceras de identidad falsificadas. Devuelve `Set-Cookie` con los mismos atributos y descarta los que traen `Domain` o un `__Host-` mal formado. Sin `Access-Control-*`. Falla cerrado (503 `PROXY_UNCONFIGURED`) sin `MTEC_USERS_UPSTREAM`/`MTEC_PUBLIC_ORIGIN` |
+| APIM | Sin cambios de lógica: Origin, cookie, CSRF, CORS, `validate-jwt` e identidad administrada hacia Container Apps (§12). El origen de la SWA debe figurar en `allowed-origins` y en el CORS del ámbito API |
+| Container Apps / Java | Sin cambios (§12) |
 
-| Registro | Nombre | Valor |
+**Límite de 45 s de SWA y arranque en frío.** SWA corta toda petición `/api` a los 45 s, y el arranque en frío medido
+es de 26–45 s. El proxy trabaja con un plazo de 38 s:
+
+* `GET`: si no hay respuesta a tiempo, devuelve 503 `BACKEND_WARMING` (`Retry-After: 3`). Las lecturas pueden repetirse.
+* `POST`/`PUT`: solo se reenvían si ms-users está caliente. Si no lo está, el proxy hace primero un
+  `GET /v1/auth/session` sin credenciales a través de APIM. Si esa petición no termina a tiempo, o deja menos de 8 s
+  para la escritura, el proxy responde 503 `BACKEND_WARMING` **sin haber enviado la escritura**. Una escritura que
+  agota el plazo después de enviarse devuelve 504 `UPSTREAM_TIMEOUT`, que nunca se reintenta. El estado «caliente»
+  dura 120 s, por debajo del enfriamiento de 300 s de Container Apps.
+* Angular V2 repite solo 503 `BACKEND_WARMING`, cada 3 s, dentro de su tope total de 70 s. No reintenta ningún otro
+  error.
+
+**Entorno de verificación:** entorno de preview `d04` de la SWA `markettec`
+(`https://victorious-beach-0a55f0c1e-d04.westus2.2.azurestaticapps.net`), desplegado desde esta rama con app settings
+propios (`MTEC_USERS_UPSTREAM`, `MTEC_PUBLIC_ORIGIN`, `MTEC_D04_PROBE=enabled`). Su origen se añadió en APIM a
+`allowed-origins` y al CORS del ámbito API. Producción (`default`) no cambia: su job de despliegue sigue deshabilitado
+y `/api` allí sigue sirviendo la SPA.
+
+Despliegue manual (el job de GitHub está deshabilitado): StaticSitesClient en `linux/amd64` con
+`DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1`, `SKIP_APP_BUILD=true`, `SKIP_API_BUILD=true` (la API no tiene
+dependencias) y `DEPLOYMENT_ENVIRONMENT=d04`. El token de despliegue se lee con `az staticwebapp secrets list` y no se
+guarda.
+
+**Pruebas en navegador real** (panel de Claude, Chromium, 2026-11-09, con los flags apagados):
+
+| # | Prueba | Resultado |
 | --- | --- | --- |
-| CNAME | `app.<dominio>` | `victorious-beach-0a55f0c1e.2.azurestaticapps.net` (validación SWA por CNAME; certificado gestionado gratuito) |
-| CNAME | `api.<dominio>` | `markettec-api.azure-api.net` |
-| TXT | `apimuid.api.<dominio>` | identificador de propiedad de APIM (`getDomainOwnershipIdentifier`), solo con certificado gestionado |
+| 1 | La SPA carga en el origen del preview | **Verificado** |
+| 2 | La cookie `__Host-` fijada por `/api` (sonda) | **Verificado**: `Set-Cookie: __Host-mtec-probe=…; max-age=300; path=/; secure; samesite=lax; httponly`, sin `Domain`; se devuelve en la siguiente petición (`cookieCount=1`) y no aparece en `document.cookie` |
+| 3 | `Authorization` atraviesa el edge de SWA | **Verificado** (la sonda lo ve). `Sec-Fetch-Site: same-origin` |
+| 4 | `GET /api/users/v1/auth/session` | **Verificado**: 404 `ROUTE_NOT_FOUND` de Java, sin `Access-Control-Allow-Origin` |
+| 5 | `POST /refresh` sin cookie / con cookie sin CSRF / con cookie y CSRF | **Verificado**: 401 `REFRESH_INVALID`, 403 `CSRF_INVALID` (APIM) y 404 de Java. La cookie y el CSRF llegan a APIM |
+| 6 | Denegaciones | **Verificado**: `ADMISSION_DISABLED`, `INTERNAL_JWT_UNCONFIGURED`, `OPERATION_NOT_RELEASED`; `%2e%2e` y `DELETE` → 404 sin reenvío |
+| 7 | Origen ajeno, `Sec-Fetch-Site: cross-site`, origen de producción contra el preview | **Verificado**: 403 en el proxy |
 
-Configuración pendiente (no aplicada):
+**Pendiente para habilitar las cookies reales:**
 
-1. SWA: `az staticwebapp hostname set -n markettec -g markettec-dev --hostname app.<dominio>` (Free admite 2 dominios).
-2. APIM: `hostnameConfigurations` tipo `Proxy` para `api.<dominio>` con certificado gestionado (la suspensión de
-   creación de Microsoft terminó el 2026-06-30; disponibilidad actual en Consumption **No determinada**) o PFX propio
-   (p. ej. Let's Encrypt por DNS-01, renovación cada 90 días). El host `azure-api.net` sigue activo y no rompe
-   `markettec-api-v1`.
-3. Regenerar con `--allowed-origin https://app.<dominio>`; actualizar el named value `allowed-origins`.
-4. `environment.apiBaseUrl = https://api.<dominio>/users`; activar `authCoreV2HttpTopologyVerified` solo tras la
-   prueba de navegador (§10.8): HTTPS válido, preflight con un único `Access-Control-Allow-Origin`, cookies
-   `__Host-` (`Secure`, `Path=/`, sin `Domain`) enviadas a `api.<dominio>` con `withCredentials`, CSRF.
-
-Coste: el dominio (~US$10–15/año en un registrador comercial; US$0 si TI del TEC delega un subdominio). Dominios
-personalizados de SWA Free y APIM Consumption, sin coste adicional.
-
-**Decisión del operador:** elegir y aportar el dominio (comprar uno o solicitar a TI del TEC la delegación de un
-subdominio) y la opción de certificado para APIM.
-
+1. ms-users: `USERS_SESSION_HTTP_ALLOWED_ORIGINS` y `USERS_SESSION_HTTP_PUBLIC_API_ORIGIN` = origen de la SWA (el
+   navegador ve la API en ese origen); lo mismo para `USERS_GOOGLE_HTTP_*`. Los flags `*_TOPOLOGY_VERIFIED` /
+   `*_SAME_SITE_VERIFIED` solo tras repetir las pruebas 2–5 con cookies emitidas por Java.
+2. Producción: llevar `api_location` y los app settings a `default` cuando se habilite el despliegue aprobado.
+   `environment.apiBaseUrl = https://victorious-beach-0a55f0c1e.2.azurestaticapps.net/api/users`.
+3. Desactivar la sonda (`MTEC_D04_PROBE`) fuera del entorno de verificación.
+4. Rollback: borrar el entorno `d04` (`az staticwebapp environment delete … --environment-name d04`) y devolver
+   `allowed-origins` y el CORS del ámbito API al único origen de producción (instantáneas en el directorio de
+   rollback del operador).

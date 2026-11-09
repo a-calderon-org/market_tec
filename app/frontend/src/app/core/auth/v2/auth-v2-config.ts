@@ -81,6 +81,12 @@ export const AUTH_V2_HTTP_API_BASE = new InjectionToken<string | null>('AUTH_V2_
  */
 export const AUTH_V2_COLD_START_BUDGET_MS = 70_000;
 
+/** Espera entre reintentos ante `503 BACKEND_WARMING` del proxy same-origin (dentro del mismo tope total). */
+export const AUTH_V2_WARMING_RETRY_MS = new InjectionToken<number>('AUTH_V2_WARMING_RETRY_MS', {
+  providedIn: 'root',
+  factory: () => 3_000,
+});
+
 /** Tope por petición del adaptador HTTP (las de sesión tienen además el del coordinador). */
 export const AUTH_V2_HTTP_TIMEOUT_MS = new InjectionToken<number>('AUTH_V2_HTTP_TIMEOUT_MS', {
   providedIn: 'root',

@@ -23,8 +23,9 @@ import {
   SessionResponse,
   SessionSnapshot,
   TIMEOUT_ERROR_CODE,
+  BACKEND_WARMING_ERROR_CODE,
 } from './auth-contract';
-import { AUTH_V2_HTTP_API_BASE, AUTH_V2_HTTP_TIMEOUT_MS } from './auth-v2-config';
+import { AUTH_V2_HTTP_API_BASE, AUTH_V2_HTTP_TIMEOUT_MS, AUTH_V2_WARMING_RETRY_MS } from './auth-v2-config';
 import { SESSION_LOCK_NAME, SessionLock } from './session-lock';
 
 /** Marca de cuerpo inutilizable devuelta por los validadores. */
@@ -58,6 +59,7 @@ export class HttpAuthApiAdapter extends AuthApiPort {
   private readonly http = new HttpClient(inject(HttpBackend));
   private readonly baseUrl: string;
   private readonly timeoutMs = inject(AUTH_V2_HTTP_TIMEOUT_MS);
+  private readonly warmingRetryMs = inject(AUTH_V2_WARMING_RETRY_MS);
   private readonly lock = inject(SessionLock);
 
   constructor() {
@@ -146,11 +148,37 @@ export class HttpAuthApiAdapter extends AuthApiPort {
     );
   }
 
-  private send<T>(
+  /**
+   * Una petición con el tope total `timeoutMs`. Solo `503 BACKEND_WARMING` se repite (el proxy garantiza que no se
+   * reenvió nada no idempotente); TIMEOUT, red, 504 y el resto de errores se propagan sin reintento.
+   */
+  private async send<T>(
     method: 'GET' | 'POST',
     versionlessPath: string,
     options: { body?: object; csrfToken?: string | null },
     parse: (body: unknown) => Parsed<T>,
+    signal?: AbortSignal,
+  ): Promise<T> {
+    const deadline = Date.now() + this.timeoutMs;
+
+    for (;;) {
+      try {
+        return await this.sendOnce(method, versionlessPath, options, parse, deadline - Date.now(), signal);
+      } catch (error) {
+        const warming =
+          error instanceof AuthApiError && error.status === 503 && error.code === BACKEND_WARMING_ERROR_CODE;
+        if (!warming || deadline - Date.now() <= this.warmingRetryMs) throw error;
+        await waitOrAbort(this.warmingRetryMs, signal);
+      }
+    }
+  }
+
+  private sendOnce<T>(
+    method: 'GET' | 'POST',
+    versionlessPath: string,
+    options: { body?: object; csrfToken?: string | null },
+    parse: (body: unknown) => Parsed<T>,
+    budgetMs: number,
     signal?: AbortSignal,
   ): Promise<T> {
     return new Promise<T>((resolve, reject) => {
@@ -173,7 +201,7 @@ export class HttpAuthApiAdapter extends AuthApiPort {
         })
         .pipe(
           timeout({
-            first: this.timeoutMs,
+            first: Math.max(1, budgetMs),
             with: () => throwError(() => new AuthApiError(0, TIMEOUT_ERROR_CODE)),
           }),
         );
@@ -204,6 +232,24 @@ export class HttpAuthApiAdapter extends AuthApiPort {
       signal?.addEventListener('abort', onAbort, { once: true });
     });
   }
+}
+
+function waitOrAbort(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new AuthApiError(0, ABORTED_ERROR_CODE));
+      return;
+    }
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new AuthApiError(0, ABORTED_ERROR_CODE));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
 }
 
 export function toAuthApiError(error: unknown): AuthApiError {
