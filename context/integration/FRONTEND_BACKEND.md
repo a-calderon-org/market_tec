@@ -1,5 +1,11 @@
 # Integración frontend-backend
 
+**Extension MTEC-32 de escritura:** POST/PUT locales preservan el body de alta
+Angular y agregan imagenes opcionales; vendedor/propietario se resuelven desde
+composicion confiable. No se cambio el cliente Angular ni su destino. Ver
+[contrato Catalog en revision](../../contracts/openapi/catalog.json) y
+[pruebas de servicio](../../app/ms-catalog/README.md).
+
 **MTEC-32, Verificado localmente:** existe un adaptador optativo de listado/detalle
 en ms-catalog con composicion de prueba. No cambia `apiBaseUrl`, Angular ni APIM.
 La autenticacion real y la conformidad contractual siguen pendientes; ver

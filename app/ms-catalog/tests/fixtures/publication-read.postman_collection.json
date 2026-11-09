@@ -1,6 +1,6 @@
 {
   "info": {
-    "name": "MTEC-32 — lectura local (fixture de pruebas)",
+    "name": "MTEC-32 — publicaciones locales (fixture de pruebas)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "description": "Solo para tests/fixtures/publication-http-preview.ts en localhost. Credencial sintética sin validación JWT. No usar con APIM o producción."
   },
@@ -152,6 +152,176 @@
               "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));",
               "pm.test(\"Correlación\", () => pm.expect(pm.response.headers.get(\"X-Correlation-ID\")).to.eql(\"postman-catalog\"));",
               "pm.test(\"Recurso inexistente\", () => pm.expect(pm.response.json().error.code).to.eql(\"PUBLICATION_NOT_FOUND\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Crear publicación",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer local-test-only"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "postman-catalog"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/v1/publicaciones",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"categoria\":\"Electrónica\",\"subcategoria\":\"\",\"titulo\":\"Creada desde Postman\",\"descripcion\":\"Prueba sintética\",\"precio\":42,\"condicion\":null,\"ubicacion\":\"\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+              "pm.test(\"Correlación\", () => pm.expect(pm.response.headers.get(\"X-Correlation-ID\")).to.eql(\"postman-catalog\"));",
+              "if (pm.response.code === 201) pm.collectionVariables.set(\"createdId\", pm.response.json().id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Actualizar publicación propia",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer local-test-only"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "postman-catalog"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/v1/publicaciones/{{createdId}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"categoria\":\"Electrónica\",\"subcategoria\":\"\",\"titulo\":\"Actualizada desde Postman\",\"descripcion\":\"Prueba sintética\",\"precio\":42,\"condicion\":null,\"ubicacion\":\"\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Correlación\", () => pm.expect(pm.response.headers.get(\"X-Correlation-ID\")).to.eql(\"postman-catalog\"));",
+              "pm.test(\"Contenido actualizado\", () => pm.expect(pm.response.json().titulo).to.eql(\"Actualizada desde Postman\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Rechazar edición ajena",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer local-test-other"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "postman-catalog"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/v1/publicaciones/{{createdId}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"categoria\":\"Electrónica\",\"subcategoria\":\"\",\"titulo\":\"Creada desde Postman\",\"descripcion\":\"Prueba sintética\",\"precio\":42,\"condicion\":null,\"ubicacion\":\"\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 403\", () => pm.response.to.have.status(403));",
+              "pm.test(\"Correlación\", () => pm.expect(pm.response.headers.get(\"X-Correlation-ID\")).to.eql(\"postman-catalog\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Rechazar propietario en body",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer local-test-only"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "postman-catalog"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/v1/publicaciones",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"categoria\":\"Electrónica\",\"subcategoria\":\"\",\"titulo\":\"Creada desde Postman\",\"descripcion\":\"Prueba sintética\",\"precio\":42,\"condicion\":null,\"ubicacion\":\"\",\"ownerId\":\"usr-other\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+              "pm.test(\"Correlación\", () => pm.expect(pm.response.headers.get(\"X-Correlation-ID\")).to.eql(\"postman-catalog\"));"
             ]
           }
         }

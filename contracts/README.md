@@ -79,6 +79,15 @@ Las advertencias `info-license` y `operation-4xx-response` sobre los endpoints d
 salud son de estilo y no invalidan los contratos. Los errores estructurales sí
 producen un código de salida distinto de cero.
 
+El guard de regresion de auth usa `examples/auth/compatibility-baseline.json`
+para proteger contratos ajenos a autenticacion. `sourceCommit` identifica la base
+original; `fileReviews` registra revisiones posteriores de archivos concretos.
+MTEC-32 actualiza exclusivamente el hash de Catalog para POST/PUT aprobados,
+conservando los hashes de eventos, Notifications, health y schemas de Users.
+Los hashes de archivo representan los bytes versionados LF: un checkout Windows
+con conversion automatica a CRLF puede diferir sin cambio semantico. CI los
+comprueba sobre su checkout Linux; no regenerar todos los hashes desde CRLF.
+
 ## Candidata de autenticación
 
 Users/identidad `0.3.0-draft` consolida decisiones aprobadas B01–B06 sin aprobar

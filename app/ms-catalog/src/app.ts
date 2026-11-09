@@ -12,7 +12,6 @@ export function createApp(settings: Settings = loadSettings(), publications?: Pu
   const container = createContainer(settings);
 
   app.disable('x-powered-by');
-  app.use(express.json({ limit: '1mb' }));
   app.use(correlationId);
   app.use(requestLogger(settings.serviceName, settings.logLevel));
   app.use(createHealthRouter(container.getHealthQuery));

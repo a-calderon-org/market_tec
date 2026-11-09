@@ -14,7 +14,11 @@ for (const price of [20, 10, 30]) {
 }
 const app = createApp({ port: 3100, serviceName: 'ms-catalog', logLevel: 'silent' }, {
   publications,
+  writes: { publications, async resolveActor(userId) {
+    return { userId, seller: { id: userId === 'usr-preview' ? 101 : 102, nombre: 'Usuario de prueba', carrera: '', verificado: false } };
+  } },
   async authenticate(request) {
+    if (request.headers.authorization === 'Bearer local-test-other') return { userId: 'usr-other' };
     return request.headers.authorization === 'Bearer local-test-only' ? { userId: 'usr-preview' } : undefined;
   },
 });

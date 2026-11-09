@@ -1,7 +1,14 @@
 {
   "sourceCommit": "4c087f847be73ea1be59f41cabee95c8ca94448b",
+  "fileReviews": {
+    "contracts/openapi/catalog.json": {
+      "sourceCommit": "97ffa72f4972083b51d3f5a4324772279e5955b4",
+      "ticket": "MTEC-32",
+      "scope": "Approved POST/PUT publication interfaces and documented read errors; Catalog 0.2.0-draft, operations still proposed. Other baseline entries retain their original reviewed source."
+    }
+  },
   "files": {
-    "contracts/openapi/catalog.json": "c10be17fc031c9017b47bd0c3823da9729dcff4e1b80ab49ebe4131b3d2e7c9e",
+    "contracts/openapi/catalog.json": "1b901249f72347bf685f0206e359d709ef6a375ac56ed5991d6204a117dad757",
     "contracts/openapi/notifications.json": "e04882fbe53bfd171871265b3605bd83bb4577d0c00c040288607fadbd7d4675",
     "contracts/events/MESSAGE_SENT_V1.md": "bd1b773f864dcaf32bcfa6c10b43ab6ddeb6a226c833c42af1ceb678001ce8d9",
     "contracts/events/common-event-envelope.schema.json": "4514a5da78ce2b7ce4b7d0233a504f2d4983d7cfd7d8137feba92e05a3572941",

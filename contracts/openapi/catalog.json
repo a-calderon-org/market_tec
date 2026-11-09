@@ -3,7 +3,7 @@
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "info": {
     "title": "MarketTec Catalog API",
-    "version": "0.1.0-draft",
+    "version": "0.2.0-draft",
     "description": "Contrato de diseño compatible con los consumidores Angular actuales. Solo GET /health está implementado."
   },
   "x-contract-status": "draft-pending-team-approval",
@@ -55,6 +55,106 @@
       }
     },
     "/v1/publicaciones": {
+        "post": {
+          "operationId": "createPublication",
+          "summary": "Crear publicación",
+          "x-implementation-status": "proposed",
+          "description": "Interfaces de escritura aprobadas por el responsable el 2026-11-09. Adaptador local con identidad inyectada; pendiente integración de autenticación y conformidad completa. Propietario y snapshot vendedor nunca proceden del body. imagenes omitido se interpreta como [] también en PUT.",
+          "security": [
+            {
+              "bearerAuth": [],
+              "apimSubscriptionKey": []
+            }
+          ],
+          "parameters": [
+            {
+              "$ref": "#/components/parameters/CorrelationId"
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicationWriteRequest"
+                }
+              }
+            }
+          },
+          "responses": {
+            "201": {
+              "description": "Publicación creada",
+              "headers": {
+                "X-Correlation-ID": {
+                  "$ref": "#/components/headers/CorrelationId"
+                },
+                "Location": {
+                  "schema": {
+                    "type": "string"
+                  },
+                  "description": "Ruta relativa del detalle creado"
+                }
+              },
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/PublicationDetailV1"
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Solicitud inválida",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorEnvelope"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "No autenticado",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorEnvelope"
+                  }
+                }
+              }
+            },
+            "409": {
+              "description": "Conflicto concurrente",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorEnvelope"
+                  }
+                }
+              }
+            },
+            "413": {
+              "description": "Cuerpo superior a 1 MiB",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorEnvelope"
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Error interno",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorEnvelope"
+                  }
+                }
+              }
+            }
+          }
+        },
       "get": {
         "operationId": "listPublications",
         "summary": "Listar y filtrar publicaciones",
@@ -185,11 +285,134 @@
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       }
     },
     "/v1/publicaciones/{publicationId}": {
+        "put": {
+          "operationId": "updatePublication",
+          "summary": "Actualizar contenido completo de una publicación",
+          "x-implementation-status": "proposed",
+          "description": "Interfaces de escritura aprobadas por el responsable el 2026-11-09. Adaptador local con identidad inyectada; pendiente integración de autenticación y conformidad completa. Propietario y snapshot vendedor nunca proceden del body. imagenes omitido se interpreta como [] también en PUT.",
+          "security": [
+            {
+              "bearerAuth": [],
+              "apimSubscriptionKey": []
+            }
+          ],
+          "parameters": [
+            {
+              "$ref": "#/components/parameters/CorrelationId"
+            },
+            {
+              "$ref": "#/components/parameters/PublicationId"
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicationWriteRequest"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Publicación actualizada",
+              "headers": {
+                "X-Correlation-ID": {
+                  "$ref": "#/components/headers/CorrelationId"
+                }
+              },
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/PublicationDetailV1"
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Solicitud inválida",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorEnvelope"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "No autenticado",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorEnvelope"
+                  }
+                }
+              }
+            },
+            "403": {
+              "description": "Solo el propietario puede actualizar",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorEnvelope"
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "Publicación inexistente",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorEnvelope"
+                  }
+                }
+              }
+            },
+            "409": {
+              "description": "Conflicto concurrente",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorEnvelope"
+                  }
+                }
+              }
+            },
+            "413": {
+              "description": "Cuerpo superior a 1 MiB",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorEnvelope"
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Error interno",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorEnvelope"
+                  }
+                }
+              }
+            }
+          }
+        },
       "get": {
         "operationId": "getPublicationDetail",
         "summary": "Consultar el detalle de una publicación",
@@ -253,6 +476,15 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
           }
         }
       }
@@ -322,6 +554,22 @@
       }
     },
     "responses": {
+      "Unauthorized": {
+        "description": "Principal autenticado ausente o inválido",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorEnvelope" }
+          }
+        }
+      },
+      "InternalError": {
+        "description": "Fallo interno sin detalles sensibles",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorEnvelope" }
+          }
+        }
+      },
       "BadRequest": {
         "description": "Parámetros inválidos",
         "content": {
@@ -344,6 +592,60 @@
       }
     },
     "schemas": {
+        "PublicationWriteRequest": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "categoria",
+            "subcategoria",
+            "titulo",
+            "descripcion",
+            "precio",
+            "condicion",
+            "ubicacion"
+          ],
+          "properties": {
+            "categoria": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "subcategoria": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "titulo": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "descripcion": {
+              "type": "string",
+              "maxLength": 5000
+            },
+            "precio": {
+              "type": "number",
+              "minimum": 0
+            },
+            "condicion": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "ubicacion": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "imagenes": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uri"
+              }
+            }
+          }
+        },
       "PublicationId": {
         "type": "string",
         "minLength": 1,
