@@ -292,12 +292,19 @@ class AuthContractsTest(unittest.TestCase):
         self.assertNotIn("MailboxVerificationRequired", self.api["components"]["schemas"])
         self.assertFalse(self.api["x-identity-policy"]["automaticMergeByEmail"])
 
-    def test_email_magic_link_remains_independent_and_unavailable(self):
-        for route in ("/v1/auth/email/requests", "/v1/auth/email/confirm"):
-            op = self.api["paths"][route]["post"]
-            self.assertEqual({"503"}, set(op["responses"]))
-            self.assertEqual(["AUTH_TEMPORARILY_UNAVAILABLE"], op["x-error-codes"]["503"])
+    def test_email_magic_link_is_independent_and_available(self):
+        request = self.api["paths"]["/v1/auth/email/requests"]["post"]
+        confirm = self.api["paths"]["/v1/auth/email/confirm"]["post"]
+        for op in (request, confirm):
             self.assertIn("independent-email-authentication-only", op["x-registration-flow"])
+            self.assertIn("no automatic merge", op["x-registration-flow"])
+        self.assertEqual({"202", "400", "403", "429", "503"}, set(request["responses"]))
+        self.assertEqual(["email"], self.api["components"]["schemas"]["MagicLinkRequest"]["required"])
+        self.assertEqual("#/components/schemas/AuthResponse",
+                         confirm["responses"]["200"]["content"]["application/json"]["schema"]["$ref"])
+        self.assertTrue({"ATTEMPT_CONSUMED", "CONTINUITY_REQUIRED"} <= set(confirm["x-error-codes"]["409"]))
+        self.assertEqual(["ATTEMPT_EXPIRED"], confirm["x-error-codes"]["410"])
+        self.assertEqual([{"apimSubscriptionKey": [], "emailAttemptCookie": []}], confirm["security"])
 
     def test_google_and_email_use_same_internal_user_shape(self):
         logins = [case["value"] for case in self.cases if case["name"] in {"google-login", "email-login-same-internal-user"}]

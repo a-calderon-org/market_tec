@@ -28,218 +28,138 @@
       </div>
     }
 
-    <form
-      class="login-form"
-      [formGroup]="loginForm"
-      (ngSubmit)="submit()"
-    >
+    @if (emailLoginAvailable) {
+      @if (linkSentTo(); as sentTo) {
+        <div class="login-form email-link-sent" role="status">
+          <p class="email-link-sent__title">
+            Revisa tu correo institucional
+          </p>
 
-      <label class="form-field">
+          <p class="google-login-note">
+            Si {{ sentTo }} es elegible, recibirás un enlace de acceso. Vence en 10 minutos, funciona una sola vez
+            y debe abrirse en este mismo navegador.
+          </p>
 
-        <span class="form-field__label">
-          Correo Institucional
-        </span>
-
-        <div
-          class="input-control"
-          [class.input-control--error]="
-            isControlInvalid(
-              'correo'
-            )
-          "
-        >
-          <span class="input-control__icon">
+          <button type="button" class="institutional-button" (click)="requestAnotherLink()">
+            Solicitar otro enlace
+          </button>
+        </div>
+      } @else if (!emailFormOpen()) {
+        <button type="button" class="login-submit" (click)="openEmailForm()">
+          <span class="login-submit__icon">
             @
           </span>
 
-          <input
-            type="email"
-            formControlName="correo"
-            autocomplete="username"
-            placeholder="ejemplo@estudiantec.cr"
-          >
-        </div>
-
-        @if (
-          hasEmailError(
-            'required'
-          )
-        ) {
-          <small class="field-error">
-            El correo institucional es obligatorio.
-          </small>
-        }
-
-        @if (
-          hasEmailError(
-            'email'
-          )
-        ) {
-          <small class="field-error">
-            Ingresa un correo electrónico válido.
-          </small>
-        }
-
-        @if (
-          hasEmailError(
-            'institutionalEmail'
-          ) &&
-          !hasEmailError(
-            'email'
-          )
-        ) {
-          <small class="field-error">
-            Utiliza tu cuenta
-            @estudiantec.cr o @tec.ac.cr.
-          </small>
-        }
-
-        @if (
-          !isControlInvalid(
-            'correo'
-          )
-        ) {
-          <small class="form-field__help">
-            ⓘ Usa tu cuenta
-            @estudiantec.cr o @tec.ac.cr
-          </small>
-        }
-
-      </label>
-
-      <label class="form-field">
-
-        <div class="form-field__heading">
-          <span class="form-field__label">
-            Contraseña única
+          <span>
+            Continuar con correo institucional
           </span>
-
-          <button
-            class="forgot-password"
-            type="button"
-            disabled
-            title="
-              Recuperación de contraseña
-              no disponible en Phase I
-            "
-          >
-            ¿Olvidaste tu contraseña?
-          </button>
-        </div>
-
-        <div
-          class="input-control"
-          [class.input-control--error]="
-            isControlInvalid(
-              'password'
-            )
-          "
+        </button>
+      } @else {
+        <form
+          class="login-form"
+          [formGroup]="loginForm"
+          (ngSubmit)="submit()"
         >
-          <span class="input-control__icon">
-            ♙
-          </span>
 
-          <input
-            [type]="
-              showPassword()
-                ? 'text'
-                : 'password'
-            "
-            formControlName="password"
-            autocomplete="current-password"
-            placeholder="••••••••"
-          >
+          <label class="form-field">
+
+            <span class="form-field__label">
+              Correo Institucional
+            </span>
+
+            <div
+              class="input-control"
+              [class.input-control--error]="
+                isControlInvalid(
+                  'correo'
+                )
+              "
+            >
+              <span class="input-control__icon">
+                @
+              </span>
+
+              <input
+                type="email"
+                formControlName="correo"
+                autocomplete="username"
+                placeholder="ejemplo@estudiantec.cr"
+              >
+            </div>
+
+            @if (
+              hasEmailError(
+                'required'
+              )
+            ) {
+              <small class="field-error">
+                El correo institucional es obligatorio.
+              </small>
+            }
+
+            @if (
+              hasEmailError(
+                'email'
+              )
+            ) {
+              <small class="field-error">
+                Ingresa un correo electrónico válido.
+              </small>
+            }
+
+            @if (
+              hasEmailError(
+                'institutionalEmail'
+              ) &&
+              !hasEmailError(
+                'email'
+              )
+            ) {
+              <small class="field-error">
+                Utiliza tu cuenta
+                @estudiantec.cr, @itcr.ac.cr o @tec.ac.cr.
+              </small>
+            }
+
+            @if (
+              !isControlInvalid(
+                'correo'
+              )
+            ) {
+              <small class="form-field__help">
+                ⓘ Te enviaremos un enlace de acceso de un solo uso.
+              </small>
+            }
+
+          </label>
 
           <button
-            class="password-toggle"
-            type="button"
-            (click)="
-              togglePasswordVisibility()
-            "
-            [attr.aria-label]="
-              showPassword()
-                ? 'Ocultar contraseña'
-                : 'Mostrar contraseña'
+            class="login-submit"
+            type="submit"
+            [disabled]="
+              loginForm.invalid ||
+              sendingLink() ||
+              submitting()
             "
           >
-            @if (showPassword()) {
-              ◉
+            @if (sendingLink()) {
+              <span>
+                Enviando enlace...
+              </span>
             } @else {
-              ◎
+              <span class="login-submit__icon">
+                ↪
+              </span>
+
+              <span>
+                Enviar enlace de acceso
+              </span>
             }
           </button>
-        </div>
 
-        @if (
-          loginForm.controls
-            .password
-            .hasError(
-              'required'
-            ) &&
-          isControlInvalid(
-            'password'
-          )
-        ) {
-          <small class="field-error">
-            La contraseña es obligatoria.
-          </small>
-        }
-
-        @if (
-          loginForm.controls
-            .password
-            .hasError(
-              'minlength'
-            ) &&
-          isControlInvalid(
-            'password'
-          )
-        ) {
-          <small class="field-error">
-            La contraseña debe tener
-            al menos 8 caracteres.
-          </small>
-        }
-
-      </label>
-
-      <label class="remember-session">
-
-        <input
-          type="checkbox"
-          formControlName="rememberSession"
-        >
-
-        <span>
-          Mantener sesión iniciada
-        </span>
-
-      </label>
-
-      <button
-        class="login-submit"
-        type="submit"
-        [disabled]="
-          loginForm.invalid ||
-          submitting()
-        "
-      >
-        @if (submitting()) {
-          <span>
-            Ingresando...
-          </span>
-        } @else {
-          <span class="login-submit__icon">
-            ↪
-          </span>
-
-          <span>
-            Ingresar
-          </span>
-        }
-      </button>
-
-    </form>
+        </form>
+      }
+    }
 
     <div class="login-divider">
       <span></span>

@@ -6,6 +6,7 @@ import { Injectable } from '@angular/core';
 export class LoginService {
   private readonly institutionalDomains = [
     '@estudiantec.cr',
+    '@itcr.ac.cr',
     '@tec.ac.cr'
   ];
 

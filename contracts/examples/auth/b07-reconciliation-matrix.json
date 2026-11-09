@@ -982,16 +982,15 @@
       "group": "magic-link",
       "javaState": "gated",
       "flags": [
-        "users.google.http.enabled",
         "users.email.enabled"
       ],
-      "requestJava": "{email}; with users.email.enabled=false the service answers 503 AUTH_TEMPORARILY_UNAVAILABLE; with it true Java sends a link and answers 202 with csrfToken and sets the attempt cookie",
-      "requestOpenapi": "EmailRequest; contract and DECISION_LOG state both email routes answer 503 for now",
-      "responseJava": "202 {status:'accepted', csrfToken} when enabled; 503 otherwise",
-      "responseOpenapi": "503 only",
+      "requestJava": "{email}; Java sends a link and answers 202 with csrfToken and sets __Host-mtec-email-attempt; routes absent (404) with users.email.enabled=false",
+      "requestOpenapi": "MagicLinkRequest {email}",
+      "responseJava": "202 {status:'accepted', csrfToken}",
+      "responseOpenapi": "202 MagicLinkRequested",
       "transport": {
         "cookies": [
-          "attempt (set when enabled)"
+          "email_attempt (set)"
         ],
         "jwt": false,
         "origin": true,
@@ -1004,6 +1003,10 @@
         "503"
       ],
       "httpOpenapi": [
+        "202",
+        "400",
+        "403",
+        "429",
         "503"
       ],
       "envelope": "ErrorEnvelope details=[]",
@@ -1036,8 +1039,7 @@
       ],
       "openapiSecurity": [
         [
-          "apimSubscriptionKey",
-          "attemptCookie"
+          "apimSubscriptionKey"
         ]
       ]
     },
@@ -1048,16 +1050,15 @@
       "group": "magic-link",
       "javaState": "gated",
       "flags": [
-        "users.google.http.enabled",
         "users.email.enabled"
       ],
-      "requestJava": "{attemptId(32 hex), token(64 hex)}; attempt cookie + X-CSRF-Token",
-      "requestOpenapi": "EmailConfirmationRequest; 503 only",
-      "responseJava": "200 AuthResponse when enabled; 503 otherwise",
-      "responseOpenapi": "503 only",
+      "requestJava": "{attemptId(32 hex), token(64 hex)}; __Host-mtec-email-attempt cookie + X-CSRF-Token",
+      "requestOpenapi": "MagicLinkConfirmation",
+      "responseJava": "200 AuthResponse (new account or same userId for an existing institutional identity); 409 CONTINUITY_REQUIRED for an address owned only by another account",
+      "responseOpenapi": "200 AuthResponse",
       "transport": {
         "cookies": [
-          "attempt (read, cleared)",
+          "email_attempt (read, cleared)",
           "refresh (set)"
         ],
         "jwt": false,
@@ -1069,9 +1070,18 @@
         "400",
         "401",
         "403",
+        "409",
+        "410",
         "503"
       ],
       "httpOpenapi": [
+        "200",
+        "400",
+        "401",
+        "403",
+        "409",
+        "410",
+        "429",
         "503"
       ],
       "envelope": "ErrorEnvelope details=[]",
@@ -1098,7 +1108,7 @@
       "openapiSecurity": [
         [
           "apimSubscriptionKey",
-          "attemptCookie"
+          "emailAttemptCookie"
         ]
       ]
     },

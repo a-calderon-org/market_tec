@@ -646,15 +646,14 @@
       "post": {
         "operationId": "requestInstitutionalEmailLink",
         "summary": "Solicitar enlace institucional",
-        "description": "Autenticación independiente por Magic Link institucional, todavía no implementada. Temporalmente responde 503 AUTH_TEMPORARILY_UNAVAILABLE; no forma parte del registro Google.",
+        "description": "Magic Link institucional. Solo dominios estudiantec.cr, itcr.ac.cr y tec.ac.cr. Envía un enlace de un solo uso (10 minutos; máximo 3 solicitudes por correo cada 15 minutos, silenciosamente) cuyo secreto viaja en el fragmento. Responde 202 idéntico para correos nuevos, existentes o limitados y fija la cookie HttpOnly __Host-mtec-email-attempt.",
         "x-implementation-status": "proposed",
         "x-approval-status": "proposed",
         "x-route-class": "attempt-proof",
         "x-public-apim-path": "/auth/email/requests",
         "security": [
           {
-            "apimSubscriptionKey": [],
-            "attemptCookie": []
+            "apimSubscriptionKey": []
           }
         ],
         "parameters": [
@@ -666,17 +665,65 @@
           },
           {
             "$ref": "#/components/parameters/WebClient"
-          },
-          {
-            "$ref": "#/components/parameters/CsrfToken"
           }
         ],
         "responses": {
+          "202": {
+            "description": "Solicitud aceptada; si es elegible se envió un enlace.",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MagicLinkRequested"
+                },
+                "examples": {
+                  "synthetic": {
+                    "value": {
+                      "status": "accepted",
+                      "csrfToken": "0000000000000000000000000000000000000000000000000000000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Auth400"
+          },
+          "403": {
+            "$ref": "#/components/responses/Auth403"
+          },
+          "429": {
+            "$ref": "#/components/responses/Auth429"
+          },
           "503": {
             "$ref": "#/components/responses/Auth503"
           }
         },
         "x-error-codes": {
+          "400": [
+            "INVALID_REQUEST"
+          ],
+          "403": [
+            "FORBIDDEN",
+            "CSRF_INVALID",
+            "ORIGIN_DENIED",
+            "ELIGIBILITY_DENIED",
+            "REAUTHENTICATION_REQUIRED"
+          ],
+          "429": [
+            "RATE_LIMITED"
+          ],
           "503": [
             "AUTH_TEMPORARILY_UNAVAILABLE"
           ]
@@ -690,12 +737,11 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/EmailRequest"
+                "$ref": "#/components/schemas/MagicLinkRequest"
               },
               "examples": {
                 "synthetic": {
                   "value": {
-                    "attemptId": "attempt-placeholder",
                     "email": "usuario@estudiantec.cr"
                   }
                 }
@@ -703,16 +749,17 @@
             }
           }
         },
-        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending",
-        "x-registration-flow": "independent-email-authentication-only; not-google-continuation",
-        "x-current-behavior": "503 AUTH_TEMPORARILY_UNAVAILABLE"
+        "x-integration-readiness": "ready",
+        "x-registration-flow": "independent-email-authentication-only; not-google-continuation; no automatic merge by address",
+        "x-current-behavior": "202 EmailLinkRequested con users.email.enabled=true; 404 cuando el servicio de correo está deshabilitado.",
+        "x-java-error-codes": "400 INSTITUTIONAL_EMAIL_REQUIRED para dominios no institucionales (divergencia registrada en observed-ms-users)."
       }
     },
     "/v1/auth/email/confirm": {
       "post": {
         "operationId": "confirmInstitutionalEmailLink",
-        "summary": "Confirmar enlace y completar login o registro pendiente",
-        "description": "Autenticación independiente por Magic Link institucional, todavía no implementada. Temporalmente responde 503 AUTH_TEMPORARILY_UNAVAILABLE; no forma parte del registro Google.",
+        "summary": "Confirmar Magic Link institucional e iniciar sesión",
+        "description": "Confirmación explícita por POST desde el navegador que solicitó el enlace (cookie __Host-mtec-email-attempt + X-CSRF-Token). Correo nuevo: crea cuenta, identidad institucional y sesión. Identidad institucional existente: nueva sesión para el mismo userId. Correo perteneciente solo a otra cuenta (p. ej. Google): 409 CONTINUITY_REQUIRED sin vinculación automática. Enlace consumido 409, expirado 410, alterado o de otro navegador 401/403, sin crear sesión.",
         "x-implementation-status": "proposed",
         "x-approval-status": "proposed",
         "x-route-class": "attempt-proof",
@@ -720,7 +767,7 @@
         "security": [
           {
             "apimSubscriptionKey": [],
-            "attemptCookie": []
+            "emailAttemptCookie": []
           }
         ],
         "parameters": [
@@ -738,11 +785,110 @@
           }
         ],
         "responses": {
+          "200": {
+            "description": "Enlace válido: sesión inmediata (AuthResponse) y cookie __Host-mtec-refresh; la cookie de intento se borra.",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Cache-Control": {
+                "$ref": "#/components/headers/NoStore"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                },
+                "examples": {
+                  "synthetic": {
+                    "value": {
+                      "token": "internal-jwt-placeholder",
+                      "tokenType": "Bearer",
+                      "expiresAt": 1790000240,
+                      "user": {
+                        "userId": "usr_abc123",
+                        "email": "usuario@estudiantec.cr",
+                        "nombre": "Ana López",
+                        "fotoPerfil": "https://example.invalid/avatar.png"
+                      },
+                      "session": {
+                        "sessionId": "session-placeholder",
+                        "status": "active",
+                        "serverTime": 1790000000,
+                        "authenticatedAt": 1790000000,
+                        "renewedAt": 1790000000,
+                        "lastActivityAt": 1790000000,
+                        "windowExpiresAt": 1790003600,
+                        "inactivityExpiresAt": 1790001800,
+                        "absoluteExpiresAt": 1790028800,
+                        "expiresAt": 1790001800,
+                        "warningAt": 1790001500
+                      },
+                      "csrfToken": "csrf-placeholder"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Auth400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Auth401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Auth403"
+          },
+          "409": {
+            "$ref": "#/components/responses/Auth409"
+          },
+          "410": {
+            "$ref": "#/components/responses/Auth410"
+          },
+          "429": {
+            "$ref": "#/components/responses/Auth429"
+          },
           "503": {
             "$ref": "#/components/responses/Auth503"
           }
         },
         "x-error-codes": {
+          "400": [
+            "INVALID_REQUEST"
+          ],
+          "401": [
+            "AUTH_PROOF_INVALID",
+            "UNAUTHORIZED",
+            "ACCESS_TOKEN_EXPIRED",
+            "SESSION_EXPIRED",
+            "SESSION_REVOKED",
+            "REFRESH_INVALID"
+          ],
+          "403": [
+            "FORBIDDEN",
+            "CSRF_INVALID",
+            "ORIGIN_DENIED",
+            "ELIGIBILITY_DENIED",
+            "REAUTHENTICATION_REQUIRED"
+          ],
+          "409": [
+            "ATTEMPT_CONSUMED",
+            "IDENTITY_CONFLICT",
+            "CONTINUITY_REQUIRED",
+            "REGISTRATION_REQUIRED",
+            "ACTIVITY_NOT_ACCEPTED"
+          ],
+          "410": [
+            "ATTEMPT_EXPIRED"
+          ],
+          "429": [
+            "RATE_LIMITED"
+          ],
           "503": [
             "AUTH_TEMPORARILY_UNAVAILABLE"
           ]
@@ -756,22 +902,22 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/EmailConfirmationRequest"
+                "$ref": "#/components/schemas/MagicLinkConfirmation"
               },
               "examples": {
                 "synthetic": {
                   "value": {
-                    "attemptId": "attempt-placeholder",
-                    "token": "single-use-placeholder"
+                    "attemptId": "00000000000000000000000000000000",
+                    "token": "0000000000000000000000000000000000000000000000000000000000000000"
                   }
                 }
               }
             }
           }
         },
-        "x-integration-readiness": "conditional-draft-B07-parameters-and-tests-pending",
-        "x-registration-flow": "independent-email-authentication-only; not-google-continuation",
-        "x-current-behavior": "503 AUTH_TEMPORARILY_UNAVAILABLE"
+        "x-integration-readiness": "ready",
+        "x-registration-flow": "independent-email-authentication-only; not-google-continuation; no automatic merge by address",
+        "x-current-behavior": "200 AuthResponse con users.email.enabled=true; 404 cuando el servicio de correo está deshabilitado."
       }
     },
     "/v1/auth/session": {
@@ -2703,6 +2849,12 @@
         "in": "cookie",
         "name": "__Host-mtec-refresh",
         "description": "Refresh opaco rotatorio HttpOnly/Secure/host-only aprobado B06. Nombre __Host y Path=/ son propuesta conjunta; SameSite/hosts/topología y protocolo pendientes. Solo ms-users verifica; no propagar a negocio."
+      },
+      "emailAttemptCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-mtec-email-attempt",
+        "description": "Cookie HttpOnly/Secure/Path=/ SameSite=Lax, 10 minutos, que vincula el Magic Link al navegador solicitante. No concede sesión."
       }
     },
     "parameters": {
@@ -4777,6 +4929,61 @@
           }
         },
         "description": "Solo intento Google purpose=register; el cuerpo no puede aportar userId, correo, roles ni privilegios."
+      },
+      "MagicLinkRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "email"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 254,
+            "format": "email",
+            "description": "Correo institucional exacto (estudiantec.cr, itcr.ac.cr o tec.ac.cr); autenticación independiente de Google."
+          }
+        }
+      },
+      "MagicLinkConfirmation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "attemptId",
+          "token"
+        ],
+        "properties": {
+          "attemptId": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{32}$",
+            "description": "Identificador del intento tomado del fragmento del enlace."
+          },
+          "token": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "writeOnly": true,
+            "description": "Secreto de un solo uso del fragmento del enlace; se envía en body POST. Redactar en toda telemetría."
+          }
+        }
+      },
+      "MagicLinkRequested": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "csrfToken"
+        ],
+        "properties": {
+          "status": {
+            "const": "accepted"
+          },
+          "csrfToken": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "CSRF derivado de la cookie HttpOnly __Host-mtec-email-attempt; solo en memoria del navegador que solicitó el enlace."
+          }
+        }
       }
     }
   },

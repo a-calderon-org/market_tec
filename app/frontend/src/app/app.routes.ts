@@ -5,6 +5,7 @@ import { MyPublications } from './features/publications/my-publications/my-publi
 import { PublicationCreate } from './features/publications/publication-create/publication-create';
 import { Messenger } from './features/messenger/messenger';
 import { Login } from './features/auth/login';
+import { EmailLinkCallback } from './features/auth/email-link-callback';
 import { authGuard, guestGuard } from './features/auth/auth.guard';
 
 export const routes: Routes = [
@@ -17,6 +18,11 @@ export const routes: Routes = [
     path: 'login',
     canActivate: [guestGuard],
     component: Login
+  },
+  {
+    // Destino del Magic Link institucional; sin guard: la confirmación crea la sesión.
+    path: 'acceso/correo',
+    component: EmailLinkCallback
   },
   {
     path: 'mis-publicaciones',

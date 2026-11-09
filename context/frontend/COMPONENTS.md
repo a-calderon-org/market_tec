@@ -3,7 +3,8 @@
 | Ruta/componente | Responsabilidad | Servicios |
 |---|---|---|
 | `/` → `Home` | catálogo completo por lotes, búsqueda/filtros/orden previos a paginación local e historial de búsquedas | `PublicationService`, `HomeFilterService`, `RecentSearchService` |
-| `/login` → `Login` | Google GIS y maqueta de credenciales TEC | `GoogleAuthService`, `LoginService` |
+| `/login` → `Login` | Google GIS y, con `authCoreV2`, solicitud de Magic Link institucional | `GoogleAuthService`, `LoginService`, `AuthSessionService` |
+| `/acceso/correo` → `EmailLinkCallback` | Lee `#attempt&token`, borra el fragmento y confirma por POST; abre el perfil | `AuthSessionService` |
 | `/mis-publicaciones` → `MyPublications` | estadísticas y filtros de publicaciones de `USR-001`; recibe metadatos paginados, pero sus controles no navegan | `PublicationService` |
 | `/publicaciones/nueva` → `PublicationCreate` | formulario, previews locales y POST | `PublicationService`, `PublicationFeedbackService` |
 | `/publicaciones/:id` → `PublicationDetail` | detalle, galería y enlace a mensajería | `PublicationService` |

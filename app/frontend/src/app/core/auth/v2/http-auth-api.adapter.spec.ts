@@ -204,6 +204,82 @@ describe('HttpAuthApiAdapter + núcleo v2 contra ms-users (HttpTestingController
     await done;
   }
 
+  describe('Magic Link institucional', () => {
+    const EMAIL_CSRF = 'e'.repeat(64);
+    const TOKEN = 'f'.repeat(64);
+
+    beforeEach(() => {
+      localStorage.clear();
+      configure();
+    });
+
+    async function requestLink(): Promise<void> {
+      const pending = TestBed.inject(AuthSessionService).requestEmailLink('ana@estudiantec.cr');
+      const req = httpTesting.expectOne(url('/v1/auth/email/requests'));
+      expectCookieRequest(req, 'POST');
+      expect(req.request.body).toEqual({ email: 'ana@estudiantec.cr' });
+      expect(req.request.headers.has('X-CSRF-Token')).toBe(false);
+      req.flush({ status: 'accepted', csrfToken: EMAIL_CSRF }, { status: 202, statusText: 'Accepted' });
+      await pending;
+    }
+
+    it('solicita el enlace y confirma con la cookie de intento y su CSRF: sesión interna en memoria', async () => {
+      await requestLink();
+      // Solo el CSRF del intento se comparte con la pestaña del enlace; nunca attemptId ni token.
+      expect(JSON.stringify(localStorage)).toContain(EMAIL_CSRF);
+
+      const session = TestBed.inject(AuthSessionService);
+      const done = session.confirmEmailLink({ attemptId: ATTEMPT_ID, token: TOKEN });
+      await settle();
+      const req = httpTesting.expectOne(url('/v1/auth/email/confirm'));
+      expectCookieRequest(req, 'POST');
+      expect(req.request.headers.get('X-CSRF-Token')).toBe(EMAIL_CSRF);
+      expect(req.request.body).toEqual({ attemptId: ATTEMPT_ID, token: TOKEN });
+      req.flush(authResponse());
+      await done;
+
+      expect(session.currentIdentity()?.userId).toBe(USER_ID);
+      expect(await session.getAccessToken()).toBe(INTERNAL_JWT);
+      expect(JSON.stringify(localStorage)).not.toContain(EMAIL_CSRF);
+      expect(JSON.stringify(localStorage)).not.toContain(TOKEN);
+    });
+
+    it('desde otro navegador (sin el intento) no envía nada ni gasta el enlace', async () => {
+      const session = TestBed.inject(AuthSessionService);
+      await expect(session.confirmEmailLink({ attemptId: ATTEMPT_ID, token: TOKEN }))
+        .rejects.toMatchObject({ status: 403, code: 'EMAIL_LINK_OTHER_BROWSER' });
+      httpTesting.expectNone(url('/v1/auth/email/confirm'));
+      expect(session.currentIdentity()).toBeNull();
+    });
+
+    it('enlace consumido, expirado o de otra cuenta Google: error de Java y ninguna sesión', async () => {
+      for (const [status, code] of [[409, 'ATTEMPT_CONSUMED'], [410, 'ATTEMPT_EXPIRED'],
+        [409, 'CONTINUITY_REQUIRED'], [401, 'AUTH_PROOF_INVALID'], [403, 'CSRF_INVALID']] as const) {
+        await requestLink();
+        const session = TestBed.inject(AuthSessionService);
+        const done = session.confirmEmailLink({ attemptId: ATTEMPT_ID, token: TOKEN });
+        await settle();
+        httpTesting.expectOne(url('/v1/auth/email/confirm')).flush(envelope(code), { status, statusText: 'x' });
+        await expect(done).rejects.toMatchObject({ status, code });
+        expect(session.currentIdentity()).toBeNull();
+        expect(JSON.stringify(localStorage)).not.toContain(EMAIL_CSRF);
+      }
+    });
+
+    it('fallo del proveedor (503) o 202 malformado no se informan como enviados', async () => {
+      const session = TestBed.inject(AuthSessionService);
+      let pending = session.requestEmailLink('ana@estudiantec.cr');
+      httpTesting.expectOne(url('/v1/auth/email/requests'))
+        .flush(envelope('AUTH_TEMPORARILY_UNAVAILABLE'), { status: 503, statusText: 'x' });
+      await expect(pending).rejects.toMatchObject({ status: 503 });
+
+      pending = session.requestEmailLink('ana@estudiantec.cr');
+      httpTesting.expectOne(url('/v1/auth/email/requests')).flush({ status: 'accepted' });
+      await expect(pending).rejects.toMatchObject({ status: 0, code: 'INVALID_RESPONSE' });
+      expect(JSON.stringify(localStorage)).not.toContain('csrfToken');
+    });
+  });
+
   describe('autenticación Google', () => {
     beforeEach(() => configure());
 
