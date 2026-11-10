@@ -4,7 +4,7 @@
   "approvals": {
     "abuse_protection": {
       "evidence_file": "abuse_protection.staging.json",
-      "evidence_sha256": "b63df21a7f44998ba3f65608ac12412deb7efb2945425ea275b7b7438c6238f9"
+      "evidence_sha256": "8c91019c027bed6ddf3cee1d0d68ac7a06847984e89b4c3f55cef954ddbef3de"
     },
     "ms_users_contract": null
   },

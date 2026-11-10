@@ -1,8 +1,8 @@
 {
   "approval_type": "abuse_protection",
-  "backend_sha": "fc7e18fb78540858de83a1209e31471178aa0353",
+  "backend_sha": "be4595cfda702848fbd10dd8b2e8b36f126c548c",
   "openapi_contract_version": "0.3.0-draft",
-  "openapi_sha256": "24bc6cdd167218083e324c01e00db58cd3eeb105b03d55a68ba576f6996cb0a5",
+  "openapi_sha256": "1d151691f7af0880c61e87bcf8eaf610c7abe6c14e17b01ea74fc005bc068fd7",
   "environment": "staging",
   "apim_revision": "markettec-users-v1:1",
   "review_id": "a-calderon-org/ms-users-market-tec#32"
