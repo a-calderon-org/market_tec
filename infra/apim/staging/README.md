@@ -1,8 +1,9 @@
 # Staging package (markettec-users-v1, revision 1)
 
 The `staging` inputs target `markettec-users-v1:1` on APIM `markettec-api`. The
-backend route inventory identifies [ms-users `75303f4361eadd7167dc6b86fffbcabeb0728394`](https://github.com/a-calderon-org/ms-users-market-tec/commit/75303f4361eadd7167dc6b86fffbcabeb0728394)
-(PR #35, uniform password-recovery acknowledgement): the same 27 routes as `8707f03` (PR #34), i.e.
+backend route inventory identifies [ms-users `f56ba7ec43d345cbd152705c53d2a7a8108a5add`](https://github.com/a-calderon-org/ms-users-market-tec/commit/f56ba7ec43d345cbd152705c53d2a7a8108a5add)
+(PR #37 merge; includes PR #35 uniform recovery acknowledgement and PR #36 password throttle reset without
+`DELETE`): the same 27 routes as `8707f03` (PR #34), i.e.
 the 22 routes of `be4595c` plus the five password routes. The manifest
 lists the same 27 operations. The JWKS snapshot uses kid `stg-jwt-2026-11`.
 
@@ -16,8 +17,10 @@ The existing `abuse_protection` evidence is bound to `be4595c` and to `users.jso
 alone, so generation with these inputs is **refused** until the operator records, after
 explicit authorization, new evidence documents in `evidence/`:
 
-* `abuse_protection`: backend `75303f4`, contract binding with the extension (below). Evidence bound
+* `abuse_protection`: backend `f56ba7e`, contract binding with the extension (below). Evidence bound
   to `8707f03` is rejected: that build leaked account existence through recovery requests (fixed in PR #35).
+  Evidence bound to `75303f4` is rejected: its password throttle ran `DELETE`, which the runtime identity lacks, so
+  every successful password login failed in Azure (fixed in PR #36).
   Without it every anonymous operation, including Google and Magic Link, is denied.
 * `ms_users_contract`: same binding. Without it the five password operations stay terminal
   503 `BACKEND_CONTRACT_PENDING` (the other ten are unaffected).

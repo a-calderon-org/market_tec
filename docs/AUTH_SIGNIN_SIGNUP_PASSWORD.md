@@ -42,11 +42,11 @@ El logo oficial es el SVG del encabezado (`app.html`): se reutilizó tal cual en
 
 ## Dependencias y límites conocidos
 
-* **APIM**: las cinco rutas nuevas están preparadas en el manifiesto de staging (27 operaciones, ms-users `75303f4`) y en el
+* **APIM**: las cinco rutas nuevas están preparadas en el manifiesto de staging (27 operaciones, ms-users `f56ba7e`) y en el
   perfil `ms-users-password-v1` mediante la extensión del generador (`--openapi-extension`, ver
   [`infra/apim/README.md`](../infra/apim/README.md)); `operations.json` y la matriz B07 de 22 operaciones no cambian. Estado
   **Proposed**: no están publicadas en Azure y el paquete no se genera hasta registrar evidencias `abuse_protection` y
-  `ms_users_contract` aprobadas para `75303f4` ([`infra/apim/staging/README.md`](../infra/apim/staging/README.md)). **Sin esto no
+  `ms_users_contract` aprobadas para `f56ba7e` ([`infra/apim/staging/README.md`](../infra/apim/staging/README.md)). **Sin esto no
   hay E2E en staging**. El contrato aditivo está en `contracts/openapi/users-password.json` (no modifica `users.json`).
 * El proxy same-origin `/api/users` ya admite las rutas (patrón genérico, métodos GET/POST/PUT); no requirió cambios.
 * El cambio de contraseña (`PUT /v1/me/password`) existe en ms-users pero esta SPA aún no lo consume (no está en el transporte restringido).

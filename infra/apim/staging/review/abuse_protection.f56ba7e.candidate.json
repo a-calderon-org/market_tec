@@ -1,0 +1,12 @@
+{
+  "status": "candidate_not_releasable",
+  "approval_type": "abuse_protection",
+  "backend_sha": "f56ba7ec43d345cbd152705c53d2a7a8108a5add",
+  "openapi_contract_version": "0.3.0-draft+users-password-0.1.0-draft",
+  "openapi_sha256": "4b57f6460a42b6c47ecae725da83a79442e8b889c5078fdfa9db755420eb8950",
+  "environment": "staging",
+  "apim_revision": "markettec-users-v1:1",
+  "release_profile": "ms-users-password-v1",
+  "acceptance_scope": "staging_only_not_production",
+  "review_id": null
+}
