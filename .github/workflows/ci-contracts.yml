@@ -36,6 +36,7 @@ jobs:
         run: >-
           npm --prefix contracts exec -- redocly lint
           contracts/openapi/users.json
+          contracts/openapi/users-password.json
           contracts/openapi/catalog.json
           contracts/openapi/notifications.json
       - name: Validate JSON Schema and contract behavior

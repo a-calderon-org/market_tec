@@ -147,6 +147,20 @@ export class HttpAuthApiAdapter extends AuthApiPort {
     );
   }
 
+  loginWithPassword(email: string, password: string, signal?: AbortSignal): Promise<AuthResponse> {
+    return this.send('POST', '/auth/password/login', { body: { email, password } }, parseAuthResponse, signal);
+  }
+
+  requestPasswordRecovery(email: string, signal?: AbortSignal): Promise<EmailLinkRequested> {
+    return this.send(
+      'POST',
+      '/auth/password/recovery/requests',
+      { body: { email } },
+      parseEmailLinkRequested,
+      signal,
+    );
+  }
+
   getSession(signal?: AbortSignal): Promise<SessionResponse> {
     return this.send('GET', '/auth/session', {}, parseSessionResponse, signal);
   }

@@ -1,6 +1,6 @@
 import { AfterViewInit, Component, ElementRef, ViewChild, effect, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
-import { describeGoogleAuthFailure, GoogleAuthService } from './services/google-auth.service';
+import { describeGoogleAuthFailure, GoogleAuthService, type GoogleButtonTheme } from './services/google-auth.service';
 import type { GoogleAttemptPurpose } from '../../core/auth/v2/auth-contract';
 import { FEATURE_FLAGS } from '../../core/feature-flags';
 import { AbstractControl, NonNullableFormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
@@ -8,7 +8,18 @@ import { Router } from '@angular/router';
 import { LoginService } from './services/login.service';
 import { AuthSessionService } from '../../core/auth/v2/auth-session.service';
 import { describeEmailLinkFailure } from './services/email-link-errors';
+import { describePasswordLoginFailure, describeRecoveryRequestFailure } from './services/password-auth-errors';
 import { ThemeService } from '../../core/theme.service';
+
+/** Operación visible de la pantalla: dos formularios y dos propósitos de Google bien diferenciados. */
+export type AuthMode = 'signin' | 'signup';
+/** Dentro de «Iniciar sesión»: contraseña o solicitud de recuperación. */
+export type SignInView = 'password' | 'recovery';
+
+/** Temas oficiales de GIS: `outline` sobre claro y `filled_black` sobre oscuro. */
+export function googleThemeFor(theme: 'light' | 'dark'): GoogleButtonTheme {
+  return theme === 'dark' ? 'filled_black' : 'outline';
+}
 
 @Component({
   selector: 'app-login',
@@ -29,7 +40,7 @@ export class Login implements AfterViewInit {
     const theme = this.themeService.theme();
 
     if (this.googleButtonReady) {
-      void this.renderGoogleButton(theme, false);
+      this.restyleGoogleButton(theme);
     }
   });
 
@@ -40,11 +51,43 @@ export class Login implements AfterViewInit {
   readonly authCoreV2 = inject(FEATURE_FLAGS).authCoreV2;
   readonly googlePurpose = signal<GoogleAttemptPurpose>('login');
 
-  /** Cambia entre «Ingresar» y «Crear cuenta»; pide un intento nuevo a ms-users. */
-  setGooglePurpose(purpose: GoogleAttemptPurpose): void {
-    if (!this.authCoreV2 || this.googleLoading() || this.submitting() || this.googlePurpose() === purpose) return;
-    this.googlePurpose.set(purpose);
-    void this.loadGoogleButton();
+  /** Operación visible. Cada una usa su propio propósito de Google (intento y nonce propios) y su propio formulario. */
+  readonly mode = signal<AuthMode>('signin');
+  readonly signInView = signal<SignInView>('password');
+
+  /** Contraseñas activas (ms-users `users.password.enabled` + flag del build); sin ellas no hay formulario de contraseña. */
+  readonly passwordAuthAvailable =
+    inject(FEATURE_FLAGS).authCoreV2 && inject(FEATURE_FLAGS).authCoreV2Adapter === 'http'
+    && inject(FEATURE_FLAGS).passwordAuth === true;
+
+  /** Cambia entre «Iniciar sesión» y «Crear cuenta»; pide un intento de Google nuevo para el propósito nuevo. */
+  selectMode(mode: AuthMode): void {
+    if (this.mode() === mode || this.submitting() || this.sendingLink() || this.signingIn()) return;
+    this.mode.set(mode);
+    this.signInView.set('password');
+    this.resetFeedback();
+    this.linkSentTo.set(null);
+    this.recoverySentTo.set(null);
+    this.emailFormOpen.set(false);
+    this.passwordForm.reset();
+    this.recoveryForm.reset();
+    this.loginForm.reset();
+    this.googlePurpose.set(mode === 'signin' ? 'login' : 'register');
+    if (this.authCoreV2 && this.googleButtonReady) void this.loadGoogleButton();
+  }
+
+  /** Flechas izquierda/derecha entre las dos pestañas (patrón WAI-ARIA de tabs). */
+  onTabKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    this.selectMode(this.mode() === 'signin' ? 'signup' : 'signin');
+    (event.currentTarget as HTMLElement | null)?.parentElement
+      ?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.focus();
+  }
+
+  private resetFeedback(): void {
+    this.error.set(false);
+    this.errorMessage.set('');
   }
 
   ngAfterViewInit(): void {
@@ -54,6 +97,17 @@ export class Login implements AfterViewInit {
 
   async loadGoogleButton(): Promise<void> {
     await this.renderGoogleButton(this.themeService.theme(), true);
+  }
+
+  /**
+   * Cambio de tema: solo se vuelve a dibujar el botón oficial con el mismo intento (sin otro nonce ni otro botón). Si
+   * no hay uno vigente, se renderiza completo.
+   */
+  private restyleGoogleButton(theme: 'light' | 'dark'): void {
+    if (this.renderingGoogleButton || this.submitting()) return;
+    if (!this.googleAuth.restyleButton(this.googleButton.nativeElement, googleThemeFor(theme))) {
+      void this.renderGoogleButton(theme, false);
+    }
   }
 
   private async renderGoogleButton(
@@ -68,7 +122,7 @@ export class Login implements AfterViewInit {
     try {
       await this.googleAuth.renderButton(this.googleButton.nativeElement, credential => {
         void this.signInWithGoogle(credential);
-      }, theme === 'dark' ? 'outline_dark' : 'outline', this.googlePurpose());
+      }, googleThemeFor(theme), this.googlePurpose());
     } catch (error) {
       this.googleLoadError.set(true);
       this.error.set(true);
@@ -219,6 +273,109 @@ export class Login implements AfterViewInit {
     } finally {
       this.sendingLink.set(false);
     }
+  }
+
+  // ---- Contraseña ---------------------------------------------------------------------------------------------
+
+  readonly signingIn = signal(false);
+  readonly showPassword = signal(false);
+  /** Dirección a la que se pidió el enlace de recuperación (solo para el mensaje de confirmación). */
+  readonly recoverySentTo = signal<string | null>(null);
+  readonly recovering = signal(false);
+
+  readonly passwordForm = this.formBuilder.group({
+    correo: this.formBuilder.control('', [
+      Validators.required,
+      Validators.email,
+      (control) => this.validateInstitutionalEmail(control)
+    ]),
+    contrasena: this.formBuilder.control('', [Validators.required, Validators.maxLength(256)])
+  });
+
+  readonly recoveryForm = this.formBuilder.group({
+    correo: this.formBuilder.control('', [
+      Validators.required,
+      Validators.email,
+      (control) => this.validateInstitutionalEmail(control)
+    ])
+  });
+
+  togglePasswordVisibility(): void {
+    this.showPassword.update((visible) => !visible);
+  }
+
+  openRecovery(): void {
+    this.resetFeedback();
+    this.recoveryForm.controls.correo.setValue(this.passwordForm.controls.correo.value);
+    this.recoverySentTo.set(null);
+    this.signInView.set('recovery');
+  }
+
+  backToPasswordSignIn(): void {
+    this.resetFeedback();
+    this.recoverySentTo.set(null);
+    this.signInView.set('password');
+  }
+
+  /** `POST /v1/auth/password/login`: sin Magic Link. La contraseña no se conserva tras el envío. */
+  async submitPassword(): Promise<void> {
+    this.resetFeedback();
+    if (this.passwordForm.invalid || this.signingIn() || this.submitting() || !this.session) {
+      this.passwordForm.markAllAsTouched();
+      return;
+    }
+
+    const { correo, contrasena } = this.passwordForm.getRawValue();
+    this.signingIn.set(true);
+    let signedIn = false;
+    try {
+      await this.session.signInWithPassword(this.loginService.normalizeEmail(correo), contrasena);
+      signedIn = true;
+      this.passwordForm.controls.contrasena.reset();
+      if (!await this.router.navigate(['/'])) throw new Error('No fue posible abrir MarketTec.');
+    } catch (error) {
+      this.error.set(true);
+      this.errorMessage.set(signedIn ? 'Ingresaste, pero no fue posible abrir MarketTec. Recarga la página.'
+        : describePasswordLoginFailure(error));
+      if (!signedIn) this.passwordForm.controls.contrasena.reset();
+    } finally {
+      this.signingIn.set(false);
+    }
+  }
+
+  /** `POST /v1/auth/password/recovery/requests`: acuse idéntico para cualquier dirección institucional. */
+  async submitRecovery(): Promise<void> {
+    this.resetFeedback();
+    if (this.recoveryForm.invalid || this.recovering() || !this.session) {
+      this.recoveryForm.markAllAsTouched();
+      return;
+    }
+
+    const correo = this.loginService.normalizeEmail(this.recoveryForm.getRawValue().correo);
+    this.recovering.set(true);
+    try {
+      await this.session.requestPasswordRecovery(correo);
+      this.recoverySentTo.set(correo);
+    } catch (error) {
+      this.error.set(true);
+      this.errorMessage.set(describeRecoveryRequestFailure(error));
+    } finally {
+      this.recovering.set(false);
+    }
+  }
+
+  isFieldInvalid(form: 'password' | 'recovery', controlName: 'correo' | 'contrasena'): boolean {
+    const group = form === 'password' ? this.passwordForm : this.recoveryForm;
+    const control = (group.controls as Record<string, AbstractControl>)[controlName];
+
+    return !!control && control.invalid && (control.dirty || control.touched);
+  }
+
+  hasFieldError(form: 'password' | 'recovery', controlName: 'correo' | 'contrasena', errorName: string): boolean {
+    const group = form === 'password' ? this.passwordForm : this.recoveryForm;
+    const control = (group.controls as Record<string, AbstractControl>)[controlName];
+
+    return this.isFieldInvalid(form, controlName) && !!control?.hasError(errorName);
   }
 
   isControlInvalid(

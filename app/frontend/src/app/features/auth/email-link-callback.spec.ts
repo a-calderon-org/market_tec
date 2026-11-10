@@ -1,10 +1,11 @@
 import { TestBed } from '@angular/core/testing';
 import { Location } from '@angular/common';
-import { provideRouter, Router } from '@angular/router';
+import { ActivatedRoute, provideRouter, Router } from '@angular/router';
 import { vi } from 'vitest';
 import { AuthApiError } from '../../core/auth/v2/auth-contract';
 import { AuthSessionService } from '../../core/auth/v2/auth-session.service';
 import { FEATURE_FLAGS } from '../../core/feature-flags';
+import { PasswordCredentialsService } from '../../core/auth/v2/password-credentials.service';
 import { EmailLinkCallback, parseEmailLinkFragment } from './email-link-callback';
 
 const ATTEMPT = 'a'.repeat(32);
@@ -80,5 +81,77 @@ describe('EmailLinkCallback', () => {
       await fixture.componentInstance.ngOnInit();
       expect(fixture.componentInstance.failure()).toContain(text);
     }
+  });
+});
+
+describe('EmailLinkCallback con contraseñas (passwordAuth)', () => {
+  const session = { confirmEmailLink: vi.fn() };
+  const passwords = { status: vi.fn() };
+
+  async function open(path: string, data: object = {}) {
+    session.confirmEmailLink.mockReset().mockResolvedValue(undefined);
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([{ path: path.split('#')[0].slice(1), component: EmailLinkCallback, data }, { path: '**', children: [] }]),
+        { provide: FEATURE_FLAGS, useValue: { authCoreV2: true, authCoreV2Adapter: 'http', passwordAuth: true } },
+        { provide: AuthSessionService, useValue: session },
+        { provide: PasswordCredentialsService, useValue: passwords },
+        // El componente se crea fuera del outlet: se declara la ruta que lo activaría.
+        { provide: ActivatedRoute, useValue: { snapshot: { data, fragment: path.split('#')[1] ?? null } } },
+      ],
+    });
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl(path);
+    const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    const fixture = TestBed.createComponent(EmailLinkCallback);
+    await fixture.componentInstance.ngOnInit();
+    fixture.detectChanges();
+    return { fixture, navigate };
+  }
+
+  const link = `attempt=${ATTEMPT}&token=${TOKEN}`;
+
+  it('a confirmed link for an account without a password leads to the password setup', async () => {
+    passwords.status.mockReset().mockResolvedValue({ configured: false, setupAvailable: true });
+    const { navigate } = await open(`/acceso/correo#${link}`);
+    expect(navigate).toHaveBeenCalledWith(['/contrasena'], { replaceUrl: true });
+    expect(navigate).not.toHaveBeenCalledWith(['/'], expect.anything());
+  });
+
+  it('an account that already has a password signs in without being asked to set one', async () => {
+    passwords.status.mockReset().mockResolvedValue({ configured: true, setupAvailable: false });
+    const { navigate } = await open(`/acceso/correo#${link}`);
+    expect(navigate).toHaveBeenCalledWith(['/'], { replaceUrl: true, state: { openProfile: true } });
+  });
+
+  it('a failed status query never blocks a session that was already created', async () => {
+    passwords.status.mockReset().mockRejectedValue(new AuthApiError(503, 'AUTH_TEMPORARILY_UNAVAILABLE'));
+    const { navigate } = await open(`/acceso/correo#${link}`);
+    expect(navigate).toHaveBeenCalledWith(['/'], { replaceUrl: true, state: { openProfile: true } });
+  });
+
+  it('does not check the password state when the link failed', async () => {
+    passwords.status.mockReset();
+    session.confirmEmailLink.mockReset();
+    const { fixture } = await open(`/acceso/correo#attempt=${ATTEMPT}&token=zz`);
+    expect(passwords.status).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.failure()).toContain('no es válido');
+  });
+
+  it('the recovery page explains B02: a link never replaces an existing password, and creates no session', async () => {
+    passwords.status.mockReset();
+    const { fixture, navigate } = await open(`/acceso/recuperar#${link}`, { purpose: 'recovery' });
+    passwords.status.mockClear(); // `open` ya procesó un enlace válido; ahora el canje falla por continuidad
+    session.confirmEmailLink.mockRejectedValueOnce(new AuthApiError(409, 'CONTINUITY_REQUIRED'));
+    await fixture.componentInstance.ngOnInit();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.recovery).toBe(true);
+    expect(fixture.componentInstance.failure()).toContain('no puede reemplazar la contraseña');
+    expect(fixture.componentInstance.failure()).not.toContain('Google');
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Recuperar acceso');
+    expect(passwords.status).not.toHaveBeenCalled();
+    (fixture.nativeElement.querySelector('button') as HTMLButtonElement).click();
+    expect(navigate).toHaveBeenLastCalledWith(['/login']);
   });
 });

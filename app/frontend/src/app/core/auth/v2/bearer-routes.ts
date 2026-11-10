@@ -13,6 +13,7 @@ const SEGMENT = '[^/?#]+';
 const BEARER_ROUTES: readonly RegExp[] = [
   /^\/me\/profile$/,
   /^\/me\/auth-methods$/,
+  /^\/me\/password$/,
   new RegExp(`^/usuarios/${SEGMENT}$`),
   new RegExp(`^/usuarios/${SEGMENT}/publicaciones$`),
   /^\/publicaciones$/,

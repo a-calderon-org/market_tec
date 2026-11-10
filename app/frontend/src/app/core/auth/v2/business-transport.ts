@@ -23,6 +23,10 @@ export type BusinessTransportMode = 'blocked' | 'restricted' | 'enabled';
 const V2_HTTP_BUSINESS_ROUTES: readonly { readonly method: string; readonly route: string }[] = [
   { method: 'GET', route: '/me/profile' },
   { method: 'PUT', route: '/me/profile' },
+  // Contraseña propia (ms-users, solo con `passwordAuth`): estado y primera contraseña. El cambio (PUT) existe en
+  // ms-users pero esta SPA aún no lo usa, así que no sale.
+  { method: 'GET', route: '/me/password' },
+  { method: 'POST', route: '/me/password' },
 ];
 
 /** ¿Puede salir esta operación en modo `restricted`? `route` es la ruta sin `/v1`. */

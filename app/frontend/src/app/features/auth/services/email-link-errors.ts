@@ -2,7 +2,7 @@ import { AuthApiError, AuthRequiredError } from '../../../core/auth/v2/auth-cont
 import { EMAIL_LINK_OTHER_BROWSER } from '../../../core/auth/v2/auth-session.service';
 
 /** Mensaje para la UI del Magic Link a partir del status y el `error.code` de ms-users. */
-export function describeEmailLinkFailure(error: unknown): string {
+export function describeEmailLinkFailure(error: unknown, purpose: 'access' | 'recovery' = 'access'): string {
   if (error instanceof AuthRequiredError) {
     return 'El inicio de sesión se canceló. Solicita un nuevo enlace.';
   }
@@ -23,6 +23,10 @@ export function describeEmailLinkFailure(error: unknown): string {
     case 'ATTEMPT_EXPIRED':
       return 'Este enlace expiró. Solicita uno nuevo para ingresar.';
     case 'CONTINUITY_REQUIRED':
+      if (purpose === 'recovery') {
+        return 'Por seguridad, un enlace al correo no puede reemplazar la contraseña de una cuenta que ya tiene una ni '
+          + 'entregar su historial. Ingresa con tu contraseña actual o verifica tu correo desde «Crear cuenta» para entrar sin ella.';
+      }
       return 'Este correo ya pertenece a una cuenta creada con Google. Ingresa con el botón de Google.';
     case 'AUTH_PROOF_INVALID':
       return 'El enlace no es válido. Solicita uno nuevo para ingresar.';

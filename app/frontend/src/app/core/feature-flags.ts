@@ -30,6 +30,12 @@ export interface FeatureFlags {
    * heredado (ID Token de Google hacia `markettec-api-v1`). Solo tiene efecto con `authCoreV2`.
    */
   readonly catalogInternalJwt?: boolean;
+  /**
+   * Inicio de sesión con correo institucional y contraseña, configuración de la primera contraseña y recuperación
+   * (ms-users `users.password.enabled`). Apagado por defecto: sin él la pantalla solo ofrece Google y el enlace por
+   * correo, y no existe ningún formulario de contraseña. Solo tiene efecto con `authCoreV2` y el adaptador `http`.
+   */
+  readonly passwordAuth?: boolean;
 }
 
 export const DEFAULT_FEATURE_FLAGS: FeatureFlags = Object.freeze({
@@ -37,6 +43,7 @@ export const DEFAULT_FEATURE_FLAGS: FeatureFlags = Object.freeze({
   authCoreV2Adapter: 'mock',
   authCoreV2HttpTopologyVerified: false,
   catalogInternalJwt: false,
+  passwordAuth: false,
 });
 
 /**
@@ -61,6 +68,8 @@ export function resolveFeatureFlags(source: unknown): FeatureFlags {
       typeof raw['catalogInternalJwt'] === 'boolean'
         ? raw['catalogInternalJwt']
         : DEFAULT_FEATURE_FLAGS.catalogInternalJwt,
+    passwordAuth:
+      typeof raw['passwordAuth'] === 'boolean' ? raw['passwordAuth'] : DEFAULT_FEATURE_FLAGS.passwordAuth,
   });
 }
 

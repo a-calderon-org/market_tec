@@ -39,6 +39,18 @@ export abstract class AuthApiPort {
     signal?: AbortSignal,
   ): Promise<AuthResponse>;
 
+  /**
+   * `POST /v1/auth/password/login`: correo institucional + contraseña, misma respuesta y cookie que los demás
+   * métodos. No requiere Magic Link. Los fallos son uniformes (`INVALID_CREDENTIALS`) o `429 RATE_LIMITED`.
+   */
+  abstract loginWithPassword(email: string, password: string, signal?: AbortSignal): Promise<AuthResponse>;
+
+  /**
+   * `POST /v1/auth/password/recovery/requests`: enlace de recuperación al correo (acuse idéntico para cualquier
+   * dirección). Se canjea con `confirmEmailLink`; no reemplaza una contraseña existente (B02).
+   */
+  abstract requestPasswordRecovery(email: string, signal?: AbortSignal): Promise<EmailLinkRequested>;
+
   /** `GET /v1/auth/session`: reconcilia; no entrega JWT. */
   abstract getSession(signal?: AbortSignal): Promise<SessionResponse>;
 

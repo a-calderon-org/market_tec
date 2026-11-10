@@ -10,7 +10,7 @@ no demuestran que una ruta o integración esté implementada.
 ## Estructura
 
 - `identity/IDENTITY_CONTRACT.md`: identidad interna, JWT recomendado y frontera de confianza.
-- `openapi/*.json`: OpenAPI 3.1 de diseño por microservicio.
+- `openapi/*.json`: OpenAPI 3.1 de diseño por microservicio. `users-password.json` es una extensión aditiva de `users.json` (contraseñas, política B02) que no modifica la reconciliación B07.
 - `events/*.schema.json`: JSON Schema Draft 2020-12 para eventos asíncronos.
 - `examples/events/`: ejemplos válidos e inválidos usados por las pruebas.
 - `tests/test_contracts.py`: compatibilidad y semántica de contratos generales.
@@ -64,6 +64,7 @@ source contracts/.venv/bin/activate
 python -m pip install -r contracts/requirements-validation.txt
 npm --prefix contracts exec -- redocly lint \
   contracts/openapi/users.json \
+  contracts/openapi/users-password.json \
   contracts/openapi/catalog.json \
   contracts/openapi/notifications.json
 python -m unittest discover -s contracts/tests -p 'test_*.py' -v

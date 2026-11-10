@@ -80,13 +80,17 @@
   font: inherit;
   font-size: 0.85rem;
 
-  cursor: not-allowed;
+  cursor: pointer;
 
   background: var(--surface, #fff);
   border: 1px solid var(--border, #d8dfe9);
   border-radius: 10px;
+}
 
-  opacity: 0.9;
+.institutional-button:disabled {
+  cursor: not-allowed;
+
+  opacity: 0.65;
 }
 
 .institutional-button__google {
@@ -255,10 +259,11 @@
   display: grid;
   place-items: center;
 
-  padding: 2px;
+  padding: 4px 2px;
 
-  color: var(--text-muted, #8a9ab2);
-  font-size: 1rem;
+  color: var(--accent-text, #5a4cf0);
+  font: inherit;
+  font-size: 0.74rem;
 
   cursor: pointer;
 
@@ -271,14 +276,19 @@
 
   color: var(--accent-text, #5a4cf0);
   font: inherit;
-  font-size: 0.73rem;
+  font-size: 0.8rem;
+  text-decoration: underline;
 
-  cursor: not-allowed;
+  cursor: pointer;
 
   background: transparent;
   border: 0;
+}
 
-  opacity: 0.85;
+.forgot-password:focus-visible {
+  border-radius: 3px;
+  outline: 2px solid var(--accent-text, #5649e9);
+  outline-offset: 3px;
 }
 
 .form-field__help {
@@ -438,17 +448,19 @@
   min-height: 44px;
 }
 
+/*
+ * Contenedor del botón oficial de Google Identity Services. Sin altura fija ni `overflow`: el botón (y su borde,
+ * sobre todo en el tema oscuro) debe poder renderizarse completo. Solo se centra y se le da el ancho disponible;
+ * el interior del iframe de Google no se toca.
+ */
 .google-button {
   display: flex;
   justify-content: center;
+  box-sizing: border-box;
   width: min(100%, 400px);
-  height: 40px;
+  min-height: 44px;
   margin: 0 auto;
-
-  overflow: hidden;
-
-  border-radius: 4px;
-  line-height: 0;
+  padding: 2px 0;
 }
 
 .google-button[hidden] { display: none; }
@@ -473,4 +485,108 @@
 
 :host-context(html[data-theme='dark']) .login-submit:hover:not(:disabled) {
   background: #1a73e8;
+}
+
+/* Operación: Iniciar sesión / Crear cuenta */
+
+.auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+
+  margin: 0 0 22px;
+  padding: 4px;
+
+  background: var(--surface-muted, #f1f3f9);
+  border: 1px solid var(--border, #dce3ed);
+  border-radius: 12px;
+}
+
+.auth-tab {
+  min-height: 40px;
+  padding: 0 12px;
+
+  color: var(--text-muted, #505866);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
+
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.auth-tab--active {
+  color: var(--text, #172033);
+
+  background: var(--surface, #fff);
+  box-shadow: 0 1px 4px rgb(21 29 48 / 16%);
+}
+
+.auth-tab:focus-visible {
+  outline: 2px solid var(--accent-text, #5649e9);
+  outline-offset: 2px;
+}
+
+.auth-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.auth-secondary {
+  display: flex;
+  justify-content: center;
+}
+
+.auth-lead {
+  margin: 0;
+}
+
+/*
+ * Botón principal centrado: nunca más ancho que 400px (igual que el de Google), centrado en la tarjeta y a todo el
+ * ancho disponible en móvil, con el contenido centrado.
+ */
+.login-submit--centered {
+  box-sizing: border-box;
+  align-self: center;
+  justify-self: center;
+  justify-content: center;
+
+  width: min(100%, 400px);
+  margin-inline: auto;
+
+  text-align: center;
+}
+
+@media (width <= 560px) {
+  .auth-tab {
+    font-size: 0.84rem;
+  }
+
+  .login-submit--centered,
+  .google-button {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-tab,
+  .login-submit {
+    transition: none;
+  }
+}
+
+:host-context(html[data-theme='dark']) .auth-tabs {
+  background: var(--surface-muted, #2b2c2f);
+}
+
+:host-context(html[data-theme='dark']) .auth-tab--active {
+  background: var(--surface, #1f2022);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 40%);
 }
