@@ -1,37 +1,45 @@
 # Staging package (markettec-users-v1, revision 1)
 
 The `staging` inputs target `markettec-users-v1:1` on APIM `markettec-api`. The
-`ms-users-google-v1` profile includes Google and Magic Link. The backend route
-inventory identifies [ms-users `be4595cfda702848fbd10dd8b2e8b36f126c548c`](https://github.com/a-calderon-org/ms-users-market-tec/commit/be4595cfda702848fbd10dd8b2e8b36f126c548c)
-(PR #33). The JWKS snapshot uses kid `stg-jwt-2026-11`.
+backend route inventory identifies [ms-users `8707f03cf61c1e0bbe042a24ae6a2d721609e6f7`](https://github.com/a-calderon-org/ms-users-market-tec/commit/8707f03cf61c1e0bbe042a24ae6a2d721609e6f7)
+(PR #34): the 22 routes of `be4595c` plus the five password routes (27). The manifest
+lists the same 27 operations. The JWKS snapshot uses kid `stg-jwt-2026-11`.
 
-**Verified against deployment artifacts.** The staged inputs match the deployment
-snapshot. Both Magic Link operation policies exported after deployment match the
-locally generated candidates after XML canonicalization. This comparison covers
-those two exports.
+**Deployed state (2026-11-10, read-only check).** Azure runs the `ms-users-google-v1`
+package built from the previous inputs (backend `be4595c`, 22 operations). Policies
+generated from those inputs (Git history before this change) match all 22 operation
+exports and the API scope after XML canonicalization. ms-users runs image `be4595c`.
 
-**Review provenance.** The deployment snapshot rebinds the `abuse_protection`
-record to the deployed backend and OpenAPI bytes. It carries forward the historical
-reference [ms-users PR #32](https://github.com/a-calderon-org/ms-users-market-tec/pull/32).
-A separate approval for this binding was not verified. The [prior evidence for
-`fc7e18f`](https://github.com/a-calderon-org/market_tec/blob/69e469e9a26b184d94c36ca798422a3d25141fbc/infra/apim/staging/evidence/abuse_protection.staging.json)
-remains available in Git history.
+**Proposed: password activation (`ms-users-password-v1`). Not approved, not deployed.**
+The existing `abuse_protection` evidence is bound to `be4595c` and to `users.json`
+alone, so generation with these inputs is **refused** until the operator records, after
+explicit authorization, new evidence documents in `evidence/`:
 
-From the repository root, verify the SHA-256 values against `openapi_sha256` in
-the evidence and `approvals.abuse_protection.evidence_sha256` in the staging manifest.
+* `abuse_protection`: backend `8707f03`, contract binding with the extension (below).
+  Without it every anonymous operation, including Google and Magic Link, is denied.
+* `ms_users_contract`: same binding. Without it the five password operations stay terminal
+  503 `BACKEND_CONTRACT_PENDING` (the other ten are unaffected).
+
+Compute the contract binding (version and SHA-256) the evidence must contain:
 
 ```bash
-shasum -a 256 contracts/openapi/users.json \
-  infra/apim/staging/evidence/abuse_protection.staging.json
+python3 -c "import sys; sys.path.insert(0, 'infra/apim'); import generate_policies as g; print(*g.contract_binding(open('contracts/openapi/users.json','rb').read(), open('contracts/openapi/users-password.json','rb').read()))"
 ```
 
-Set `UPSTREAM_GLOBAL_XML` and `UPSTREAM_API_XML` to the saved APIM scope exports
-and `OUTPUT_DIR` to a new local directory. Generate the candidate package locally.
+**Review provenance.** The previous deployment snapshot rebound the `abuse_protection`
+record to the deployed backend and OpenAPI bytes, carrying forward the historical
+reference [ms-users PR #32](https://github.com/a-calderon-org/ms-users-market-tec/pull/32);
+a separate approval for that binding was not verified. A new binding needs its own
+reviewed `review_id`; reusing PR #32 does not cover the password operations.
+
+Set `UPSTREAM_GLOBAL_XML` and `UPSTREAM_API_XML` to fresh APIM scope exports and
+`OUTPUT_DIR` to a new local directory. Generate the candidate package locally.
 
 ```bash
-python3 infra/apim/generate_policies.py --mode package --release ms-users-google-v1 \
+python3 infra/apim/generate_policies.py --mode package --release ms-users-password-v1 \
   --manifest infra/apim/staging/operations.staging.json \
   --openapi contracts/openapi/users.json \
+  --openapi-extension contracts/openapi/users-password.json \
   --backend-routes infra/apim/staging/backend-routes.staging.json \
   --evidence-dir infra/apim/staging/evidence \
   --allowed-origin https://victorious-beach-0a55f0c1e.2.azurestaticapps.net \
@@ -41,3 +49,6 @@ python3 infra/apim/generate_policies.py --mode package --release ms-users-google
   --upstream-global "$UPSTREAM_GLOBAL_XML" --upstream-api "$UPSTREAM_API_XML" \
   --gateway-auth-resource api://9ef55975-8943-4bc4-9e98-21457569d4cc --output-dir "$OUTPUT_DIR"
 ```
+
+Before applying, compare the ten `ms-users-google-v1` operations and `api-scope.candidate.xml`
+with fresh exports: they must be unchanged. Only the five password operations are new.

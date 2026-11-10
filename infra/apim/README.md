@@ -27,6 +27,29 @@ without `abuse_protection`). It also writes a candidate keyless API definition (
 (`api-scope.*`) and the resolved Angular → APIM → ms-users chain (`route_check.py`). Nothing is applied to Azure.
 Operator steps: [`docs/MTEC12_41_MS_USERS_STAGING_HANDOFF.md`](../../docs/MTEC12_41_MS_USERS_STAGING_HANDOFF.md).
 
+## Password extension and profile `ms-users-password-v1` (Proposed)
+
+`--openapi-extension contracts/openapi/users-password.json` adds the five password operations of ms-users
+`8707f03` (PR #34) to `users.json` without changing it. Their security rows live in `PASSWORD_SECURITY_REFERENCE`
+(`security_reference.py`); the 22-row `SECURITY_REFERENCE`, its digest, `operations.json` and the B07 matrix are
+unchanged. The generator accepts the extension only if it declares `x-extends` `users.json` with the same version,
+adds exactly those five routes and overlaps none of the base paths.
+
+| Operation | Class | Gateway checks |
+| --- | --- | --- |
+| `POST /auth/password/login`, `POST /auth/password/recovery/requests` | public, anonymous admission | Origin; needs `abuse_protection` |
+| `GET /me/password` | jwt | `validate-jwt` |
+| `POST`/`PUT /me/password` | jwt, `csrf: session` | Origin, `X-CSRF-Token` presence/format, `validate-jwt` |
+
+`csrf: session` is valid only for cookieless internal-JWT writes: ms-users binds the token to the JWT's session
+(`SessionAuthority.requireCsrf`), so the gateway checks only presence and format. All five rows are
+`pending_password_contract` and stay terminal 503 `BACKEND_CONTRACT_PENDING` until an `ms_users_contract` evidence
+document exists. With the extension, evidence binds to both files: `openapi_contract_version` =
+`<users.json version>+users-password-<extension version>` and `openapi_sha256` = SHA-256 of
+`"<users.json sha256>\n<users-password.json sha256>\n"` (`contract_binding()`); evidence bound to `users.json` alone is
+rejected. The profile `ms-users-password-v1` = `ms-users-google-v1` + the five operations (same API, CORS headers
+and methods). The SPA does not call `PUT /me/password` yet; the route is still checked end to end by `route_check.py`.
+
 Gateway authentication (MTEC-12/D04): `--gateway-auth-resource api://<app id>` ends every forwarded operation with
 `authentication-managed-identity` for that resource (Container Apps authentication in front of ms-users). Because that
 replaces `Authorization`, internal-JWT operations first copy the validated user JWT to `X-MTEC-User-Authorization`

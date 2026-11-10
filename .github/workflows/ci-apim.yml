@@ -5,6 +5,7 @@ on:
     paths:
       - 'infra/apim/**'
       - 'contracts/openapi/users.json'
+      - 'contracts/openapi/users-password.json'
       - 'app/frontend/src/app/core/api/api-url.ts'
       - 'app/frontend/src/app/core/auth/v2/http-auth-api.adapter.ts'
       - 'app/frontend/src/app/features/profile/services/user.service.ts'
@@ -13,6 +14,7 @@ on:
     paths:
       - 'infra/apim/**'
       - 'contracts/openapi/users.json'
+      - 'contracts/openapi/users-password.json'
       - 'app/frontend/src/app/core/api/api-url.ts'
       - 'app/frontend/src/app/core/auth/v2/http-auth-api.adapter.ts'
       - 'app/frontend/src/app/features/profile/services/user.service.ts'
