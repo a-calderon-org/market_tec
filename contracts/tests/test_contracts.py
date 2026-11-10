@@ -259,7 +259,7 @@ class OpenApiContractsTest(unittest.TestCase):
             ("/v1/publicaciones", "get"): {"200", "400", "401"},
             ("/v1/publicaciones", "post"): {"201", "400", "401", "409", "503"},
             ("/v1/publicaciones/{publicationId}", "get"): {"200", "400", "401", "404"},
-            ("/v1/publicaciones/{publicationId}", "put"): {"200", "400", "401", "403", "404", "409", "503"},
+            ("/v1/publicaciones/{publicationId}", "put"): {"200", "400", "401", "403", "404", "409"},
         }
         for (route, method), codes in expected.items():
             with self.subTest(route=route, method=method):
@@ -270,6 +270,8 @@ class OpenApiContractsTest(unittest.TestCase):
         for field in ("userId", "vendedor", "ownerId", "propietario", "id"):
             self.assertNotIn(field, write["properties"])
         self.assertFalse(write["additionalProperties"])
+        # Updates never consult ms-users, so they cannot fail with SELLER_PROFILE_UNAVAILABLE.
+        self.assertNotIn("503", document["paths"]["/v1/publicaciones/{publicationId}"]["put"]["responses"])
         seller_id = document["components"]["schemas"]["SellerV1"]["properties"]["id"]
         self.assertEqual(["integer", "null"], seller_id["type"])
 

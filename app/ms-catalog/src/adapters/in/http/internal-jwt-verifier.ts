@@ -17,6 +17,7 @@ export interface KeySource {
 const MAX_TOKEN_CHARS = 8192;
 const COMPACT = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 const HEX32 = /^[0-9a-f]{32}$/;
+const MAX_LIFETIME_SECONDS = 240;
 const FORBIDDEN_HEADERS = ['jku', 'jwk', 'x5u', 'x5c', 'crit'];
 
 export function parseJwks(value: unknown): Map<string, KeyObject> {
@@ -29,6 +30,7 @@ export function parseJwks(value: unknown): Map<string, KeyObject> {
     if ('d' in jwk) throw new Error('JWKS must not contain private keys');
     const key = createPublicKey({ key: { kty: 'RSA', n: jwk.n, e: jwk.e } as JsonWebKey, format: 'jwk' });
     if ((key.asymmetricKeyDetails?.modulusLength ?? 0) < 2048) continue;
+    if (keys.has(jwk.kid)) throw new Error('JWKS has duplicate kid');
     keys.set(jwk.kid, key);
   }
   if (!keys.size) throw new Error('JWKS has no usable RS256 keys');
@@ -41,33 +43,40 @@ export class StaticJwks implements KeySource {
   async key(kid: string) { return this.keys.get(kid); }
 }
 
-// Fetches the published JWKS, caches it and refreshes on unknown kid at most once per minRefreshMs.
+/**
+ * Fetches the published JWKS from a fixed URI. Keys are refreshed after ttlMs and on an unknown kid, never more
+ * than once per minRefreshMs. If refreshing fails, the last verified keys are trusted only until maxStaleMs after
+ * their fetch; past that every token is rejected (fail closed, never indefinite trust).
+ */
 export class RemoteJwks implements KeySource {
   private keys = new Map<string, KeyObject>();
   private fetchedAt: number | undefined;
+  private attemptedAt: number | undefined;
   private pending: Promise<void> | undefined;
 
   constructor(private readonly uri: string, private readonly fetchFn: typeof fetch = fetch,
     private readonly now: () => number = Date.now, private readonly ttlMs = 300_000,
-    private readonly minRefreshMs = 30_000) {}
+    private readonly minRefreshMs = 30_000, private readonly maxStaleMs = 600_000) {}
 
   async key(kid: string) {
-    const age = this.fetchedAt === undefined ? Infinity : this.now() - this.fetchedAt;
-    if (age > this.ttlMs || (!this.keys.has(kid) && age > this.minRefreshMs)) await this.refresh();
+    const since = (time: number | undefined) => time === undefined ? Infinity : this.now() - time;
+    const wanted = since(this.fetchedAt) > this.ttlMs || !this.keys.has(kid);
+    if (wanted && since(this.attemptedAt) > this.minRefreshMs) await this.refresh();
+    if (since(this.fetchedAt) > this.maxStaleMs) throw new Error('JWKS unavailable');
     return this.keys.get(kid);
   }
 
   private refresh(): Promise<void> {
     this.pending ??= (async () => {
+      this.attemptedAt = this.now();
       try {
         const response = await this.fetchFn(this.uri, { headers: { Accept: 'application/json' }, redirect: 'error',
           signal: AbortSignal.timeout(10_000) });
         if (!response.ok) throw new Error(`JWKS fetch failed with ${response.status}`);
         this.keys = parseJwks(await response.json());
         this.fetchedAt = this.now();
-      } catch (error) {
-        // Keep previously verified keys; without any key every token is rejected (fail closed).
-        if (!this.keys.size) throw error;
+      } catch {
+        // Keep the last verified keys; key() enforces maxStaleMs.
       } finally {
         this.pending = undefined;
       }
@@ -104,15 +113,17 @@ export class InternalJwtVerifier {
     const claims = decode(encodedPayload);
     if (!claims) return undefined;
     const now = this.options.nowSeconds?.() ?? Math.floor(Date.now() / 1000);
-    const skew = this.options.clockSkewSeconds ?? 30;
-    const audience = claims.aud;
-    const audienceOk = audience === this.options.audience ||
-      (Array.isArray(audience) && audience.length === 1 && audience[0] === this.options.audience);
+    // No positive tolerance by default, as ms-users and the APIM policy (clock-skew="0").
+    const skew = this.options.clockSkewSeconds ?? 0;
+    // Identity contract §6: aud is a single string equal to the configured audience.
+    const audienceOk = claims.aud === this.options.audience;
     const { sub, sid, jti, iat, exp, nbf } = claims;
     if (claims.iss !== this.options.issuer || !audienceOk) return undefined;
     if (typeof sub !== 'string' || !sub.trim() || sub.length > 64) return undefined;
     if (typeof sid !== 'string' || !HEX32.test(sid) || typeof jti !== 'string' || !HEX32.test(jti)) return undefined;
-    if (!isTime(iat) || !isTime(exp) || exp <= iat || now >= exp || iat > now + skew) return undefined;
+    // 0 < exp-iat <= 240 s and exp itself is already expired (identity contract §6).
+    if (!isTime(iat) || !isTime(exp) || exp <= iat || exp - iat > MAX_LIFETIME_SECONDS || now >= exp ||
+      iat > now + skew) return undefined;
     if (nbf !== undefined && (!isTime(nbf) || nbf > now + skew)) return undefined;
     return { userId: sub, sessionId: sid, tokenId: jti, expiresAt: exp, credential: token };
   }

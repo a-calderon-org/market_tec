@@ -37,7 +37,8 @@ export interface PublicationPage {
 export interface Publications {
   create(actor: PublicationActor, content: PublicationContent): Promise<PublicationView>;
   get(id: string): Promise<PublicationView>;
-  update(actor: PublicationActor, id: string, content: PublicationContent): Promise<PublicationView>;
+  // Only the owner id is needed: the original seller snapshot is preserved.
+  update(actor: Pick<PublicationActor, 'userId'>, id: string, content: PublicationContent): Promise<PublicationView>;
   list(filter?: PublicationFilter): Promise<PublicationPage>;
   listOwned(actor: PublicationActor, filter?: PublicationFilter): Promise<PublicationPage>;
 }

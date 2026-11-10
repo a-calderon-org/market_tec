@@ -83,7 +83,9 @@ export function createPublicationRouter(dependencies: PublicationHttpDependencie
     });
     router.put('/:publicationId', async (request, response) => {
       const content = parseContent(request.body);
-      response.json(await writes.publications.update(await actor(request), request.params.publicationId as string, content));
+      // Ownership uses only the verified subject; ms-users is not consulted on updates.
+      const owner = { userId: identities.get(request)!.userId };
+      response.json(await writes.publications.update(owner, request.params.publicationId as string, content));
     });
   }
   router.get('/', async (request, response) => {

@@ -115,7 +115,12 @@ test('tampered, expired, foreign-key and wrong issuer/audience/type tokens are r
     type: mint('usr-google', { header: { typ: 'JWT' } }),
     algNone: `${b64({ alg: 'none', typ: 'at+jwt', kid: 'stg-test' })}.${p}.`,
     noSubject: mint('', {}),
-    future: mint('usr-google', { claims: { iat: NOW + 120, exp: NOW + 300 } }),
+    future: mint('usr-google', { claims: { iat: NOW + 1, exp: NOW + 200 } }),
+    expiresNow: mint('usr-google', { claims: { iat: NOW - 240, exp: NOW } }),
+    tooLong: mint('usr-google', { claims: { iat: NOW - 10, exp: NOW + 300 } }),
+    audienceArray: mint('usr-google', { claims: { aud: [AUDIENCE] } }),
+    stringTimes: mint('usr-google', { claims: { iat: String(NOW - 10) } }),
+    badSid: mint('usr-google', { claims: { sid: 'not-hex' } }),
     embeddedJwk: mint('usr-google', { header: { jwk: jwk(foreign.publicKey, 'x') } }),
   };
   for (const [name, token] of Object.entries(rejected)) {
@@ -149,10 +154,16 @@ test('seller snapshot failures never write: revoked session 401, unavailable or 
   profileMode = 'ok';
   assert.equal((await call('POST', '', mint('usr-mismatch'), content)).status, 503);
   assert.equal((await (await call('GET', '', mint('usr-google'))).json()).totalRecords, before);
-  // Reads and authentication never call ms-users; only writes resolve the seller snapshot.
+  // Reads, authentication and updates never call ms-users; only creation resolves the seller snapshot.
   profileCalls.length = 0;
-  await call('GET', '', mint('usr-google'));
+  profileMode = 'down';
+  const list = await (await call('GET', '', mint('usr-google'))).json();
+  const own = list.items.find((item: { vendedor: { userId: string } }) => item.vendedor.userId === 'usr-google');
+  assert.equal((await call('PUT', `/${own.id}`, mint('usr-google'), content)).status, 200);
+  assert.equal((await call('PUT', `/${own.id}`, mint('usr-magic'), content)).status, 403);
+  assert.equal((await call('PUT', '/missing', mint('usr-magic'), content)).status, 404);
   assert.deepEqual(profileCalls, []);
+  profileMode = 'ok';
 });
 
 test('RemoteJwks fetches the published JWKS once and refreshes for a rotated kid', async () => {
@@ -175,8 +186,25 @@ test('RemoteJwks fetches the published JWKS once and refreshes for a rotated kid
   assert.equal(fetches, 2);
 });
 
+test('RemoteJwks keeps known keys only for a bounded time when refresh fails, then fails closed', async () => {
+  let now = 0;
+  let healthy = true;
+  const keys = new RemoteJwks('https://users.example.test/.well-known/jwks.json', async () => {
+    if (!healthy) throw new TypeError('fetch failed');
+    return Response.json(JWKS);
+  }, () => now, 300_000, 30_000, 600_000);
+  const verifier = new InternalJwtVerifier({ issuer: ISSUER, audience: AUDIENCE, keys, nowSeconds: () => NOW });
+  assert.ok(await verifier.verify(mint('usr-google')));
+  healthy = false;
+  now = 400_000;
+  assert.ok(await verifier.verify(mint('usr-google')), 'stale but within maxStaleMs');
+  now = 700_000;
+  await assert.rejects(verifier.verify(mint('usr-google')), /JWKS unavailable/);
+});
+
 test('static JWKS rejects private material and the bearer parser accepts a single Bearer token only', () => {
   assert.throws(() => new StaticJwks({ keys: [{ ...signing.privateKey.export({ format: 'jwk' }), kid: 'k' }] }));
+  assert.throws(() => new StaticJwks({ keys: [JWKS.keys[0], JWKS.keys[0]] }), /duplicate kid/);
   assert.equal(bearerToken('Bearer a.b.c'), 'a.b.c');
   for (const value of [undefined, 'bearer a.b.c', 'Bearer a.b.c extra', 'Basic abc', ['Bearer a.b.c']]) {
     assert.equal(bearerToken(value as string | undefined), undefined);

@@ -6,11 +6,12 @@ de invocar los casos de uso. El repositorio y puerto de imagenes son inyectados.
 Las pruebas simulan dos usuarios y verifican 201/403 y respuestas JSON Schema;
 no acreditan un flujo real con JWT/APIM/ms-users.
 
-**MTEC-32, Verificado localmente:** en pruebas HTTP aisladas, Express invoca un
-autenticador inyectado antes de consultar `PublicationService` y el repositorio en
-memoria. La respuesta es plana y conserva fechas e IDs de compatibilidad. Este
-flujo no esta conectado a Angular/APIM ni habilitado en el arranque normal; ver
-[fixture y limitaciones](../../app/ms-catalog/README.md#mtec-32--incremento-de-lectura-http-en-pruebas).
+**MTEC-32, Verificado localmente:** Express verifica el JWT interno (RS256, JWKS de
+ms-users, iss/aud/tiempos) antes de invocar `PublicationService` y el repositorio en
+memoria; el propietario es el `sub`. Solo el alta consulta `GET /v1/me/profile` de
+ms-users con el mismo token para el snapshot del vendedor. Habilitado en el arranque
+normal solo con configuracion explicita; no desplegado ni probado E2E; ver
+[autenticacion real](../../app/ms-catalog/README.md#autenticacion-real-con-el-jwt-interno-de-ms-users).
 
 ## Autenticación
 
