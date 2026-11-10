@@ -19,6 +19,7 @@ import {
 import { AuthRequiredError } from './auth-contract';
 import { AuthSessionService } from './auth-session.service';
 import { bearerHeaderName } from './auth-v2-config';
+import { FEATURE_FLAGS } from '../../feature-flags';
 
 /**
  * Interceptor del núcleo v2 (flag `authCoreV2`), política D-11:
@@ -39,6 +40,8 @@ import { bearerHeaderName } from './auth-v2-config';
  *   cualquier otra ruta o método del mismo origen se bloquea antes de `next()`.
  * - Publicaciones: las operaciones exactas de `isCatalogOperation` hacia `catalogApiBaseUrl` salen con el ID
  *   Token de Google en memoria (`GoogleCatalogCredential`), nunca con el JWT interno. Sin token, no salen.
+ *   Con `catalogInternalJwt` (ms-catalog propio) salen en cambio con el JWT interno, nunca con el de Google,
+ *   e incluyen `PUT /publicaciones/{id}`.
  * - NO envía `Ocp-Apim-Subscription-Key` ni ninguna clave de APIM.
  * - `401` de negocio: se propaga el error y se gestiona la pérdida de sesión; la
  *   petición original NUNCA se reejecuta (GET, POST, PUT, PATCH ni DELETE).
@@ -56,9 +59,18 @@ export const authCoreV2Interceptor: HttpInterceptorFn = (req, next) => {
 
   const transport = inject(AUTH_V2_BUSINESS_TRANSPORT);
 
-  // Publicaciones (proxy same-origin del catálogo): lista exacta de operaciones, solo con el ID Token de Google
-  // retenido en memoria. Nunca el JWT interno; las cookies de ms-users las descarta el proxy.
-  if (transport !== 'blocked' && isCatalogOperation(req.url, req.method, catalogApiBase())) {
+  const catalogBase = catalogApiBase();
+  const catalogInternalJwt = inject(FEATURE_FLAGS).catalogInternalJwt === true;
+
+  // Publicaciones con el ms-catalog propio (`catalogInternalJwt`): lista exacta de operaciones, solo con el JWT
+  // interno de ms-users (sesión Google o Magic Link) y solo hacia `catalogApiBaseUrl`. Nunca el ID Token de Google.
+  if (transport !== 'blocked' && catalogInternalJwt && isCatalogOperation(req.url, req.method, catalogBase, true)) {
+    return sendWithInternalJwt(req, next, bearerHeaderName(catalogBase));
+  }
+
+  // Publicaciones (proxy same-origin del catálogo heredado): lista exacta de operaciones, solo con el ID Token de
+  // Google retenido en memoria. Nunca el JWT interno; las cookies de ms-users las descarta el proxy.
+  if (transport !== 'blocked' && !catalogInternalJwt && isCatalogOperation(req.url, req.method, catalogBase)) {
     const googleToken = inject(GoogleCatalogCredential).current();
 
     if (!googleToken) {
@@ -108,6 +120,15 @@ export const authCoreV2Interceptor: HttpInterceptorFn = (req, next) => {
     return next(req);
   }
 
+  return sendWithInternalJwt(req, next, bearerHeaderName(environment.apiBaseUrl));
+};
+
+/** Adjunta el JWT interno vigente (revalidado justo antes de `next`) en `headerName`; nunca reejecuta un 401. */
+function sendWithInternalJwt(
+  req: Parameters<HttpInterceptorFn>[0],
+  next: Parameters<HttpInterceptorFn>[1],
+  headerName: string,
+): ReturnType<HttpInterceptorFn> {
   const session = inject(AuthSessionService);
 
   return from(session.acquireAccessCredential()).pipe(
@@ -128,7 +149,7 @@ export const authCoreV2Interceptor: HttpInterceptorFn = (req, next) => {
         return throwError(() => new AuthRequiredError(reason));
       }
 
-      return next(req.clone({ setHeaders: { [bearerHeaderName(environment.apiBaseUrl)]: `Bearer ${token}` } })).pipe(
+      return next(req.clone({ setHeaders: { [headerName]: `Bearer ${token}` } })).pipe(
         catchError((error: unknown) => {
           if (error instanceof HttpErrorResponse && error.status === 401) {
             session.handleBusinessUnauthorized(token);
@@ -139,4 +160,4 @@ export const authCoreV2Interceptor: HttpInterceptorFn = (req, next) => {
       );
     }),
   );
-};
+}

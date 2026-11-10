@@ -119,4 +119,15 @@ export class PublicationService {
       publication
     );
   }
+
+  /** Solo con el ms-catalog propio (JWT interno): reemplaza el contenido de una publicación propia. */
+  updatePublication(
+    id: string,
+    publication: CreatePublication
+  ): Observable<PublicationDetail> {
+    return this.apiClient.put<PublicationDetail>(
+      `/publicaciones/${encodeURIComponent(id)}`,
+      publication
+    );
+  }
 }

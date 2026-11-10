@@ -24,12 +24,19 @@ export interface FeatureFlags {
    * ella el adaptador HTTP no se construye. No sustituye a los flags de ms-users.
    */
   readonly authCoreV2HttpTopologyVerified?: boolean;
+  /**
+   * Publicaciones con el JWT interno de ms-users hacia el ms-catalog propio (`catalogApiBaseUrl` apuntando al proxy
+   * `/api/catalog-v2/v1`), válido para sesiones Google y Magic Link. Apagado por defecto: se conserva el camino
+   * heredado (ID Token de Google hacia `markettec-api-v1`). Solo tiene efecto con `authCoreV2`.
+   */
+  readonly catalogInternalJwt?: boolean;
 }
 
 export const DEFAULT_FEATURE_FLAGS: FeatureFlags = Object.freeze({
   authCoreV2: false,
   authCoreV2Adapter: 'mock',
   authCoreV2HttpTopologyVerified: false,
+  catalogInternalJwt: false,
 });
 
 /**
@@ -50,6 +57,10 @@ export function resolveFeatureFlags(source: unknown): FeatureFlags {
       typeof raw['authCoreV2HttpTopologyVerified'] === 'boolean'
         ? raw['authCoreV2HttpTopologyVerified']
         : DEFAULT_FEATURE_FLAGS.authCoreV2HttpTopologyVerified,
+    catalogInternalJwt:
+      typeof raw['catalogInternalJwt'] === 'boolean'
+        ? raw['catalogInternalJwt']
+        : DEFAULT_FEATURE_FLAGS.catalogInternalJwt,
   });
 }
 
