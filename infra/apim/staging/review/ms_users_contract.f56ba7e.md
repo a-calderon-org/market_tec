@@ -1,5 +1,7 @@
 # Revisión `ms_users_contract` — ms-users `f56ba7e`, staging (candidato, no liberable)
 
+**Registrado (solo staging):** la evidencia aprobada es [`evidence/ms_users_contract.f56ba7e.staging.json`](../evidence/ms_users_contract.f56ba7e.staging.json), `review_id` `a-calderon-org/market_tec#54/reviews/5846068230` (decisión del responsable, `COMMENTED`); aprobación técnica independiente: review `5846443018` (SebastianVD32, `APPROVED`). El texto siguiente es el expediente revisado y no cambia.
+
 **Estado: Proposed. Candidato de revisión. No es evidencia aprobada.** Este documento y
 [`ms_users_contract.f56ba7e.candidate.json`](ms_users_contract.f56ba7e.candidate.json) existen para que una
 persona autorizada apruebe (o rechace) en GitHub la reconciliación de las cinco operaciones de contraseña. El
