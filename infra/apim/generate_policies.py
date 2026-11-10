@@ -21,6 +21,8 @@ Fail-closed rules:
   internal-JWT operation into a terminal deny instead of requiring JWKS/issuer/audience, and
   `no_product_scope` records that the API belongs to no APIM product instead of requiring a product
   export. Neither can enable an operation; both are recorded in the output.
+* Password extension (optional): `openapi_extension` adds the operations of contracts/openapi/users-password.json
+  and their PASSWORD_SECURITY_REFERENCE rows. Approvals then bind to both contract files (EXTENSION_* below).
 """
 import argparse
 import hashlib
@@ -35,8 +37,8 @@ from xml.etree import ElementTree as ET
 from build_jwt_policy import build as build_jwt
 from policy_schema import valid_https_origin, validate_policy
 from release_profiles import NOT_RELEASED, profile as release_profile
-from route_check import resolve as resolve_routes
-from security_reference import COOKIE_NAMES, SECURITY_REFERENCE
+from route_check import expected_calls, resolve as resolve_routes
+from security_reference import COOKIE_NAMES, PASSWORD_SECURITY_REFERENCE, SECURITY_REFERENCE
 
 HERE = Path(__file__).parent
 AUTH = {"public", "cookie", "jwt", "jwt_cookie"}
@@ -63,6 +65,11 @@ EVIDENCE_DIR = HERE / "evidence"
 EVIDENCE_FIELDS = {"approval_type", "backend_sha", "openapi_contract_version", "openapi_sha256", "environment",
                    "apim_revision", "review_id"}
 EVIDENCE_FILE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,79}\.json")
+CSRF_MODES = ("none", "required", "if_cookie", "session")
+CONTRACT_STATUSES = ("reconciled", "pending_ms_users_pr23", "pending_password_contract")
+# The only supported extension contract: additive to users.json, same base version, disjoint routes.
+EXTENSION_DOCUMENT = "users.json"
+EXTENSION_LABEL = "users-password"
 TOKEN = re.compile(r"[A-Za-z0-9._:/#-]{3,128}")
 BACKEND_SHA = re.compile(r"[0-9a-f]{40}")
 REQUIRED_EXPORTS = {
@@ -122,19 +129,21 @@ def validate(manifest: dict) -> list:
             raise ValueError("invalid cookies")
         if op["cookie_mode"] not in ("none", "required", "optional") or (op["cookie_mode"] == "none") != (not cookies):
             raise ValueError("cookie_mode inconsistent with cookies")
-        if op["csrf"] not in ("none", "required", "if_cookie"):
+        if op["csrf"] not in CSRF_MODES:
             raise ValueError("invalid csrf mode")
         if (op["csrf"] == "required" and op["cookie_mode"] != "required") or (op["csrf"] == "if_cookie" and op["cookie_mode"] != "optional"):
             raise ValueError("csrf mode inconsistent with cookie_mode")
         if op["method"] != "GET" and cookies and op["csrf"] == "none":
             raise ValueError("state-changing cookie operation requires csrf")
+        if op["csrf"] == "session" and (op["auth"] != "jwt" or op["cookie_mode"] != "none"):
+            raise ValueError("session csrf applies to internal-JWT operations without cookies only")
         if op["csrf"] != "none" and not op["origin"]:
             raise ValueError("csrf-protected operation must enforce Origin")
         if op["method"] == "GET" and (op["csrf"] != "none" or op["origin"]):
             raise ValueError("safe method cannot require origin or csrf")
         if not isinstance(op["origin"], bool) or not isinstance(op["anonymous_admission"], bool):
             raise ValueError("invalid boolean flag")
-        if op["contract_status"] not in ("reconciled", "pending_ms_users_pr23"):
+        if op["contract_status"] not in CONTRACT_STATUSES:
             raise ValueError("invalid contract_status")
         if op["auth"] in ("jwt", "jwt_cookie") and op["anonymous_admission"]:
             raise ValueError("jwt operation cannot admit anonymous traffic")
@@ -151,21 +160,21 @@ def validate(manifest: dict) -> list:
     return ops
 
 
-def verify_reference(ops: list) -> None:
+def verify_reference(ops: list, reference: dict = SECURITY_REFERENCE) -> None:
     """The manifest may not differ from the reviewed security reference in any direction."""
-    if {(o["method"], o["backend_path"]) for o in ops} != set(SECURITY_REFERENCE):
+    if {(o["method"], o["backend_path"]) for o in ops} != set(reference):
         raise ValueError("operations differ from the security reference")
     for op in ops:
-        expected = SECURITY_REFERENCE[(op["method"], op["backend_path"])]
+        expected = reference[(op["method"], op["backend_path"])]
         for field in REFERENCE_FIELDS:
             if op[field] != expected[field]:
                 raise ValueError(f"{op['id']}: {field} differs from the security reference")
 
 
-def verify_sources(manifest: dict, openapi: dict, backend_routes: dict) -> None:
+def verify_sources(manifest: dict, openapi: dict, backend_routes: dict, reference: dict = SECURITY_REFERENCE) -> None:
     """Reject mappings that disagree with the security reference, OpenAPI or the real controllers."""
     ops = validate(manifest)
-    verify_reference(ops)
+    verify_reference(ops, reference)
     java = {tuple(route) for route in backend_routes["routes"]}
     declared = {(op["method"], op["backend_path"]) for op in ops}
     if declared != java:
@@ -276,7 +285,8 @@ def checks_for(op: dict) -> list:
         else:
             condition = f"@{{ return {_count(name)} > 1 || ({_count(name)} == 1 && !{_valid(name)}); }}"
         checks.append(_guard(condition, 401, "Unauthorized", COOKIE_ERRORS[kind]))
-    if op["csrf"] == "required":
+    if op["csrf"] in ("required", "session"):
+        # `session`: no cookie; ms-users verifies the token against the session of the validated JWT.
         checks.append(_guard(f"@{{ return {_csrf_invalid()}; }}", 403, "Forbidden", "CSRF_INVALID"))
     elif op["csrf"] == "if_cookie":
         # Idempotent logout: no cookie means no CSRF demand and ms-users answers 204.
@@ -397,17 +407,49 @@ def policy_for(op: dict, approvals: dict, jwks, issuer: str, audience: str, rele
     return xml
 
 
-def _prepare(manifest, openapi_bytes, backend_routes, evidence_dir):
-    """`openapi_bytes` are the exact bytes of the contract used; evidence is bound to their SHA-256."""
+def merge_extension(openapi: dict, extension: dict) -> dict:
+    """users.json + the additive password extension; refuses anything that is not a disjoint, same-version addition."""
+    base_version = openapi.get("info", {}).get("version")
+    if extension.get("x-extends") != {"document": EXTENSION_DOCUMENT, "version": base_version}:
+        raise ValueError(f"extension must declare x-extends {EXTENSION_DOCUMENT} {base_version}")
+    spec = {(m.upper(), p) for p, item in extension.get("paths", {}).items() for m in item if m in ("get", "post", "put")}
+    if spec != set(PASSWORD_SECURITY_REFERENCE):
+        raise ValueError("extension operations differ from the password security reference")
+    if set(extension["paths"]) & set(openapi["paths"]):
+        raise ValueError("extension paths overlap the base contract")
+    return {**openapi, "paths": {**openapi["paths"], **extension["paths"]}}
+
+
+def contract_binding(openapi_bytes: bytes, extension_bytes=None) -> tuple:
+    """(version, sha256) evidence must match. Base only: users.json version and file SHA-256 (unchanged).
+    With the extension: `<base>+users-password-<ext>` and SHA-256 of "<base sha>\n<extension sha>\n"."""
+    base = json.loads(openapi_bytes)
+    version = base.get("info", {}).get("version")
+    digest = hashlib.sha256(openapi_bytes).hexdigest()
+    if extension_bytes is None:
+        return version, digest
+    ext = json.loads(extension_bytes)
+    combined = f"{digest}\n{hashlib.sha256(extension_bytes).hexdigest()}\n".encode()
+    return f"{version}+{EXTENSION_LABEL}-{ext.get('info', {}).get('version')}", hashlib.sha256(combined).hexdigest()
+
+
+def _prepare(manifest, openapi_bytes, backend_routes, evidence_dir, extension_bytes=None):
+    """`openapi_bytes` (and `extension_bytes`) are the exact contract bytes used; evidence is bound to them."""
     ops = validate(manifest)
-    verify_reference(ops)
     if not isinstance(openapi_bytes, (bytes, bytearray)) or backend_routes is None:
         raise ValueError("openapi file bytes and backend routes are required")
+    if extension_bytes is not None and not isinstance(extension_bytes, (bytes, bytearray)):
+        raise ValueError("extension must be the contract file bytes")
     openapi = json.loads(openapi_bytes)
-    verify_sources(manifest, openapi, backend_routes)
+    reference = SECURITY_REFERENCE
+    if extension_bytes is not None:
+        openapi = merge_extension(openapi, json.loads(extension_bytes))
+        reference = {**SECURITY_REFERENCE, **PASSWORD_SECURITY_REFERENCE}
+    verify_reference(ops, reference)
+    verify_sources(manifest, openapi, backend_routes, reference)
+    version, digest = contract_binding(openapi_bytes, extension_bytes)
     ctx = {"evidence_dir": evidence_dir or EVIDENCE_DIR, "backend_sha": backend_routes.get("sha"),
-           "openapi_version": openapi.get("info", {}).get("version"),
-           "openapi_sha256": hashlib.sha256(openapi_bytes).hexdigest()}
+           "openapi_version": version, "openapi_sha256": digest}
     return ops, {name: verify_approval(manifest, name, ctx) for name in APPROVALS}
 
 
@@ -487,7 +529,8 @@ def release_bundle(name: str, definitions: list, allowed_origins: list) -> dict:
     if api["subscriptionRequired"] is not False or api["protocols"] != ["https"] or api["service_url_path"]:
         raise ValueError("release API must be https-only, keyless and forward to the bare ms-users origin")
     chain = resolve_routes(f"{PLACEHOLDER_GATEWAY}/{api['path'].strip('/').rsplit('/v1', 1)[0]}", PLACEHOLDER_GATEWAY,
-                           api["path"], enabled, {d["id"]: PLACEHOLDER_USERS for d in enabled}, PLACEHOLDER_USERS)
+                           api["path"], enabled, {d["id"]: PLACEHOLDER_USERS for d in enabled}, PLACEHOLDER_USERS,
+                           expected_calls(spec["operations"]))
     return {"profile": name, "operations": sorted(released),
             "api_definition": {**api, "serviceUrl": None, "applied_in_azure": False,
                                "note": "candidate; serviceUrl is the bare ms-users origin supplied by the operator"},
@@ -521,9 +564,9 @@ def _result(kind, suffix, index, ops, manifest, approvals, report, jwks, issuer,
 
 
 def analyze(manifest, jwks, issuer, audience, upstream_xml=None, openapi=None, backend_routes=None, evidence_dir=None,
-            release=None, allowed_origins=None, gateway_resource=None) -> dict:
+            release=None, allowed_origins=None, gateway_resource=None, openapi_extension=None) -> dict:
     """Local review output (*.xml.txt). Never a package, whatever the inputs."""
-    ops, approvals = _prepare(manifest, openapi, backend_routes, evidence_dir)
+    ops, approvals = _prepare(manifest, openapi, backend_routes, evidence_dir, openapi_extension)
     report = upstream_report(upstream_xml)
     return _result("analysis", ".xml.txt", "operations.analysis.json", ops, manifest, approvals, report, jwks, issuer,
                    audience, release, allowed_origins, gateway_resource=gateway_resource)
@@ -531,7 +574,7 @@ def analyze(manifest, jwks, issuer, audience, upstream_xml=None, openapi=None, b
 
 def build_package(manifest, jwks, issuer, audience, upstream_xml=None, openapi=None, backend_routes=None, evidence_dir=None,
                   release=None, allowed_origins=None, jwt_unconfigured=False, no_product_scope=False,
-                  gateway_resource=None) -> dict:
+                  gateway_resource=None, openapi_extension=None) -> dict:
     """Candidate package (*.candidate.xml) or PackageError. Locally checked only; not Azure-validated or approved.
 
     `jwt_unconfigured` / `no_product_scope` build a partial staging package (release profile only): they never
@@ -539,7 +582,7 @@ def build_package(manifest, jwks, issuer, audience, upstream_xml=None, openapi=N
     """
     if (jwt_unconfigured or no_product_scope) and not release:
         raise PackageError("partial staging packages need a release profile")
-    ops, approvals = _prepare(manifest, openapi, backend_routes, evidence_dir)
+    ops, approvals = _prepare(manifest, openapi, backend_routes, evidence_dir, openapi_extension)
     report = upstream_report(upstream_xml, no_product_scope)
     if report["missing_exports"]:
         raise PackageError("missing verified upstream policy exports: " + ", ".join(report["missing_exports"]))
@@ -580,6 +623,8 @@ def main() -> None:
     parser.add_argument("--mode", choices=("analyze", "package"), required=True)
     parser.add_argument("--manifest", type=Path, default=HERE / "operations.json")
     parser.add_argument("--openapi", type=Path, default=HERE / "../../contracts/openapi/users.json")
+    parser.add_argument("--openapi-extension", type=Path,
+                        help="additive contract (contracts/openapi/users-password.json) merged with --openapi")
     parser.add_argument("--backend-routes", type=Path, default=HERE / "backend-routes.json")
     parser.add_argument("--evidence-dir", type=Path, default=EVIDENCE_DIR)
     parser.add_argument("--jwks", type=Path)
@@ -611,9 +656,10 @@ def main() -> None:
                   args.issuer, args.audience, upstream, args.openapi.read_bytes(),
                   json.loads(args.backend_routes.read_text()), args.evidence_dir, args.release, args.allowed_origin)
         gateway = args.gateway_auth_resource
+        extension = args.openapi_extension.read_bytes() if args.openapi_extension else None
         result = (build_package(*inputs, jwt_unconfigured=args.jwt_unconfigured, no_product_scope=args.no_product_scope,
-                                gateway_resource=gateway)
-                  if args.mode == "package" else analyze(*inputs, gateway_resource=gateway))
+                                gateway_resource=gateway, openapi_extension=extension)
+                  if args.mode == "package" else analyze(*inputs, gateway_resource=gateway, openapi_extension=extension))
         write_output(result, out)
     except (ValueError, OSError) as error:  # PackageError is a ValueError
         raise SystemExit(f"refused: {error}")

@@ -26,6 +26,26 @@ EXPECTED_CALLS = {
     "updateOwnUserProfile": ("PUT", "/me/profile", "/v1/me/profile"),
 }
 
+# Password extension (contracts/openapi/users-password.json). Source: http-auth-api.adapter.ts (login, recovery) and
+# password-credentials.service.ts (status, first password). The SPA does not call PUT /me/password yet; its entry
+# still proves the APIM route reaches the Java endpoint when a profile releases it.
+PASSWORD_CALLS = {
+    "loginWithPassword": ("POST", "/auth/password/login", "/v1/auth/password/login"),
+    "requestPasswordRecoveryLink": ("POST", "/auth/password/recovery/requests", "/v1/auth/password/recovery/requests"),
+    "getOwnPasswordStatus": ("GET", "/me/password", "/v1/me/password"),
+    "setOwnInitialPassword": ("POST", "/me/password", "/v1/me/password"),
+    "changeOwnPassword": ("PUT", "/me/password", "/v1/me/password"),
+}
+
+
+def expected_calls(operation_ids) -> dict:
+    """Expected calls for exactly these released operations; an operation without a known call is refused."""
+    known = {**EXPECTED_CALLS, **PASSWORD_CALLS}
+    missing = [op for op in operation_ids if op not in known]
+    if missing:
+        raise ValueError(f"no expected client call for released operations: {missing}")
+    return {op: known[op] for op in operation_ids}
+
 
 class RouteError(ValueError):
     """The route chain does not reach the expected ms-users endpoint."""

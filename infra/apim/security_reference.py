@@ -211,6 +211,60 @@ SECURITY_REFERENCE = {
     },
 }
 
+# Additive password extension (contracts/openapi/users-password.json; ms-users `users.password.enabled`, 8707f03).
+# Kept apart so the reviewed 22-operation reference above, its digest and B07 stay unchanged: the generator merges
+# it only when that extension contract is supplied. Every row stays `pending_password_contract` (terminal 503
+# BACKEND_CONTRACT_PENDING) until an `ms_users_contract` evidence document approves the extension.
+# * login / recovery request: anonymous like Magic Link requests (Origin, admission needs abuse_protection).
+# * /v1/me/password: internal JWT; writes add the session CSRF (`session`): Java binds X-CSRF-Token to the JWT's
+#   session (SessionAuthority.requireCsrf), not to a cookie, so the gateway checks presence/format only.
+PASSWORD_SECURITY_REFERENCE = {
+    ('POST', '/v1/auth/password/login'): {
+        'auth': 'public',
+        'cookies': [],
+        'cookie_mode': 'none',
+        'origin': True,
+        'csrf': 'none',
+        'anonymous_admission': True,
+        'contract_status': 'pending_password_contract',
+    },
+    ('POST', '/v1/auth/password/recovery/requests'): {
+        'auth': 'public',
+        'cookies': [],
+        'cookie_mode': 'none',
+        'origin': True,
+        'csrf': 'none',
+        'anonymous_admission': True,
+        'contract_status': 'pending_password_contract',
+    },
+    ('GET', '/v1/me/password'): {
+        'auth': 'jwt',
+        'cookies': [],
+        'cookie_mode': 'none',
+        'origin': False,
+        'csrf': 'none',
+        'anonymous_admission': False,
+        'contract_status': 'pending_password_contract',
+    },
+    ('POST', '/v1/me/password'): {
+        'auth': 'jwt',
+        'cookies': [],
+        'cookie_mode': 'none',
+        'origin': True,
+        'csrf': 'session',
+        'anonymous_admission': False,
+        'contract_status': 'pending_password_contract',
+    },
+    ('PUT', '/v1/me/password'): {
+        'auth': 'jwt',
+        'cookies': [],
+        'cookie_mode': 'none',
+        'origin': True,
+        'csrf': 'session',
+        'anonymous_admission': False,
+        'contract_status': 'pending_password_contract',
+    },
+}
 
 
 def reference_digest() -> str:

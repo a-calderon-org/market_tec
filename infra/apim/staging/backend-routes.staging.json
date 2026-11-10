@@ -1,6 +1,6 @@
 {
- "source": "a-calderon-org/ms-users-market-tec main be4595c controllers (PR #33 merge; same 22 routes as fc7e18f)",
- "sha": "be4595cfda702848fbd10dd8b2e8b36f126c548c",
+ "source": "a-calderon-org/ms-users-market-tec main 8707f03 controllers (PR #34 merge; the 22 routes of be4595c plus 5 password routes)",
+ "sha": "8707f03cf61c1e0bbe042a24ae6a2d721609e6f7",
  "routes": [
   [
    "GET",
@@ -21,6 +21,10 @@
   [
    "GET",
    "/v1/me/auth-methods"
+  ],
+  [
+   "GET",
+   "/v1/me/password"
   ],
   [
    "GET",
@@ -56,6 +60,14 @@
   ],
   [
    "POST",
+   "/v1/auth/password/login"
+  ],
+  [
+   "POST",
+   "/v1/auth/password/recovery/requests"
+  ],
+  [
+   "POST",
    "/v1/auth/proofs/attempts"
   ],
   [
@@ -81,6 +93,14 @@
   [
    "POST",
    "/v1/me/auth-methods"
+  ],
+  [
+   "POST",
+   "/v1/me/password"
+  ],
+  [
+   "PUT",
+   "/v1/me/password"
   ],
   [
    "PUT",

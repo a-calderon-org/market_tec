@@ -336,6 +336,71 @@
       "csrf": "none",
       "anonymous_admission": false,
       "contract_status": "reconciled"
+    },
+    {
+      "id": "loginWithPassword",
+      "method": "POST",
+      "public_path": "/auth/password/login",
+      "backend_path": "/v1/auth/password/login",
+      "auth": "public",
+      "cookies": [],
+      "cookie_mode": "none",
+      "origin": true,
+      "csrf": "none",
+      "anonymous_admission": true,
+      "contract_status": "pending_password_contract"
+    },
+    {
+      "id": "requestPasswordRecoveryLink",
+      "method": "POST",
+      "public_path": "/auth/password/recovery/requests",
+      "backend_path": "/v1/auth/password/recovery/requests",
+      "auth": "public",
+      "cookies": [],
+      "cookie_mode": "none",
+      "origin": true,
+      "csrf": "none",
+      "anonymous_admission": true,
+      "contract_status": "pending_password_contract"
+    },
+    {
+      "id": "getOwnPasswordStatus",
+      "method": "GET",
+      "public_path": "/me/password",
+      "backend_path": "/v1/me/password",
+      "auth": "jwt",
+      "cookies": [],
+      "cookie_mode": "none",
+      "origin": false,
+      "csrf": "none",
+      "anonymous_admission": false,
+      "contract_status": "pending_password_contract"
+    },
+    {
+      "id": "setOwnInitialPassword",
+      "method": "POST",
+      "public_path": "/me/password",
+      "backend_path": "/v1/me/password",
+      "auth": "jwt",
+      "cookies": [],
+      "cookie_mode": "none",
+      "origin": true,
+      "csrf": "session",
+      "anonymous_admission": false,
+      "contract_status": "pending_password_contract"
+    },
+    {
+      "id": "changeOwnPassword",
+      "method": "PUT",
+      "public_path": "/me/password",
+      "backend_path": "/v1/me/password",
+      "auth": "jwt",
+      "cookies": [],
+      "cookie_mode": "none",
+      "origin": true,
+      "csrf": "session",
+      "anonymous_admission": false,
+      "contract_status": "pending_password_contract"
     }
   ]
 }
