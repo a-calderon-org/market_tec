@@ -41,7 +41,9 @@ test('only owner can update; ownership, original date and snapshot remain unchan
   const { service } = fixture();
   const created = await service.create(owner, content);
   await assert.rejects(service.update(other, created.id, content), { code: 'PUBLICATION_FORBIDDEN' });
-  const updated = await service.update({ ...owner, seller: { ...owner.seller, nombre: 'Changed' } }, created.id,
+  // A caller-supplied seller can never replace the stored snapshot.
+  const changedSeller = { ...owner, seller: { ...owner.seller, nombre: 'Changed' } };
+  const updated = await service.update(changedSeller, created.id,
     { ...content, titulo: 'Nuevo título', ownerId: other.userId } as PublicationContent);
   assert.equal(updated.titulo, 'Nuevo título');
   assert.deepEqual(updated.vendedor, created.vendedor);

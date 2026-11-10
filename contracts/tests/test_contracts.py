@@ -230,15 +230,52 @@ class OpenApiContractsTest(unittest.TestCase):
                 for ref in walk_refs(document):
                     resolve_ref(ref, document, path)
 
-    def test_only_health_is_marked_implemented(self) -> None:
+    # Catalog publications are served by ms-catalog with internal-JWT authentication.
+    IMPLEMENTED = {
+        ("catalog.json", "/v1/publicaciones", "get"),
+        ("catalog.json", "/v1/publicaciones", "post"),
+        ("catalog.json", "/v1/publicaciones/{publicationId}", "get"),
+        ("catalog.json", "/v1/publicaciones/{publicationId}", "put"),
+    }
+
+    def test_only_health_and_catalog_publications_are_marked_implemented(self) -> None:
         for path in sorted(OPENAPI.glob("*.json")):
             document = load_json(path)
             for route, path_item in document["paths"].items():
                 for method, operation in path_item.items():
                     if method not in {"get", "post", "put", "patch", "delete"}:
                         continue
-                    expected = "implemented" if route == "/health" else "proposed"
+                    implemented = route == "/health" or (path.name, route, method) in self.IMPLEMENTED
+                    expected = "implemented" if implemented else "proposed"
                     self.assertEqual(expected, operation["x-implementation-status"])
+
+    def test_catalog_publications_use_internal_jwt_and_explicit_status_codes(self) -> None:
+        document = load_json(OPENAPI / "catalog.json")
+        bearer = document["components"]["securitySchemes"]["bearerAuth"]["description"]
+        self.assertIn("ms-users", bearer)
+        self.assertIn("RS256", bearer)
+        self.assertIn("X-User-Id", bearer)
+        self.assertIn("aud=markettec-api", bearer)
+        self.assertIn("solo para staging", bearer)
+        expected = {
+            ("/v1/publicaciones", "get"): {"200", "400", "401"},
+            ("/v1/publicaciones", "post"): {"201", "400", "401", "409", "413", "415", "503"},
+            ("/v1/publicaciones/{publicationId}", "get"): {"200", "400", "401", "404"},
+            ("/v1/publicaciones/{publicationId}", "put"): {"200", "400", "401", "403", "404", "409", "413", "415"},
+        }
+        for (route, method), codes in expected.items():
+            with self.subTest(route=route, method=method):
+                operation = document["paths"][route][method]
+                self.assertLessEqual(codes, set(operation["responses"]))
+                self.assertIn({"bearerAuth": [], "apimSubscriptionKey": []}, operation["security"])
+        write = document["components"]["schemas"]["PublicationWriteRequest"]
+        for field in ("userId", "vendedor", "ownerId", "propietario", "id"):
+            self.assertNotIn(field, write["properties"])
+        self.assertFalse(write["additionalProperties"])
+        # Updates never consult ms-users, so they cannot fail with SELLER_PROFILE_UNAVAILABLE.
+        self.assertNotIn("503", document["paths"]["/v1/publicaciones/{publicationId}"]["put"]["responses"])
+        seller_id = document["components"]["schemas"]["SellerV1"]["properties"]["id"]
+        self.assertEqual(["integer", "null"], seller_id["type"])
 
     def test_openapi_examples_match_their_schemas(self) -> None:
         count = 0

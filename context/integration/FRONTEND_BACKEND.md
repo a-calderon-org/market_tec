@@ -6,10 +6,10 @@ composicion confiable. No se cambio el cliente Angular ni su destino. Ver
 [contrato Catalog en revision](../../contracts/openapi/catalog.json) y
 [pruebas de servicio](../../app/ms-catalog/README.md).
 
-**MTEC-32, Verificado localmente:** existe un adaptador optativo de listado/detalle
-en ms-catalog con composicion de prueba. No cambia `apiBaseUrl`, Angular ni APIM.
-La autenticacion real y la conformidad contractual siguen pendientes; ver
-[alcance y pruebas](../../app/ms-catalog/README.md#mtec-32--incremento-de-lectura-http-en-pruebas).
+**MTEC-32, Verificado localmente:** ms-catalog valida el JWT interno de ms-users y,
+configurado, expone listado, detalle, alta y actualizacion en su arranque normal.
+No esta desplegado, no cambia APIM y no hay prueba E2E con Angular; ver
+[autenticacion real](../../app/ms-catalog/README.md#autenticacion-real-con-el-jwt-interno-de-ms-users).
 
 ## Topología real
 

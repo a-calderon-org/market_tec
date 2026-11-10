@@ -7,7 +7,7 @@ import type { ImageStoragePort } from '../ports/out/image-storage-port.js';
 function validateActor(actor: PublicationActor): void {
   if (!actor || typeof actor !== 'object' || Array.isArray(actor)) invalid('Invalid actor');
   validateText(actor.userId, 'userId', 64, true);
-  if (!actor.seller || !Number.isSafeInteger(actor.seller.id) || typeof actor.seller.verificado !== 'boolean') invalid('Invalid seller snapshot');
+  if (!actor.seller || (actor.seller.id !== null && !Number.isSafeInteger(actor.seller.id)) || typeof actor.seller.verificado !== 'boolean') invalid('Invalid seller snapshot');
   validateText(actor.seller.nombre, 'nombre', 160, true);
   validateText(actor.seller.carrera, 'carrera', 160);
 }
@@ -58,8 +58,9 @@ export class PublicationService implements Publications {
 
   async get(id: string): Promise<PublicationView> { return view(await this.find(id), this.placeholderImageUrl); }
 
-  async update(actor: PublicationActor, id: string, content: PublicationContent): Promise<PublicationView> {
-    validateActor(actor);
+  async update(actor: Pick<PublicationActor, 'userId'>, id: string, content: PublicationContent): Promise<PublicationView> {
+    if (!actor || typeof actor !== 'object' || Array.isArray(actor)) invalid('Invalid actor');
+    validateText(actor.userId, 'userId', 64, true);
     const ownerId = actor.userId;
     const current = await this.find(id);
     if (current.ownerId !== ownerId) throw new PublicationError('PUBLICATION_FORBIDDEN', 'Only the owner can update this publication');

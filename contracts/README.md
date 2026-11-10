@@ -84,6 +84,9 @@ para proteger contratos ajenos a autenticacion. `sourceCommit` identifica la bas
 original; `fileReviews` registra revisiones posteriores de archivos concretos.
 MTEC-32 actualiza exclusivamente el hash de Catalog para POST/PUT aprobados,
 conservando los hashes de eventos, Notifications, health y schemas de Users.
+Catalog 0.3.0-draft vuelve a actualizar solo ese hash: las cuatro operaciones de
+publicaciones pasan a `implemented` en ms-catalog con el JWT interno de ms-users,
+sin despliegue ni prueba E2E.
 Los hashes de archivo representan los bytes versionados LF: un checkout Windows
 con conversion automatica a CRLF puede diferir sin cambio semantico. CI los
 comprueba sobre su checkout Linux; no regenerar todos los hashes desde CRLF.

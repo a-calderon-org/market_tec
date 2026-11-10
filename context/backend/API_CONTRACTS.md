@@ -9,10 +9,15 @@ respuestas, limites de autenticacion y pruebas manuales en el
 El OpenAPI de catalogo sigue Proposed; no hay conformidad productiva.
 
 **Extension local MTEC-32:** la composicion optativa incorpora POST/PUT de
-publicaciones, aprobados como interfaces el 2026-11-09 y descritos en Catalog
-OpenAPI 0.2.0-draft. Pruebas HTTP verifican permisos y JSON Schema; autenticacion
-real y conformidad completa siguen pendientes. El arranque normal no habilita
-estos adaptadores sin composicion explicita.
+publicaciones, aprobados como interfaces el 2026-11-09.
+
+**Autenticacion con JWT interno, Verificado localmente (2026-11-10):** con las
+variables `CATALOG_*`, `npm start` expone listado, detalle, alta y actualizacion
+autenticados con el JWT interno de ms-users (Google o Magic Link), segun Catalog
+OpenAPI 0.3.0-draft. Propietario = `sub`; `vendedor.id` puede ser `null`; el alta
+devuelve 503 `SELLER_PROFILE_UNAVAILABLE` si no obtiene el perfil propio en ms-users.
+Almacenamiento solo en memoria. **No desplegado; sin prueba E2E.** Valores de
+staging, decisiones pendientes y rotacion en el [README](../../app/ms-catalog/README.md#autenticacion-real-con-el-jwt-interno-de-ms-users).
 
 ## Contrato implementado localmente
 

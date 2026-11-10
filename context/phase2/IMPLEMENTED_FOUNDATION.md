@@ -38,11 +38,12 @@ consumidos por casos de uso y repositorio en memoria. El detalle vigente esta en
 [README de ms-catalog](../../app/ms-catalog/README.md#publicaciones--mtec-28).
 Esta extension no agrega rutas HTTP, adaptadores Azure ni autenticacion; la tabla
 anterior conserva la evidencia historica de la fundacion, no el total actual de pruebas.
+MTEC-32 agrego despues las rutas HTTP y la autenticacion con JWT interno (README).
 
 ## Convenciones tecnicas implementadas
 
 - Health uniforme: `GET /health`, sin prefijo de version por ser endpoint tecnico.
-- Rutas de negocio futuras: `/v1`, aun no implementadas.
+- Rutas de negocio: `/v1`. `ms-catalog` implementa publicaciones con JWT interno, solo con configuracion explicita y almacenamiento en memoria (ver su README); sin despliegue.
 - `X-Correlation-ID`: se conserva si es no vacio y tiene hasta 128 caracteres; de lo contrario se genera UUID.
 - El correlation ID se devuelve tanto en header como en la respuesta health/error.
 - Logs HTTP basicos estructurados: pares clave/valor en Spring y JSON en Node/Python.

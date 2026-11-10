@@ -17,7 +17,8 @@ export interface PublicationContent {
 
 // Presentation snapshot supplied by a trusted adapter; never authoritative profile data.
 export interface SellerSnapshot {
-  readonly id: number;
+  // Legacy numeric seller id; null when the identity provider (ms-users) has none.
+  readonly id: number | null;
   readonly nombre: string;
   readonly carrera: string;
   readonly verificado: boolean;
