@@ -67,9 +67,11 @@ operation; both are recorded in `operations.candidate.json`. Staging deployment 
 document must contain exactly `approval_type`, `backend_sha`, `openapi_contract_version`, `openapi_sha256`,
 `environment`, `apim_revision`, `review_id`, and match: the approval type, `backend-routes.json` sha,
 OpenAPI `info.version`, the SHA-256 of the exact OpenAPI file bytes used to generate, and the manifest `target`.
-A well-formed `review_id` is not an independent review. Anything else raises. The tool cannot prove who
-wrote a document: that needs GitHub required review / branch protection on `infra/apim/**` and an
-operator, which are **not** configured or checked here. Until then keep every approval `null`.
+A well-formed `review_id` is not a review by itself. Anything else raises. The tool cannot prove who
+wrote a document: `review_id` must name a real GitHub review by the project responsible on the PR head that
+carried the candidate, and branch protection on `main` (PR required, admins included; no independent approval
+since 2026-11-10, see `context/decisions/DECISION_LOG.md`) keeps evidence changes in reviewed PRs. Neither is
+checked here. Without such a review keep the approval `null`.
 
 ## Exports and evidence still required (outside this repo)
 

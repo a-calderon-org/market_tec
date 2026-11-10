@@ -15,7 +15,8 @@ exports and the API scope after XML canonicalization. ms-users runs image `be459
 **Password activation (`ms-users-password-v1`): approved for staging only, not deployed.** Both approvals are
 recorded in `evidence/` and referenced by `operations.staging.json`; each `review_id` is the responsible's real GitHub
 review (state `COMMENTED`) on the PR head that carried the candidate, and that head also has an independent `APPROVED`
-review. Branch protection on `main` requires one approval, including for administrators. Not valid for production.
+review. At the time, branch protection on `main` required one independent approval; since 2026-11-10 it requires a PR
+and CI but no independent approval (`context/decisions/DECISION_LOG.md`). Not valid for production.
 
 | Approval | Evidence | `review_id` | Independent approval |
 |---|---|---|---|

@@ -177,7 +177,7 @@ Todo esto debe permanecer así hasta que cada responsable registre su conformida
 | `users.google.registration.enabled` | `false`. | RP (D-06). |
 | `users.email.enabled`, `users.auth-methods.linking.enabled` | `false`; deben seguir así (D-02, D-14). | RP. |
 | `users.*.same-site-verified` / `https-topology-verified` | `false`; el arranque falla si falta origen HTTPS verificado. | Solo con evidencia de hosts reales (D-04). |
-| Aprobaciones APIM (`approvals.abuse_protection`, `approvals.ms_users_contract`) | `null`. | Revisión independiente registrada. |
+| Aprobaciones APIM (`approvals.abuse_protection`, `approvals.ms_users_contract`) | `null`. (2026-11-10: registradas solo para staging `f56ba7e`, `infra/apim/staging/`.) | Revisión GitHub registrada del responsable (desde 2026-11-10 la revisión independiente es opcional; `context/decisions/DECISION_LOG.md`). |
 | Perfil `sql-*` obligatorio para los controladores | Activo. | — |
 | Angular: `environment.apiBaseUrl` | Vacío en `environment.example.ts`; sin URL, el interceptor no adjunta nada. | Pipeline de despliegue. |
 | Flag de Angular para el nuevo cliente | No existe aún; el plan lo introduce apagado. Con `authCoreV2=false` se conserva el cliente legado **con sus riesgos actuales** (token de Google en `sessionStorage`, `USR-001`); el flag no certifica la seguridad del frontend. | Responsable de Angular. |
