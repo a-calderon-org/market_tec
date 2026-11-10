@@ -14,7 +14,7 @@ provider account owner (the current sender `onboarding@resend.dev` is a provider
 **Approvals.** Production evidence is separate from staging: environment `production`, revision
 `markettec-users-prod-v1:1`. `abuse_protection` needs the responsible's GitHub review accepting R1–R4 of
 [`../staging/review/abuse_protection.f56ba7e.md`](../staging/review/abuse_protection.f56ba7e.md) for production.
-Until it is recorded every anonymous operation is denied (`503 ADMISSION_DISABLED`). `ms_users_contract` is not needed
+Recorded: `evidence/abuse_protection.f56ba7e.production.json`, `review_id` `a-calderon-org/market_tec#57/reviews/5849713398` (2026-11-10). `ms_users_contract` is not needed
 for this profile and stays `null`.
 
 **Shared runtime (decision 2026-11-10).** The subscription allows a single Container Apps environment, so

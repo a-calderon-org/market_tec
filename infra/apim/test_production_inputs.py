@@ -37,6 +37,14 @@ class ProductionInputsTest(unittest.TestCase):
                           CANDIDATE["review_id"]))
         self.assertIsNone(MANIFEST["approvals"]["ms_users_contract"])
 
+    def test_registered_production_evidence_is_accepted(self):
+        doc = json.loads((PROD / "evidence" / MANIFEST["approvals"]["abuse_protection"]["evidence_file"]).read_text())
+        self.assertEqual("a-calderon-org/market_tec#57/reviews/5849713398", doc["review_id"])
+        self.assertEqual({k: CANDIDATE[k] for k in gp.EVIDENCE_FIELDS - {"review_id"}},
+                         {k: doc[k] for k in gp.EVIDENCE_FIELDS - {"review_id"}})
+        _, approvals = gp._prepare(MANIFEST, OPENAPI_BYTES, ROUTES, PROD / "evidence", EXTENSION_BYTES)
+        self.assertEqual({"abuse_protection": True, "ms_users_contract": False}, approvals)
+
 
 if __name__ == "__main__":
     unittest.main()
