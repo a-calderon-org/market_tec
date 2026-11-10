@@ -176,7 +176,7 @@ describe('Login — Magic Link institucional (authCoreV2)', () => {
     await component.submit();
     fixture.detectChanges();
 
-    expect(session.requestEmailLink).toHaveBeenCalledWith('ana@estudiantec.cr');
+    expect(session.requestEmailLink).toHaveBeenCalledWith('Ana@estudiantec.cr');
     expect(text()).toContain('Revisa tu correo institucional');
     expect(fixture.nativeElement.querySelector('.login-form input')).toBeNull();
 

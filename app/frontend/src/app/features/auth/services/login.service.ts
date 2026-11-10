@@ -27,8 +27,9 @@ export class LoginService {
   normalizeEmail(
     email: string
   ): string {
-    return email
-      .trim()
-      .toLowerCase();
+    const address = email.trim();
+    const at = address.lastIndexOf('@');
+    // ms-users conserva la parte local como parte de la identidad institucional.
+    return at < 0 ? address : address.slice(0, at + 1) + address.slice(at + 1).toLowerCase();
   }
 }

@@ -28,21 +28,24 @@ export class EmailLinkCsrf {
     let entry: unknown = this.memory;
     try {
       const raw = globalThis.localStorage?.getItem(KEY);
-      if (raw) entry = JSON.parse(raw);
+      if (raw != null) entry = JSON.parse(raw);
     } catch {
       // Ilegible o bloqueado: se usa la copia en memoria, si existe.
     }
-    if (typeof entry !== 'object' || entry === null) return null;
-    const { csrfToken, expiresAt } = entry as Record<string, unknown>;
+    const { csrfToken, expiresAt } = (entry ?? {}) as Record<string, unknown>;
     if (typeof csrfToken !== 'string' || !HEX_64.test(csrfToken) || typeof expiresAt !== 'number'
-      || expiresAt <= Date.now()) {
+      || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
       this.clear();
       return null;
     }
     return csrfToken;
   }
 
-  clear(): void {
+  clearIfCurrent(csrfToken: string): void {
+    if (this.read() === csrfToken) this.clear();
+  }
+
+  private clear(): void {
     this.memory = null;
     try {
       globalThis.localStorage?.removeItem(KEY);

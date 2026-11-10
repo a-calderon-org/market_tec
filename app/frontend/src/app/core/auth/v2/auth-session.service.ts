@@ -19,6 +19,10 @@ const LEGACY_GOOGLE_TOKEN_KEY = 'google_token';
 /** Código local: el enlace se abrió en un navegador sin el intento (cookie + CSRF) que lo pidió. */
 export const EMAIL_LINK_OTHER_BROWSER = 'EMAIL_LINK_OTHER_BROWSER';
 
+const EMAIL_LINK_TERMINAL_ERRORS = new Set([
+  'ATTEMPT_CONSUMED', 'ATTEMPT_EXPIRED', 'CONTINUITY_REQUIRED', 'CSRF_INVALID',
+]);
+
 /** Access JWT junto con la generación de sesión (epoch) en la que se leyó. */
 export interface AccessCredential {
   readonly token: string;
@@ -119,11 +123,13 @@ export class AuthSessionService {
     try {
       response = await this.api.confirmEmailLink(proof, csrfToken);
     } catch (error) {
-      // Con respuesta del servidor el intento ya no sirve en este navegador; ante red/timeout se conserva.
-      if (error instanceof AuthApiError && error.status !== 0) this.emailLinkCsrf.clear();
+      // Una prueba inválida puede pertenecer a un enlace anterior y no invalida el intento vigente.
+      if (error instanceof AuthApiError && error.code !== null && EMAIL_LINK_TERMINAL_ERRORS.has(error.code)) {
+        this.emailLinkCsrf.clearIfCurrent(csrfToken);
+      }
       throw error;
     }
-    this.emailLinkCsrf.clear();
+    this.emailLinkCsrf.clearIfCurrent(csrfToken);
 
     if (!this.store.applyAuthResponse(response, epoch)) {
       throw new AuthRequiredError('cancelled');
