@@ -807,6 +807,33 @@ propietarios por rol e hitos en 4; amenazas en 6/7 y contratos en 8.1.
 | Autorización/fronteras P17/P19/P20/P22/P24 | RP, 2026-11-01: APIM admite y aplica políticas; servicios revalidan y autorizan; identidad de servicio/eventos/delegación explícita según 5 | Protección directa/origen, principal/capacidades, protocolos internos, rutas/excepciones exactas, cuotas/logs y evidencia Azure | Tres servicios; frontend; APIM/infra; SEG; RP | Reparto y comunicación Accepted; controles Proposed; Azure no verificado |
 | Contratos/transición 7.1/8.1 | Ninguna aprobación contractual ni corte operativo nuevos | Versión/consumo canónicos, compatibilidad, responsable/fecha de corte, único artefacto y tratamiento del scaffold/workflow | ms-users; tres responsables de contratos; frontend; APIM/infra; RP | Proposed; MTEC-15 sin aprobación conjunta |
 
+### Aprobaciones delimitadas ms-users → ms-catalog — 2026-11-10
+
+**Estado: aprobadas por el responsable del proyecto, solo para staging.** No
+aprueban producción, acceso universal entre servicios ni cambios en ms-users.
+
+1. **Audiencia (P04, excepción de staging).** ms-catalog acepta en staging
+   `aud=markettec-api`, la audiencia compartida del entorno que emite ms-users.
+   Se mantiene la validación estricta: firma RS256 con `kid` del JWKS revisado,
+   `typ=at+jwt`, `iss=https://markettec-api.azure-api.net/users`, `aud` string
+   única, `0 < exp-iat ≤ 240`, `exp` sin tolerancia positiva y `sub`/`sid`/`jti`.
+   La audiencia no autoriza recursos: la propiedad la decide ms-catalog por `sub`.
+   No se introduce una audiencia nueva. Producción requiere otra decisión.
+2. **Delegación acotada para el snapshot del vendedor (P19).** ms-catalog puede
+   reenviar el JWT interno del propio usuario exclusivamente a
+   `GET /v1/me/profile` de ms-users, con estas condiciones: JWT verificado antes
+   en ms-catalog; destino fijo `<issuer>/v1/me/profile` a través del gateway
+   autorizado (APIM `markettec-users-v1`); sin redirecciones, destinos
+   arbitrarios, almacenamiento ni registro del token; el `id` devuelto debe ser
+   el `sub` autenticado. No autoriza otras operaciones entre microservicios, que
+   siguen requiriendo identidad de servicio o delegación explícita.
+
+Implementación: `app/ms-catalog` (verificador y `settings.ts`), Catalog OpenAPI
+0.3.0-draft. **Verificado:** pruebas locales y lectura de la política APIM de
+`getOwnUserProfile` (sin Origin ni cookies; elimina `X-User-Id`; valida el mismo
+perfil). **No verificado:** llamada real con un JWT de staging; no hay despliegue
+de ms-catalog.
+
 ### Condiciones de salida y pendientes por asignar
 
 1. Designar revisión de seguridad y mapear cada rol a persona con autoridad;

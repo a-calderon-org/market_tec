@@ -172,9 +172,9 @@ exponiendo solo `/health`. Una configuracion parcial detiene el arranque.
 | Variable | Valor |
 |---|---|
 | `CATALOG_JWT_ISSUER` | `iss` exacto de ms-users para el entorno |
-| `CATALOG_JWT_AUDIENCE` | `aud` exacto aceptado por el catalogo para el entorno (ver decision pendiente) |
+| `CATALOG_JWT_AUDIENCE` | `aud` exacto del entorno (staging: `markettec-api`, excepcion aprobada solo para staging) |
 | `CATALOG_JWT_JWKS_URI` o `CATALOG_JWT_JWKS_JSON` | JWKS publicado, o el snapshot revisado (ver rotacion) |
-| `CATALOG_USERS_PROFILE_URL` | `GET /v1/me/profile` de ms-users a traves de su gateway |
+| `CATALOG_USERS_PROFILE_URL` | Exactamente `<CATALOG_JWT_ISSUER>/v1/me/profile` (ruta del gateway); HTTP solo en loopback local |
 | `CATALOG_PUBLICATIONS_STORE` | `memory` (unico valor; provisional) |
 | `CATALOG_PLACEHOLDER_IMAGE_URL` | URL HTTPS de imagen predeterminada |
 
@@ -216,16 +216,24 @@ la clave publica real porque APIM valida con ella los JWT reales de staging. La
 verificacion directa requiere un JWT real de staging (paso 1 de la validacion E2E).
 No se leyo el secreto privado.
 
-**Decision pendiente — audiencia.** ADR-004 P04 propone una audiencia por entorno
-compartida por los servicios (Accepted parcial; valor real pendiente). El codigo
-no fija ningun valor. Usar `markettec-api` en ms-catalog requiere confirmacion del
-responsable; si se decide una audiencia por servicio, exige un cambio en ms-users
-fuera de este incremento.
+**Aprobado el 2026-11-10, solo staging** ([ADR-004 §10](../../context/decisions/ADR-004-seguridad-autenticacion.md#aprobaciones-delimitadas-ms-users--ms-catalog--2026-11-10)):
 
-**Decision pendiente — perfil del vendedor.** Reenviar el token del usuario a ms-users
-para leer su propio perfil es una lectura en nombre del mismo usuario y con la misma
-audiencia. El contrato de identidad reserva el trabajo entre servicios a identidad
-de servicio o delegacion explicita; esta solucion minima requiere aprobacion.
+- **Audiencia:** ms-catalog acepta `aud=markettec-api`, la audiencia compartida
+  del entorno, con la validacion estricta anterior. No autoriza recursos (la
+  propiedad la decide el `sub`) ni se aplica a produccion. El codigo no fija ningun valor.
+- **Delegacion acotada:** el JWT, ya verificado, solo se reenvia a
+  `GET <issuer>/v1/me/profile` por el gateway. `settings.ts` rechaza cualquier otra
+  URL o query; la llamada usa `redirect: 'error'`, solo envia `Authorization` y
+  `Accept`, no guarda ni registra el token, y exige `id = sub`. No se reutiliza para
+  otras operaciones entre servicios.
+- **Topologia (lectura de politica APIM, 2026-11-10):** `markettec-users-v1`
+  `getOwnUserProfile` no exige Origin ni cookies, elimina `X-User-Id`, valida el
+  mismo perfil JWT y reenvia a ms-users con identidad administrada. Una peticion sin
+  token responde 401 `Invalid internal token`. **No verificado:** respuesta 200 con
+  un JWT real desde ms-catalog.
+- **Tiempo:** la consulta del perfil se corta a los 20 s, por debajo del limite de
+  38 s del proxy same-origin; si ms-users arranca en frio (35-47 s medidos), el alta
+  responde 503 `SELLER_PROFILE_UNAVAILABLE` sin escribir y puede reintentarse.
 
 ### Fuente de claves y rotacion
 
@@ -249,11 +257,17 @@ verificar ambos; (3) cambiar `USERS_INTERNAL_JWT_ACTIVE_KID` en ms-users; (4) tr
 al menos 240 s mas la cache de APIM, retirar la clave anterior en ambos. Ante
 compromiso: retirar la clave en APIM y ms-catalog a la vez o suspender rutas.
 
-**Limitaciones:** el almacenamiento es en memoria; los datos se pierden al
-reiniciar y no se comparten entre replicas. Cosmos DB (MTEC-29) no existe. La deuda
-[CAT-001](../../context/audits/TECHNICAL_DEBT.md) (`body-parser`) sigue abierta y
-afecta al parser de POST/PUT. Ningun despliegue con este almacenamiento constituye
-integracion E2E persistente.
+**Cuerpos HTTP (CAT-001, resuelto):** `body-parser@2.4.0` (corrige
+GHSA-27r3-jxmh-p828; `npm audit` sin vulnerabilidades). POST/PUT admiten JSON
+plano o comprimido (`gzip`, `deflate`, `br`) hasta 1 MiB tras descomprimir.
+JSON vacio, invalido o truncado y datos comprimidos corruptos dan 400; mas de 1 MiB
+da 413 `PAYLOAD_TOO_LARGE`; codificacion o charset no soportados dan 415
+`UNSUPPORTED_MEDIA_TYPE`. Ningun error repite el cuerpo recibido.
+
+**Limitaciones:** el almacenamiento es en memoria y provisional; los datos se
+pierden al reiniciar y no se comparten entre replicas. Cosmos DB (MTEC-29) no
+existe. Ningun despliegue con este almacenamiento constituye integracion E2E
+persistente.
 
 ### Pruebas
 

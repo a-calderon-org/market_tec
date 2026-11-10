@@ -51,6 +51,21 @@ function secureUrl(value: string | undefined, name: string): string {
   }
 }
 
+/**
+ * Bounded delegation (approved 2026-11-10): the user's verified JWT may be sent ONLY to ms-users
+ * `GET /v1/me/profile` through the authorized gateway, i.e. exactly `<issuer>/v1/me/profile` (the issuer is the
+ * ms-users API on the gateway). Plain-HTTP loopback is accepted only for local integration tests.
+ */
+function profileUrl(value: string | undefined, issuer: string): string {
+  const url = new URL(secureUrl(value, 'CATALOG_USERS_PROFILE_URL'));
+  const expected = `${issuer.replace(/\/+$/, '')}/v1/me/profile`;
+  const loopback = url.protocol === 'http:' && url.pathname.endsWith('/v1/me/profile');
+  if (url.search || (url.toString() !== expected && !loopback)) {
+    throw new Error(`CATALOG_USERS_PROFILE_URL must be exactly ${expected}`);
+  }
+  return url.toString();
+}
+
 const PUBLICATION_VARIABLES = ['CATALOG_JWT_ISSUER', 'CATALOG_JWT_AUDIENCE', 'CATALOG_JWT_JWKS_URI', 'CATALOG_JWT_JWKS_JSON',
   'CATALOG_USERS_PROFILE_URL', 'CATALOG_PUBLICATIONS_STORE', 'CATALOG_PLACEHOLDER_IMAGE_URL'];
 
@@ -71,7 +86,7 @@ function loadPublicationSettings(environment: NodeJS.ProcessEnv): PublicationSet
     jwtIssuer: issuer,
     jwtAudience: audience,
     ...(jwksUri ? { jwksUri: secureUrl(jwksUri, 'CATALOG_JWT_JWKS_URI') } : { jwksJson: jwksJson! }),
-    usersProfileUrl: secureUrl(environment.CATALOG_USERS_PROFILE_URL?.trim(), 'CATALOG_USERS_PROFILE_URL'),
+    usersProfileUrl: profileUrl(environment.CATALOG_USERS_PROFILE_URL?.trim(), issuer),
     store: 'memory',
     placeholderImageUrl: secureUrl(environment.CATALOG_PLACEHOLDER_IMAGE_URL?.trim(), 'CATALOG_PLACEHOLDER_IMAGE_URL'),
   };

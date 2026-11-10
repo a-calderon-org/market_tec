@@ -59,7 +59,7 @@
           "operationId": "createPublication",
           "summary": "Crear publicación",
           "x-implementation-status": "implemented",
-          "description": "Interfaces de escritura aprobadas el 2026-11-09. El propietario es el `sub` del JWT interno verificado; el snapshot vendedor se obtiene del perfil propio en ms-users (`GET /v1/me/profile`) con el mismo token. Propietario, vendedor, ID y fecha nunca proceden del body. imagenes omitido se interpreta como [] también en PUT; sin adaptador de imágenes solo se aceptan publicaciones sin imágenes (400).",
+          "description": "Interfaces de escritura aprobadas el 2026-11-09. El propietario es el `sub` del JWT interno verificado; el snapshot vendedor se obtiene del perfil propio en ms-users (`GET /v1/me/profile`) con el mismo token. Delegación acotada aprobada el 2026-11-10: el JWT ya verificado solo se reenvía a `<issuer>/v1/me/profile` por el gateway, sin redirecciones, y el `id` devuelto debe ser el `sub`. Propietario, vendedor, ID y fecha nunca proceden del body. imagenes omitido se interpreta como [] también en PUT; sin adaptador de imágenes solo se aceptan publicaciones sin imágenes (400).",
           "security": [
             {
               "bearerAuth": [],
@@ -133,8 +133,18 @@
                 }
               }
             },
+            "415": {
+              "description": "Content-Encoding o charset no soportados",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorEnvelope"
+                  }
+                }
+              }
+            },
             "413": {
-              "description": "Cuerpo superior a 1 MiB",
+              "description": "Cuerpo superior a 1 MiB, también tras descomprimir",
               "content": {
                 "application/json": {
                   "schema": {
@@ -394,8 +404,18 @@
                 }
               }
             },
+            "415": {
+              "description": "Content-Encoding o charset no soportados",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorEnvelope"
+                  }
+                }
+              }
+            },
             "413": {
-              "description": "Cuerpo superior a 1 MiB",
+              "description": "Cuerpo superior a 1 MiB, también tras descomprimir",
               "content": {
                 "application/json": {
                   "schema": {
@@ -499,7 +519,7 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT",
-        "description": "JWT interno emitido por ms-users para usuarios Google o Magic Link: RS256, `typ` at+jwt, `kid` del JWKS de ms-users, `iss` y `aud` (string única) iguales a los configurados por entorno, `0 < exp-iat <= 240`, `exp` vigente sin tolerancia positiva, `sid`/`jti` presentes y `sub` = userId opaco. Tokens alterados, expirados o de otro emisor/audiencia producen 401. No se aceptan ID Tokens de Google ni headers de identidad del navegador (X-User-Id u otros)."
+        "description": "JWT interno emitido por ms-users para usuarios Google o Magic Link: RS256, `typ` at+jwt, `kid` del JWKS de ms-users, `iss` y `aud` (string única) iguales a los configurados por entorno, `0 < exp-iat <= 240`, `exp` vigente sin tolerancia positiva, `sid`/`jti` presentes y `sub` = userId opaco. Tokens alterados, expirados o de otro emisor/audiencia producen 401. No se aceptan ID Tokens de Google ni headers de identidad del navegador (X-User-Id u otros). Staging: `iss=https://markettec-api.azure-api.net/users` y `aud=markettec-api` (audiencia compartida del entorno, excepción aprobada el 2026-11-10 solo para staging; ADR-004 §10). Producción no está aprobada."
       },
       "apimSubscriptionKey": {
         "type": "apiKey",

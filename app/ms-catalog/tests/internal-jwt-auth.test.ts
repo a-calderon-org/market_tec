@@ -40,6 +40,8 @@ const profileCalls: string[] = [];
 let profileMode: 'ok' | 'revoked' | 'down' = 'ok';
 const fakeUsers: typeof fetch = async (input, init) => {
   assert.equal(String(input), PROFILE_URL);
+  assert.equal(init?.redirect, 'error');
+  assert.deepEqual([...new Headers(init?.headers).keys()].sort(), ['accept', 'authorization']);
   const auth = new Headers(init?.headers).get('authorization') ?? '';
   const sub = JSON.parse(Buffer.from(auth.slice(7).split('.')[1]!, 'base64url').toString()).sub as string;
   profileCalls.push(sub);
@@ -220,4 +222,10 @@ test('publication settings: absent keeps health-only; partial or non-memory conf
   assert.throws(() => loadSettings({ ...complete, CATALOG_PUBLICATIONS_STORE: 'cosmos' }), /persistent/);
   assert.throws(() => loadSettings({ ...complete, CATALOG_JWT_JWKS_JSON: '{}' }), /exactly one/);
   assert.throws(() => loadSettings({ ...complete, CATALOG_USERS_PROFILE_URL: 'http://users.example.test/me' }), /https/);
+  // Bounded delegation: only <issuer>/v1/me/profile on the gateway (loopback HTTP for local tests).
+  for (const url of ['https://evil.example.test/users/v1/me/profile', 'https://users.example.test/users/v1/usuarios/x',
+    `${PROFILE_URL}?x=1`, 'https://users.example.test/v1/me/profile']) {
+    assert.throws(() => loadSettings({ ...complete, CATALOG_USERS_PROFILE_URL: url }), /must be exactly/, url);
+  }
+  assert.ok(loadSettings({ ...complete, CATALOG_USERS_PROFILE_URL: 'http://127.0.0.1:3911/v1/me/profile' }).publications);
 });

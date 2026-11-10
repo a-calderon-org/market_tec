@@ -255,11 +255,13 @@ class OpenApiContractsTest(unittest.TestCase):
         self.assertIn("ms-users", bearer)
         self.assertIn("RS256", bearer)
         self.assertIn("X-User-Id", bearer)
+        self.assertIn("aud=markettec-api", bearer)
+        self.assertIn("solo para staging", bearer)
         expected = {
             ("/v1/publicaciones", "get"): {"200", "400", "401"},
-            ("/v1/publicaciones", "post"): {"201", "400", "401", "409", "503"},
+            ("/v1/publicaciones", "post"): {"201", "400", "401", "409", "413", "415", "503"},
             ("/v1/publicaciones/{publicationId}", "get"): {"200", "400", "401", "404"},
-            ("/v1/publicaciones/{publicationId}", "put"): {"200", "400", "401", "403", "404", "409"},
+            ("/v1/publicaciones/{publicationId}", "put"): {"200", "400", "401", "403", "404", "409", "413", "415"},
         }
         for (route, method), codes in expected.items():
             with self.subTest(route=route, method=method):

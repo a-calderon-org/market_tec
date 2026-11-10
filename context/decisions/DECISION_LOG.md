@@ -14,6 +14,16 @@ Parámetros, demostraciones y conformidades siguen pendientes.
 
 No se encontraron ADR históricos verificables previos a Fase II. Las decisiones inferidas del código (Angular standalone, APIM, Express) no se atribuyen como decisiones formales.
 
+## ms-catalog con JWT interno: audiencia de staging y delegación de perfil — 2026-11-10
+
+**Estado: aprobado por el responsable del proyecto, limitado a staging.**
+ms-catalog acepta `aud=markettec-api` (audiencia compartida del entorno) con
+validación estricta del perfil interno, y puede reenviar el JWT del usuario ya
+verificado solo a `GET /v1/me/profile` de ms-users por el gateway, validando
+`id = sub`. Sin producción, sin audiencia nueva, sin cambios en ms-users y sin
+extender la delegación a otras operaciones. Detalle en
+[ADR-004 §10](ADR-004-seguridad-autenticacion.md#aprobaciones-delimitadas-ms-users--ms-catalog--2026-11-10).
+
 ## Registro Google institucional vigente — 2026-11-04
 
 **Estado: aprobado formalmente por el responsable del proyecto.** Registro nuevo:
