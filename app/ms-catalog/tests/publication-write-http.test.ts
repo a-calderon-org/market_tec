@@ -126,6 +126,62 @@ test('parser errors and large bodies produce correlated sanitized envelopes', as
   }
 });
 
+test('CAT-001: compressed and malformed bodies are parsed safely with controlled errors', async () => {
+  const { gzipSync, deflateSync, brotliCompressSync } = await import('node:zlib');
+  const send = (body: Buffer | string, extra: Record<string, string>) =>
+    fetch(base, { method: 'POST', headers: { ...headers, ...extra }, body: typeof body === 'string' ? body : new Uint8Array(body) });
+  const json = JSON.stringify(content);
+  // Valid compressed bodies are accepted.
+  for (const [encoding, compress] of [['gzip', gzipSync], ['deflate', deflateSync], ['br', brotliCompressSync]] as const) {
+    const response = await send(compress(Buffer.from(json)), { 'Content-Encoding': encoding });
+    assert.equal(response.status, 201, encoding);
+  }
+  const cases: [Buffer | string, Record<string, string>, number, string][] = [
+    // Plain trailing garbage after a gzip member is ignored by zlib; a corrupt second member is rejected.
+    [Buffer.concat([gzipSync(Buffer.from(json)), Buffer.from([0x1f, 0x8b, 0x08, 0, 0, 0, 0, 0, 0, 0xff, 0xde, 0xad])]),
+      { 'Content-Encoding': 'gzip' }, 400, 'INVALID_PUBLICATION'],
+    [Buffer.from('not-gzip-private-data'), { 'Content-Encoding': 'gzip' }, 400, 'INVALID_PUBLICATION'],
+    // Small compressed payload that inflates beyond the 1 MiB limit.
+    [gzipSync(Buffer.from(JSON.stringify({ ...content, descripcion: ' '.repeat(2 * 1024 * 1024) }))), { 'Content-Encoding': 'gzip' }, 413, 'PAYLOAD_TOO_LARGE'],
+    [json, { 'Content-Encoding': 'compress' }, 415, 'UNSUPPORTED_MEDIA_TYPE'],
+    [json, { 'Content-Type': 'application/json; charset=latin9' }, 415, 'UNSUPPORTED_MEDIA_TYPE'],
+    ['', {}, 400, 'INVALID_PUBLICATION'],
+    ['{"titulo": "private-data"', {}, 400, 'INVALID_PUBLICATION'],
+    [json, { 'Content-Type': 'text/plain' }, 400, 'INVALID_PUBLICATION'],
+  ];
+  for (const [body, extra, status, code] of cases) {
+    const response = await send(body, extra);
+    assert.equal(response.status, status, `${JSON.stringify(extra)} ${status}`);
+    const result = await response.json();
+    validates('ErrorEnvelope', result);
+    assert.equal(result.error.code, code);
+    assert.equal(result.error.correlationId, 'write-test');
+    assert.equal(JSON.stringify(result).includes('private-data'), false);
+  }
+  // GHSA-27r3-jxmh-p828: a complete compressed frame, then trailing bytes in a LATER chunk that reach the finished
+  // decoder. With body-parser < 2.4.0 that error has no listener and terminates the process.
+  const { request: httpRequest } = await import('node:http');
+  for (const [encoding, compress] of [['deflate', deflateSync], ['gzip', gzipSync], ['br', brotliCompressSync]] as const) {
+    const status = await new Promise<number>((resolve, reject) => {
+      const req = httpRequest(base, { method: 'POST', headers: { ...headers, 'Content-Encoding': encoding } }, res => {
+        res.resume();
+        res.on('end', () => resolve(res.statusCode ?? 0));
+      });
+      req.on('error', reject);
+      req.write(compress(Buffer.from(json)));
+      setTimeout(() => req.end(Buffer.from('trailing-bytes')), 50);
+    });
+    assert.ok([201, 400].includes(status), `${encoding} ${status}`);
+  }
+  await new Promise(resolve => setTimeout(resolve, 100));
+  assert.equal((await fetch(base, { headers })).status, 200, 'service still answers after trailing bytes');
+  // The same parser protects PUT.
+  const created = await create();
+  const put = await fetch(`${base}/${created.id}`, { method: 'PUT', headers: { ...headers, 'Content-Encoding': 'gzip' },
+    body: new Uint8Array(Buffer.concat([gzipSync(Buffer.from(json)), Buffer.from('x')])) });
+  assert.equal(put.status, 400);
+});
+
 test('identity resolution mismatch fails closed', async () => {
   const response = await fetch(base, { method: 'POST', headers: { ...headers, Authorization: 'Bearer mismatch-test' }, body: JSON.stringify(content) });
   assert.equal(response.status, 500);

@@ -13,7 +13,7 @@ No se confirmó un hallazgo que justifique P0 con evidencia local.
 | FE-001 / INT-002 | Riesgo externo + defecto documental | El cliente confía en claims no verificados y la guía promete validación previa inexistente | obtener políticas APIM, decidir flujo de sesión, corregir guía y añadir pruebas negativas | Medio-Alto | APIM/origen/Google |
 | FE-002 / INT-003 | Defecto local + riesgo externo | `USR-001` desacoplado de la cuenta; el impacto de acceso depende del servidor | definir identidad contractual y demostrar autorización multiusuario | Medio | API/ownership |
 | Verificación de build | Entorno/release | 179 tests y typecheck pasan, pero `ng build` todavía aborta con exit 134 | reproducir en CI limpio, fijar toolchain y validar presupuestos | Medio | entorno CI |
-| CAT-001 | Dependencia vulnerable, Verificado 2026-11-04 | `ms-catalog` fija transitivamente `body-parser@2.3.0`; npm reporta severidad alta por DoS en cuerpos comprimidos | actualizar lock a version corregida y validar parser/HTTP antes de produccion | Bajo-Medio | Express / registro npm |
+| CAT-001 | **Resuelto 2026-11-10** (antes: dependencia vulnerable) | `ms-catalog` fijaba transitivamente `body-parser@2.3.0`; lock actualizado a 2.4.0 | ninguna; ver evidencia | — | Express / registro npm |
 
 ### CAT-001 — evidencia y limites
 
@@ -26,8 +26,14 @@ activa `express.json`. Audit reporta una vulnerabilidad alta,
 `>=2.0.0 <2.4.0`, con correccion disponible. **Riesgo:** denegacion de servicio
 por bytes posteriores a un cuerpo comprimido segun el aviso.
 **No determinado:** explotabilidad efectiva en el despliegue/APIM.
-**Accion pendiente:** actualizar la dependencia transitiva y probar procesamiento
-de cuerpos comprimidos y regresion HTTP. No se cambiaron dependencias en MTEC-28.
+**Resolucion 2026-11-10:** `package-lock.json` fija `body-parser@2.4.0`
+(version corregida segun el aviso); `npm audit` informa 0 vulnerabilidades.
+`tests/publication-write-http.test.ts` cubre JSON valido, plano y comprimido;
+invalido o vacio (400); comprimido corrupto (400); bytes finales en un fragmento
+posterior (el servicio sigue respondiendo); bomba de descompresion (413); y
+codificacion o charset no soportados (415). **Limite:** el cierre del proceso
+descrito en el aviso no se reprodujo localmente con 2.3.0, de modo que la
+correccion se apoya en el parche de la dependencia y no en un exploit demostrado.
 
 ## P2 — Correcciones funcionales y de contrato
 

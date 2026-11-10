@@ -95,9 +95,12 @@ export function createPublicationRouter(dependencies: PublicationHttpDependencie
     response.json(await dependencies.publications.get(request.params.publicationId as string));
   });
   router.use(((error, request, response, next) => {
-    if (error?.type === 'entity.parse.failed' || error?.type === 'entity.too.large') {
-      response.status(error.type === 'entity.too.large' ? 413 : 400).json({ error: {
-        code: error.type === 'entity.too.large' ? 'PAYLOAD_TOO_LARGE' : 'INVALID_PUBLICATION',
+    // body-parser/raw-body client errors (http-errors with expose=true): malformed or truncated JSON, bodies over
+    // 1 MiB (also after decompression), unsupported encoding/charset or invalid compressed data. Never echo details.
+    if (typeof error?.status === 'number' && error.status >= 400 && error.status < 500 && error.expose === true) {
+      const status = error.status === 413 ? 413 : error.status === 415 ? 415 : 400;
+      response.status(status).json({ error: {
+        code: { 413: 'PAYLOAD_TOO_LARGE', 415: 'UNSUPPORTED_MEDIA_TYPE', 400: 'INVALID_PUBLICATION' }[status],
         message: 'Invalid request body.', details: [], correlationId: request.correlationId,
         timestamp: Math.floor(Date.now() / 1000),
       } });
