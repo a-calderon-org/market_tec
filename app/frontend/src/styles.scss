@@ -62,42 +62,16 @@ button, input, select, textarea {
   opacity: 1;
 }
 
-/* Google renders its personalized button inside an iframe. Keeping the
-   iframe canvas on the same neutral background avoids a light rectangle
-   around the official dark button. */
-:root[data-theme='dark'] .google-button,
-:root[data-theme='dark'] .google-button > div,
-:root[data-theme='dark'] .google-button iframe {
-  color-scheme: dark;
-  background-color: #131314 !important;
-}
-
+/* Botón oficial de Google Identity Services (iframe). No se toca su interior ni su tamaño: nada de alturas fijas,
+   `transform`, bordes postizos ni `!important` sobre el iframe, que recortaban el botón en Safari. Solo se declara el
+   esquema de color del contenedor para que el lienzo del iframe sea transparente (sin rectángulo claro) en cada tema;
+   el aspecto del botón lo decide el tema oficial pedido a GIS (`outline` / `filled_black`). */
 :root[data-theme='dark'] .google-button {
-  position: relative;
-  height: 39px;
+  color-scheme: dark;
 }
 
-:root[data-theme='dark'] .google-button::after {
-  position: absolute;
-  z-index: 2;
-  inset: 0;
-
-  pointer-events: none;
-
-  content: '';
-
-  border: 1px solid #8e918f;
-  border-radius: 4px;
-}
-
-:root[data-theme='dark'] .google-button > :first-child {
-  transform: translateY(-2px);
-}
-
-:root[data-theme='dark'] .google-button > div,
-:root[data-theme='dark'] .google-button iframe {
-  display: block !important;
-  margin-block: 0 !important;
+:root[data-theme='light'] .google-button {
+  color-scheme: light;
 }
 
 :focus-visible {

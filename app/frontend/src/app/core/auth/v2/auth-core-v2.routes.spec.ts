@@ -92,6 +92,7 @@ describe('apiVersionlessPath', () => {
 describe('isBearerRoute (lista explícita)', () => {
   for (const route of [
     '/me/profile',
+    '/me/password',
     '/usuarios/usr_1',
     '/usuarios/a%2Fb%3Fc%23d',
     '/usuarios/usr_1/publicaciones',
@@ -217,6 +218,8 @@ for (const config of BASES) {
       ['PUT', '/usuarios/usr_mock_0001'],
       ['GET', '/usuarios/a%2Fb%3Fc%23d'],
       ['GET', '/me/profile'],
+      ['GET', '/me/password'],
+      ['POST', '/me/password'],
       ['GET', '/chats'],
       ['POST', '/chats/C1/mensajes'],
     ];

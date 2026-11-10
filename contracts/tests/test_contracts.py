@@ -218,7 +218,8 @@ def validate_message_semantics(event: dict[str, Any]) -> None:
 class OpenApiContractsTest(unittest.TestCase):
     def test_openapi_documents_and_references(self) -> None:
         files = sorted(OPENAPI.glob("*.json"))
-        self.assertEqual(3, len(files))
+        # users, catalog, notifications y la extensión aditiva users-password (no toca la reconciliación B07 de users.json).
+        self.assertEqual(4, len(files))
         for path in files:
             with self.subTest(path=path.name):
                 document = load_json(path)

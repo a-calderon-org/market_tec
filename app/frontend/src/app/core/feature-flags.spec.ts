@@ -10,7 +10,10 @@ describe('resolveFeatureFlags', () => {
   it('applies the staging HTTP configuration', () => {
     expect(
       resolveFeatureFlags({ authCoreV2: true, authCoreV2Adapter: 'http', authCoreV2HttpTopologyVerified: true }),
-    ).toEqual({ authCoreV2: true, authCoreV2Adapter: 'http', authCoreV2HttpTopologyVerified: true, catalogInternalJwt: false });
+    ).toEqual({
+      authCoreV2: true, authCoreV2Adapter: 'http', authCoreV2HttpTopologyVerified: true,
+      catalogInternalJwt: false, passwordAuth: false,
+    });
   });
 
   it('enables the internal-JWT catalog only with an explicit boolean', () => {
@@ -18,9 +21,16 @@ describe('resolveFeatureFlags', () => {
     expect(resolveFeatureFlags({ catalogInternalJwt: 'true' }).catalogInternalJwt).toBe(false);
   });
 
+  it('enables password sign-in only with an explicit boolean, off by default', () => {
+    expect(DEFAULT_FEATURE_FLAGS.passwordAuth).toBe(false);
+    expect(resolveFeatureFlags({ passwordAuth: true }).passwordAuth).toBe(true);
+    expect(resolveFeatureFlags({ passwordAuth: 'true' }).passwordAuth).toBe(false);
+    expect(resolveFeatureFlags({ passwordAuth: 1 }).passwordAuth).toBe(false);
+  });
+
   it('ignores values of the wrong type', () => {
     expect(
-      resolveFeatureFlags({ authCoreV2: 'true', authCoreV2Adapter: 'grpc', authCoreV2HttpTopologyVerified: 1, catalogInternalJwt: 1 }),
+      resolveFeatureFlags({ authCoreV2: 'true', authCoreV2Adapter: 'grpc', authCoreV2HttpTopologyVerified: 1, catalogInternalJwt: 1, passwordAuth: 'yes' }),
     ).toEqual(DEFAULT_FEATURE_FLAGS);
   });
 });

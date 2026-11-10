@@ -110,6 +110,25 @@ export class AuthSessionService {
   }
 
   /**
+   * Inicio de sesión con correo institucional y contraseña: misma sesión interna (JWT/CSRF solo en memoria) que Google y
+   * el Magic Link, sin pedir ningún enlace. La contraseña no se guarda ni se conserva tras la petición.
+   */
+  async signInWithPassword(email: string, password: string): Promise<void> {
+    const epoch = this.store.beginLogin();
+    const response = await this.api.loginWithPassword(email, password);
+
+    if (!this.store.applyAuthResponse(response, epoch)) {
+      throw new AuthRequiredError('cancelled');
+    }
+  }
+
+  /** Pide el enlace de recuperación; su CSRF de intento se comparte con el canje del Magic Link. */
+  async requestPasswordRecovery(email: string): Promise<void> {
+    const requested = await this.api.requestPasswordRecovery(email);
+    this.emailLinkCsrf.save(requested.csrfToken);
+  }
+
+  /**
    * Confirma el Magic Link (POST explícito) desde el navegador que lo pidió. Sin el CSRF de ese navegador se
    * rechaza localmente con `EMAIL_LINK_OTHER_BROWSER`, sin gastar el enlace. La sesión resultante es la misma
    * que la de Google: JWT/CSRF internos solo en memoria.

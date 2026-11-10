@@ -32,7 +32,15 @@ export interface AuthUser {
   name: string;
   picture?: string;
 }
-export type GoogleButtonTheme = 'outline' | 'outline_dark';
+/**
+ * Temas oficiales de Google Identity Services para el botón estándar: `outline` (claro) y `filled_black` (oscuro).
+ * No existe un `outline_dark`: un valor desconocido se descarta y GIS dibuja el tema claro sobre fondo oscuro.
+ */
+export type GoogleButtonTheme = 'outline' | 'filled_black';
+
+/** Límites oficiales del ancho del botón de GIS, en píxeles. */
+export const GOOGLE_BUTTON_MIN_WIDTH = 200;
+export const GOOGLE_BUTTON_MAX_WIDTH = 400;
 
 /**
  * Mensaje para la UI a partir de un fallo del núcleo v2. Solo usa el status y el
@@ -80,6 +88,8 @@ export class GoogleAuthService {
   private readonly session = this.flags.authCoreV2 ? inject(AuthSessionService) : null;
   private readonly catalogCredential = this.flags.authCoreV2 ? inject(GoogleCatalogCredential) : null;
   private googleAttempt: GoogleLoginAttempt | null = null;
+  /** Contenedor del botón renderizado con el intento vigente; permite cambiar solo el tema sin otro intento. */
+  private renderedIn: HTMLElement | null = null;
 
   readonly user = linkedSignal<AuthUser | null>(() =>
     this.session
@@ -121,6 +131,7 @@ export class GoogleAuthService {
       throw new Error('Falta configurar el Client ID de Google.');
     }
     this.googleAttempt = null;
+    this.renderedIn = null;
     const deadline = Date.now() + 10000;
     while (!window.google?.accounts?.id) {
       if (Date.now() > deadline) {
@@ -153,11 +164,8 @@ export class GoogleAuthService {
       ...(attempt ? { nonce: attempt.nonce } : {})
     });
     element.replaceChildren();
-    identity.renderButton(element, {
-      type: 'standard', theme, size: 'large', text: 'continue_with',
-      shape: 'rectangular', logo_alignment: 'left', locale: 'es',
-      width: Math.min(400, element.clientWidth || 300)
-    });
+    identity.renderButton(element, this.buttonOptions(element, theme));
+    this.renderedIn = element;
 
     await new Promise(resolve => setTimeout(resolve, 500));
 
@@ -166,6 +174,34 @@ export class GoogleAuthService {
         `Google no pudo mostrar el botón. Verifica que ${window.location.origin} esté registrado como origen autorizado en Google Cloud y que el navegador no esté bloqueando accounts.google.com.`
       );
     }
+  }
+
+  /** Opciones del botón oficial; el ancho sigue al contenedor, dentro de los límites que admite GIS. */
+  private buttonOptions(element: HTMLElement, theme: GoogleButtonTheme): Record<string, string | number> {
+    const available = element.parentElement?.clientWidth || element.clientWidth || 0;
+    const width = available > 0
+      ? Math.max(GOOGLE_BUTTON_MIN_WIDTH, Math.min(GOOGLE_BUTTON_MAX_WIDTH, Math.floor(available)))
+      : 300;
+
+    return {
+      type: 'standard', theme, size: 'large', text: 'continue_with',
+      shape: 'rectangular', logo_alignment: 'left', locale: 'es', width,
+    };
+  }
+
+  /**
+   * Cambia solo el tema del botón ya inicializado: mismo intento, mismo nonce y un único botón (el contenedor se
+   * vacía antes de dibujar). Devuelve false si no hay un botón vigente en ese elemento; el llamador lo renderiza entero.
+   */
+  restyleButton(element: HTMLElement, theme: GoogleButtonTheme): boolean {
+    const identity = window.google?.accounts?.id;
+    if (!identity || this.renderedIn !== element || !element.isConnected) return false;
+    if (this.session && !this.googleAttempt) return false;
+
+    element.replaceChildren();
+    identity.renderButton(element, this.buttonOptions(element, theme));
+
+    return true;
   }
 
   async signIn(credential: string): Promise<void> {

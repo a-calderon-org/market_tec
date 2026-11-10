@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52" width="52" height="52">
+  <title>MarketTEC</title>
+  <defs>
+    <linearGradient id="market-logo-gradient" x1="6" y1="5" x2="43" y2="42">
+      <stop offset="0" stop-color="#0397c4"/>
+      <stop offset="1" stop-color="#00897f"/>
+    </linearGradient>
+  </defs>
+  <!-- Marca oficial de MarketTEC: idéntica a la del encabezado (app.html), centrada en un lienzo cuadrado. -->
+  <g transform="translate(0 3)">
+    <path fill="url(#market-logo-gradient)" d="M8 10h8V6.5A4.5 4.5 0 0 1 20.5 2h11A4.5 4.5 0 0 1 36 6.5V10h3a7 7 0 0 1 7 7v20a7 7 0 0 1-7 7H8a7 7 0 0 1-7-7V17a7 7 0 0 1 7-7Zm13-3.5V10h10V6.5a.5.5 0 0 0-.5-.5h-9a.5.5 0 0 0-.5.5Z"/>
+    <path fill="#fff" d="M23.5 17c.6 5.8 3.2 8.4 9 9-5.8.6-8.4 3.2-9 9-.6-5.8-3.2-8.4-9-9 5.8-.6 8.4-3.2 9-9Z"/>
+    <circle cx="41" cy="8" r="6" fill="#8fbd36"/>
+    <circle cx="43" cy="6" r="2.5" fill="#b7d84b" opacity=".8"/>
+  </g>
+</svg>

@@ -16,8 +16,42 @@
 
     </header>
 
+    @if (authCoreV2) {
+      <div class="auth-tabs" role="tablist" aria-label="Acceso a MarketTEC">
+        <button
+          type="button"
+          role="tab"
+          id="auth-tab-signin"
+          class="auth-tab"
+          aria-controls="auth-panel"
+          [attr.aria-selected]="mode() === 'signin'"
+          [attr.tabindex]="mode() === 'signin' ? 0 : -1"
+          [class.auth-tab--active]="mode() === 'signin'"
+          (click)="selectMode('signin')"
+          (keydown)="onTabKeydown($event)"
+        >
+          Iniciar sesión
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          id="auth-tab-signup"
+          class="auth-tab"
+          aria-controls="auth-panel"
+          [attr.aria-selected]="mode() === 'signup'"
+          [attr.tabindex]="mode() === 'signup' ? 0 : -1"
+          [class.auth-tab--active]="mode() === 'signup'"
+          (click)="selectMode('signup')"
+          (keydown)="onTabKeydown($event)"
+        >
+          Crear cuenta
+        </button>
+      </div>
+    }
+
     @if (error()) {
-      <div class="login-feedback">
+      <div class="login-feedback" role="alert">
         <span>
           !
         </span>
@@ -28,138 +62,305 @@
       </div>
     }
 
-    @if (emailLoginAvailable) {
-      @if (linkSentTo(); as sentTo) {
-        <div class="login-form email-link-sent" role="status">
-          <p class="email-link-sent__title">
-            Revisa tu correo institucional
-          </p>
+    <div
+      id="auth-panel"
+      class="auth-panel"
+      [attr.role]="authCoreV2 ? 'tabpanel' : null"
+      [attr.aria-labelledby]="authCoreV2 ? (mode() === 'signin' ? 'auth-tab-signin' : 'auth-tab-signup') : null"
+    >
+      @if (mode() === 'signin' && passwordAuthAvailable) {
 
-          <p class="google-login-note">
-            Si {{ sentTo }} es elegible, recibirás un enlace de acceso. Vence en 10 minutos, funciona una sola vez
-            y debe abrirse en este mismo navegador.
-          </p>
+        @if (signInView() === 'password') {
+          <form class="login-form" [formGroup]="passwordForm" (ngSubmit)="submitPassword()" novalidate>
 
-          <button type="button" class="institutional-button" (click)="requestAnotherLink()">
-            Solicitar otro enlace
-          </button>
-        </div>
-      } @else if (!emailFormOpen()) {
-        <button type="button" class="login-submit" (click)="openEmailForm()">
-          <span class="login-submit__icon">
-            @
-          </span>
-
-          <span>
-            Continuar con correo institucional
-          </span>
-        </button>
-      } @else {
-        <form
-          class="login-form"
-          [formGroup]="loginForm"
-          (ngSubmit)="submit()"
-        >
-
-          <label class="form-field">
-
-            <span class="form-field__label">
-              Correo Institucional
-            </span>
-
-            <div
-              class="input-control"
-              [class.input-control--error]="
-                isControlInvalid(
-                  'correo'
-                )
-              "
-            >
-              <span class="input-control__icon">
-                @
+            <label class="form-field">
+              <span class="form-field__label">
+                Correo institucional
               </span>
 
-              <input
-                type="email"
-                formControlName="correo"
-                autocomplete="username"
-                placeholder="ejemplo@estudiantec.cr"
-              >
+              <div class="input-control" [class.input-control--error]="isFieldInvalid('password', 'correo')">
+                <span class="input-control__icon" aria-hidden="true">@</span>
+                <input
+                  type="email"
+                  formControlName="correo"
+                  autocomplete="username"
+                  inputmode="email"
+                  placeholder="ejemplo@estudiantec.cr"
+                >
+              </div>
+
+              @if (hasFieldError('password', 'correo', 'required')) {
+                <small class="field-error">El correo institucional es obligatorio.</small>
+              }
+              @if (hasFieldError('password', 'correo', 'email')) {
+                <small class="field-error">Ingresa un correo electrónico válido.</small>
+              }
+              @if (hasFieldError('password', 'correo', 'institutionalEmail') && !hasFieldError('password', 'correo', 'email')) {
+                <small class="field-error">
+                  Utiliza tu cuenta &#64;estudiantec.cr, &#64;itcr.ac.cr o &#64;tec.ac.cr.
+                </small>
+              }
+            </label>
+
+            <label class="form-field">
+              <span class="form-field__label">
+                Contraseña
+              </span>
+
+              <div class="input-control" [class.input-control--error]="isFieldInvalid('password', 'contrasena')">
+                <span class="input-control__icon" aria-hidden="true">•</span>
+                <input
+                  [type]="showPassword() ? 'text' : 'password'"
+                  formControlName="contrasena"
+                  autocomplete="current-password"
+                  maxlength="256"
+                >
+                <button
+                  type="button"
+                  class="password-toggle"
+                  (click)="togglePasswordVisibility()"
+                  [attr.aria-pressed]="showPassword()"
+                  [attr.aria-label]="showPassword() ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+                >
+                  {{ showPassword() ? 'Ocultar' : 'Mostrar' }}
+                </button>
+              </div>
+
+              @if (hasFieldError('password', 'contrasena', 'required')) {
+                <small class="field-error">Ingresa tu contraseña.</small>
+              }
+            </label>
+
+            <button class="login-submit login-submit--centered" type="submit"
+              [disabled]="passwordForm.invalid || signingIn() || submitting()">
+              @if (signingIn()) {
+                <span>Iniciando sesión...</span>
+              } @else {
+                <span>Iniciar sesión</span>
+              }
+            </button>
+
+            <div class="auth-secondary">
+              <button type="button" class="forgot-password" (click)="openRecovery()">
+                Olvidé mi contraseña
+              </button>
             </div>
 
-            @if (
-              hasEmailError(
-                'required'
-              )
-            ) {
-              <small class="field-error">
-                El correo institucional es obligatorio.
-              </small>
-            }
+            <p class="google-login-note">
+              ¿Tu cuenta aún no tiene contraseña? Ve a «Crear cuenta», verifica tu correo y configúrala.
+            </p>
+          </form>
+        } @else {
+          @if (recoverySentTo(); as sentTo) {
+            <div class="login-form email-link-sent" role="status">
+              <p class="email-link-sent__title">
+                Revisa tu correo institucional
+              </p>
 
-            @if (
-              hasEmailError(
-                'email'
-              )
-            ) {
-              <small class="field-error">
-                Ingresa un correo electrónico válido.
-              </small>
-            }
+              <p class="google-login-note">
+                Si {{ sentTo }} tiene una cuenta, recibirás un enlace de un solo uso que vence en 10 minutos y debe
+                abrirse en este mismo navegador. Por seguridad, un enlace no reemplaza una contraseña ya
+                configurada: si tu cuenta tiene una, tendrás que usarla.
+              </p>
 
-            @if (
-              hasEmailError(
-                'institutionalEmail'
-              ) &&
-              !hasEmailError(
-                'email'
-              )
-            ) {
-              <small class="field-error">
-                Utiliza tu cuenta
-                @estudiantec.cr, @itcr.ac.cr o @tec.ac.cr.
-              </small>
-            }
+              <button type="button" class="institutional-button" (click)="backToPasswordSignIn()">
+                Volver a iniciar sesión
+              </button>
+            </div>
+          } @else {
+            <form class="login-form" [formGroup]="recoveryForm" (ngSubmit)="submitRecovery()" novalidate>
+              <p class="google-login-note auth-lead">
+                Te enviaremos un enlace de un solo uso a tu correo institucional.
+              </p>
 
-            @if (
-              !isControlInvalid(
-                'correo'
-              )
-            ) {
-              <small class="form-field__help">
-                ⓘ Te enviaremos un enlace de acceso de un solo uso.
-              </small>
-            }
+              <label class="form-field">
+                <span class="form-field__label">
+                  Correo institucional
+                </span>
 
-          </label>
+                <div class="input-control" [class.input-control--error]="isFieldInvalid('recovery', 'correo')">
+                  <span class="input-control__icon" aria-hidden="true">@</span>
+                  <input
+                    type="email"
+                    formControlName="correo"
+                    autocomplete="username"
+                    inputmode="email"
+                    placeholder="ejemplo@estudiantec.cr"
+                  >
+                </div>
 
-          <button
-            class="login-submit"
-            type="submit"
-            [disabled]="
-              loginForm.invalid ||
-              sendingLink() ||
-              submitting()
-            "
-          >
-            @if (sendingLink()) {
-              <span>
-                Enviando enlace...
-              </span>
-            } @else {
-              <span class="login-submit__icon">
-                ↪
-              </span>
+                @if (hasFieldError('recovery', 'correo', 'required')) {
+                  <small class="field-error">El correo institucional es obligatorio.</small>
+                }
+                @if (hasFieldError('recovery', 'correo', 'email')) {
+                  <small class="field-error">Ingresa un correo electrónico válido.</small>
+                }
+                @if (hasFieldError('recovery', 'correo', 'institutionalEmail') && !hasFieldError('recovery', 'correo', 'email')) {
+                  <small class="field-error">
+                    Utiliza tu cuenta &#64;estudiantec.cr, &#64;itcr.ac.cr o &#64;tec.ac.cr.
+                  </small>
+                }
+              </label>
 
-              <span>
-                Enviar enlace de acceso
-              </span>
-            }
+              <button class="login-submit login-submit--centered" type="submit"
+                [disabled]="recoveryForm.invalid || recovering()">
+                {{ recovering() ? 'Enviando enlace...' : 'Enviar enlace de recuperación' }}
+              </button>
+
+              <div class="auth-secondary">
+                <button type="button" class="forgot-password" (click)="backToPasswordSignIn()">
+                  Volver a iniciar sesión
+                </button>
+              </div>
+            </form>
+          }
+        }
+
+      } @else if (emailLoginAvailable) {
+
+        @if (linkSentTo(); as sentTo) {
+          <div class="login-form email-link-sent" role="status">
+            <p class="email-link-sent__title">
+              Revisa tu correo institucional
+            </p>
+
+            <p class="google-login-note">
+              @if (mode() === 'signup') {
+                Si {{ sentTo }} es elegible, recibirás un enlace de verificación.
+              } @else {
+                Si {{ sentTo }} es elegible, recibirás un enlace de acceso.
+              }
+              Vence en 10 minutos, funciona una sola vez y debe abrirse en este mismo navegador.
+              @if (mode() === 'signup' && passwordAuthAvailable) {
+                Al confirmarlo podrás crear tu contraseña.
+              }
+            </p>
+
+            <button type="button" class="institutional-button" (click)="requestAnotherLink()">
+              Solicitar otro enlace
+            </button>
+          </div>
+        } @else if (!emailFormOpen()) {
+          <button type="button" class="login-submit login-submit--centered" (click)="openEmailForm()">
+            <span class="login-submit__icon" aria-hidden="true">
+              @
+            </span>
+
+            <span>
+              Continuar con correo institucional
+            </span>
           </button>
+        } @else {
+          <form
+            class="login-form"
+            [formGroup]="loginForm"
+            (ngSubmit)="submit()"
+            novalidate
+          >
 
-        </form>
+            <label class="form-field">
+
+              <span class="form-field__label">
+                Correo Institucional
+              </span>
+
+              <div
+                class="input-control"
+                [class.input-control--error]="
+                  isControlInvalid(
+                    'correo'
+                  )
+                "
+              >
+                <span class="input-control__icon" aria-hidden="true">
+                  @
+                </span>
+
+                <input
+                  type="email"
+                  formControlName="correo"
+                  autocomplete="username"
+                  inputmode="email"
+                  placeholder="ejemplo@estudiantec.cr"
+                >
+              </div>
+
+              @if (
+                hasEmailError(
+                  'required'
+                )
+              ) {
+                <small class="field-error">
+                  El correo institucional es obligatorio.
+                </small>
+              }
+
+              @if (
+                hasEmailError(
+                  'email'
+                )
+              ) {
+                <small class="field-error">
+                  Ingresa un correo electrónico válido.
+                </small>
+              }
+
+              @if (
+                hasEmailError(
+                  'institutionalEmail'
+                ) &&
+                !hasEmailError(
+                  'email'
+                )
+              ) {
+                <small class="field-error">
+                  Utiliza tu cuenta
+                  &#64;estudiantec.cr, &#64;itcr.ac.cr o &#64;tec.ac.cr.
+                </small>
+              }
+
+              @if (
+                !isControlInvalid(
+                  'correo'
+                )
+              ) {
+                <small class="form-field__help">
+                  ⓘ
+                  @if (mode() === 'signup') {
+                    Te enviaremos un enlace de verificación de un solo uso.
+                  } @else {
+                    Te enviaremos un enlace de acceso de un solo uso.
+                  }
+                </small>
+              }
+
+            </label>
+
+            <button
+              class="login-submit login-submit--centered"
+              type="submit"
+              [disabled]="
+                loginForm.invalid ||
+                sendingLink() ||
+                submitting()
+              "
+            >
+              @if (sendingLink()) {
+                <span>
+                  Enviando enlace...
+                </span>
+              } @else {
+                <span>
+                  {{ mode() === 'signup' ? 'Enviar enlace de verificación' : 'Enviar enlace de acceso' }}
+                </span>
+              }
+            </button>
+
+          </form>
+        }
+
       }
-    }
+    </div>
 
     <div class="login-divider">
       <span></span>
@@ -184,17 +385,8 @@
           Reintentar conexión con Google
         </button>
       }
-      @if (authCoreV2 && !googleLoading() && !submitting()) {
-        @if (googlePurpose() === 'login') {
-          <button type="button" class="institutional-button" (click)="setGooglePurpose('register')">
-            ¿Primera vez en MarketTEC? Crear cuenta con Google
-          </button>
-        } @else {
-          <p class="google-login-note">Estás creando una cuenta nueva con tu correo institucional.</p>
-          <button type="button" class="institutional-button" (click)="setGooglePurpose('login')">
-            Ya tengo cuenta: ingresar con Google
-          </button>
-        }
+      @if (authCoreV2 && !googleLoading() && !submitting() && mode() === 'signup') {
+        <p class="google-login-note">Estás creando una cuenta nueva con tu correo institucional.</p>
       }
     </div>
 

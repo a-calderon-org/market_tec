@@ -2,6 +2,7 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { Location } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AuthSessionService } from '../../core/auth/v2/auth-session.service';
+import { PasswordCredentialsService } from '../../core/auth/v2/password-credentials.service';
 import type { EmailLinkProof } from '../../core/auth/v2/auth-contract';
 import { FEATURE_FLAGS } from '../../core/feature-flags';
 import { describeEmailLinkFailure } from './services/email-link-errors';
@@ -34,7 +35,7 @@ export function parseEmailLinkFragment(fragment: string | null | undefined): Ema
       <section class="login-card" aria-live="polite">
         <header class="login-brand">
           <div class="login-brand__welcome">
-            <h1>Acceso con correo institucional</h1>
+            <h1>{{ recovery ? 'Recuperar acceso' : 'Verificación de correo institucional' }}</h1>
           </div>
         </header>
         @if (failure(); as message) {
@@ -42,11 +43,11 @@ export function parseEmailLinkFragment(fragment: string | null | undefined): Ema
             <span>!</span>
             <p>{{ message }}</p>
           </div>
-          <button type="button" class="login-submit" (click)="requestAnotherLink()">
-            Solicitar otro enlace
+          <button type="button" class="login-submit login-submit--centered" (click)="requestAnotherLink()">
+            Volver a «Iniciar sesión»
           </button>
         } @else {
-          <p class="google-login-note" role="status">Verificando tu enlace de acceso...</p>
+          <p class="google-login-note" role="status">Verificando tu enlace...</p>
         }
       </section>
     </main>
@@ -56,13 +57,18 @@ export function parseEmailLinkFragment(fragment: string | null | undefined): Ema
 export class EmailLinkCallback implements OnInit {
   private readonly router = inject(Router);
   private readonly location = inject(Location);
-  private readonly session = inject(FEATURE_FLAGS).authCoreV2 ? inject(AuthSessionService) : null;
+  private readonly flags = inject(FEATURE_FLAGS);
+  private readonly session = this.flags.authCoreV2 ? inject(AuthSessionService) : null;
+  private readonly passwords = this.flags.authCoreV2 && this.flags.passwordAuth ? inject(PasswordCredentialsService) : null;
+  /** `/acceso/recuperar`: mismo canje del enlace, con mensajes de recuperación (B02). */
+  readonly recovery: boolean;
   private readonly proof: EmailLinkProof | null;
 
   readonly failure = signal<string | null>(null);
 
   constructor() {
     const route = inject(ActivatedRoute);
+    this.recovery = route.snapshot.data?.['purpose'] === 'recovery';
     this.proof = parseEmailLinkFragment(route.snapshot.fragment ?? globalThis.location?.hash);
     // El secreto sale de la barra del navegador (y del historial) antes de cualquier otra cosa.
     this.location.replaceState(this.location.path(false));
@@ -81,12 +87,26 @@ export class EmailLinkCallback implements OnInit {
     try {
       await this.session.confirmEmailLink(this.proof);
     } catch (error) {
-      this.failure.set(describeEmailLinkFailure(error));
+      this.failure.set(describeEmailLinkFailure(error, this.recovery ? 'recovery' : 'access'));
       return;
+    }
+
+    // Con contraseñas activas, un enlace confirmado para una cuenta sin contraseña deja una concesión de un solo uso:
+    // se lleva al estudiante a configurarla. Cualquier fallo de la consulta no impide ingresar.
+    if (this.passwords && await this.setupPending()) {
+      if (await this.router.navigate(['/contrasena'], { replaceUrl: true })) return;
     }
 
     if (!await this.router.navigate(['/'], { replaceUrl: true, state: { openProfile: true } })) {
       this.failure.set('Ingresaste, pero no fue posible abrir MarketTec. Recarga la página.');
+    }
+  }
+
+  private async setupPending(): Promise<boolean> {
+    try {
+      return (await this.passwords!.status()).setupAvailable;
+    } catch {
+      return false;
     }
   }
 

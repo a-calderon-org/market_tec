@@ -202,6 +202,15 @@ export class MockAuthApiAdapter extends AuthApiPort {
       : Promise.reject(new AuthApiError(400, 'INVALID_REQUEST'));
   }
 
+  /** La contraseña no se simula: sin ms-users real no hay credenciales que verificar. */
+  loginWithPassword(): Promise<AuthResponse> {
+    return Promise.reject(new AuthApiError(503, 'AUTH_TEMPORARILY_UNAVAILABLE'));
+  }
+
+  requestPasswordRecovery(): Promise<EmailLinkRequested> {
+    return Promise.reject(new AuthApiError(503, 'AUTH_TEMPORARILY_UNAVAILABLE'));
+  }
+
   confirmEmailLink(proof: EmailLinkProof, attemptCsrfToken: string): Promise<AuthResponse> {
     if (!proof.token || attemptCsrfToken !== 'mock-email-attempt-csrf') {
       return Promise.reject(new AuthApiError(403, 'CSRF_INVALID'));

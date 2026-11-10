@@ -90,6 +90,13 @@ export interface EmailLinkProof {
   readonly token: string;
 }
 
+/** `GET /v1/me/password`: si la cuenta ya tiene contraseña y si la primera puede configurarse ahora. */
+export interface PasswordStatus {
+  readonly configured: boolean;
+  /** Solo con una concesión de un solo uso (enlace confirmado hace menos de 10 minutos) y sin contraseña previa. */
+  readonly setupAvailable: boolean;
+}
+
 /** `status === 0` representa red/CORS, timeout o respuesta perdida. */
 export class AuthApiError extends Error {
   constructor(

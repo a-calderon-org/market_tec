@@ -7,4 +7,6 @@ export const environment = {
   // featureFlags: { authCoreV2: true, authCoreV2Adapter: 'http', authCoreV2HttpTopologyVerified: true },
   // Opcional: publicaciones del ms-catalog propio con el JWT interno (Google o Magic Link). Requiere
   // catalogApiBaseUrl: 'https://<swa>/api/catalog-v2/v1' y añadir catalogInternalJwt: true a featureFlags.
+  // Opcional: correo institucional + contraseña (ms-users `USERS_PASSWORD_ENABLED=true`, migración V14 aplicada).
+  // Añade passwordAuth: true a featureFlags; requiere authCoreV2Adapter: 'http'. Sin él no hay formulario de contraseña.
 };

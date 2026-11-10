@@ -36,6 +36,7 @@ import { SESSION_COORDINATOR_CONFIG } from './session-coordinator';
 import { InMemoryLock, SignalHub } from './auth-v2.testing';
 import { AUTH_V2_BUSINESS_TRANSPORT, BusinessTransportBlockedError } from './business-transport';
 import { EmailLinkCsrf } from './email-link-csrf';
+import { PasswordCredentialsService } from './password-credentials.service';
 import { CLIENT_BUDGET_HEADER, HttpAuthApiAdapter } from './http-auth-api.adapter';
 import { provideAuthCoreV2 } from './provide-auth-core-v2';
 import { SessionLock } from './session-lock';
@@ -321,6 +322,136 @@ describe('HttpAuthApiAdapter + núcleo v2 contra ms-users (HttpTestingController
     });
   });
 
+  describe('Contraseña institucional (correo + contraseña)', () => {
+    const PASSWORD = 'correct horse battery';
+    const EMAIL_CSRF = 'e'.repeat(64);
+
+    beforeEach(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+      configure();
+    });
+
+    it('POST /v1/auth/password/login crea la sesión interna sin pedir ningún Magic Link y sin guardar la contraseña', async () => {
+      const session = TestBed.inject(AuthSessionService);
+      const done = session.signInWithPassword('ana@estudiantec.cr', PASSWORD);
+      await settle();
+      const req = httpTesting.expectOne(url('/v1/auth/password/login'));
+      expectCookieRequest(req, 'POST');
+      expect(req.request.headers.has('X-CSRF-Token')).toBe(false);
+      expect(req.request.body).toEqual({ email: 'ana@estudiantec.cr', password: PASSWORD });
+      req.flush(authResponse());
+      await done;
+
+      httpTesting.expectNone(url('/v1/auth/email/requests'));
+      httpTesting.expectNone(url('/v1/auth/email/confirm'));
+      expect(session.status()).toBe('active');
+      expect(session.currentIdentity()?.userId).toBe(USER_ID);
+      expect(await session.getAccessToken()).toBe(INTERNAL_JWT);
+      const stored = JSON.stringify({ ...sessionStorage }) + JSON.stringify({ ...localStorage }) + document.cookie;
+      expect(stored).not.toContain(PASSWORD);
+      expect(stored).not.toContain(INTERNAL_JWT);
+    });
+
+    it('credenciales inválidas (401), bloqueo (429) y respuesta malformada no crean sesión', async () => {
+      const session = TestBed.inject(AuthSessionService);
+      for (const [status, code] of [[401, 'INVALID_CREDENTIALS'], [429, 'RATE_LIMITED'], [503, 'AUTH_TEMPORARILY_UNAVAILABLE']] as const) {
+        const done = session.signInWithPassword('ana@estudiantec.cr', 'wrong password 1');
+        await settle();
+        httpTesting.expectOne(url('/v1/auth/password/login')).flush(envelope(code), { status, statusText: 'x' });
+        await expect(done).rejects.toMatchObject({ status, code });
+        expect(session.currentIdentity()).toBeNull();
+      }
+      const malformed = session.signInWithPassword('ana@estudiantec.cr', PASSWORD);
+      await settle();
+      httpTesting.expectOne(url('/v1/auth/password/login')).flush({ token: 'x' });
+      await expect(malformed).rejects.toMatchObject({ status: 0, code: 'INVALID_RESPONSE' });
+      expect(session.currentIdentity()).toBeNull();
+    });
+
+    it('la solicitud de recuperación comparte el CSRF del intento con el canje del enlace', async () => {
+      const session = TestBed.inject(AuthSessionService);
+      const pending = session.requestPasswordRecovery('ana@estudiantec.cr');
+      await settle();
+      const req = httpTesting.expectOne(url('/v1/auth/password/recovery/requests'));
+      expectCookieRequest(req, 'POST');
+      expect(req.request.body).toEqual({ email: 'ana@estudiantec.cr' });
+      req.flush({ status: 'accepted', csrfToken: EMAIL_CSRF }, { status: 202, statusText: 'Accepted' });
+      await pending;
+      expect(TestBed.inject(EmailLinkCsrf).read()).toBe(EMAIL_CSRF);
+      expect(JSON.stringify(localStorage)).not.toContain('ana@');
+    });
+
+    it('un enlace de recuperación sin continuidad (409) no crea sesión', async () => {
+      await (async () => {
+        const session = TestBed.inject(AuthSessionService);
+        const pending = session.requestPasswordRecovery('ana@estudiantec.cr');
+        await settle();
+        httpTesting.expectOne(url('/v1/auth/password/recovery/requests'))
+          .flush({ status: 'accepted', csrfToken: EMAIL_CSRF }, { status: 202, statusText: 'Accepted' });
+        await pending;
+        const done = session.confirmEmailLink({ attemptId: ATTEMPT_ID, token: 'f'.repeat(64) });
+        await settle();
+        httpTesting.expectOne(url('/v1/auth/email/confirm'))
+          .flush(envelope('CONTINUITY_REQUIRED'), { status: 409, statusText: 'Conflict' });
+        await expect(done).rejects.toMatchObject({ status: 409, code: 'CONTINUITY_REQUIRED' });
+        expect(session.currentIdentity()).toBeNull();
+      })();
+    });
+
+    it('GET/POST /v1/me/password llevan el JWT interno; solo la escritura lleva el CSRF de sesión', async () => {
+      await signIn();
+      const passwords = TestBed.inject(PasswordCredentialsService);
+
+      const status = passwords.status();
+      await settle();
+      const get = httpTesting.expectOne(url('/v1/me/password'));
+      expect(get.request.method).toBe('GET');
+      expect(get.request.headers.get('Authorization')).toBe(`Bearer ${INTERNAL_JWT}`);
+      expect(get.request.headers.get('X-MTEC-Client')).toBe('web');
+      expect(get.request.headers.has('X-CSRF-Token')).toBe(false);
+      get.flush({ configured: false, setupAvailable: true });
+      await expect(status).resolves.toEqual({ configured: false, setupAvailable: true });
+
+      const saving = passwords.setInitial(PASSWORD);
+      await settle();
+      const post = httpTesting.expectOne(url('/v1/me/password'));
+      expect(post.request.method).toBe('POST');
+      expect(post.request.headers.get('Authorization')).toBe(`Bearer ${INTERNAL_JWT}`);
+      expect(post.request.headers.get('X-CSRF-Token')).toBe(SESSION_CSRF);
+      expect(post.request.body).toEqual({ newPassword: PASSWORD });
+      expect(post.request.withCredentials).toBe(false);
+      post.flush({ configured: true }, { status: 201, statusText: 'Created' });
+      await expect(saving).resolves.toBeUndefined();
+      const stored = JSON.stringify({ ...sessionStorage }) + JSON.stringify({ ...localStorage });
+      expect(stored).not.toContain(PASSWORD);
+    });
+
+    it('errores de la configuración se representan por código y las respuestas malformadas no se aceptan', async () => {
+      await signIn();
+      const passwords = TestBed.inject(PasswordCredentialsService);
+      for (const [status, code] of [[403, 'PASSWORD_SETUP_NOT_AUTHORIZED'], [409, 'PASSWORD_ALREADY_SET'],
+        [422, 'WEAK_PASSWORD']] as const) {
+        const saving = passwords.setInitial(PASSWORD);
+        await settle();
+        httpTesting.expectOne(url('/v1/me/password')).flush(envelope(code), { status, statusText: 'x' });
+        await expect(saving).rejects.toMatchObject({ status, code });
+      }
+      const status = passwords.status();
+      await settle();
+      httpTesting.expectOne(url('/v1/me/password')).flush({ configured: 'yes' });
+      await expect(status).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+    });
+
+    it('el cambio de contraseña (PUT) no sale desde esta SPA: el transporte restringido lo bloquea', async () => {
+      await signIn();
+      const http = TestBed.inject(HttpClient);
+      await expect(firstValueFrom(http.put(url('/v1/me/password'), { currentPassword: 'a', newPassword: 'b' })))
+        .rejects.toBeInstanceOf(BusinessTransportBlockedError);
+      httpTesting.expectNone(url('/v1/me/password'));
+    });
+  });
+
   describe('autenticación Google', () => {
     beforeEach(() => configure());
 
@@ -401,6 +532,48 @@ describe('HttpAuthApiAdapter + núcleo v2 contra ms-users (HttpTestingController
       const stored = JSON.stringify({ ...sessionStorage }) + JSON.stringify({ ...localStorage }) + document.cookie;
       expect(stored).not.toContain(INTERNAL_JWT);
       expect(stored).not.toContain(GOOGLE_ID_TOKEN);
+    });
+
+    it('usa los temas oficiales de GIS, el ancho del contenedor (200–400) y re-dibuja solo el tema sin otro intento ni botón', async () => {
+      const renderButton = vi.fn((el: HTMLElement, _options: Record<string, string | number>) => {
+        el.appendChild(document.createElement('div'));
+      });
+      window.google = { accounts: { id: { initialize: vi.fn(), renderButton, disableAutoSelect: vi.fn() } } };
+      const google = TestBed.inject(GoogleAuthService);
+      const host = document.createElement('div');
+      const element = document.createElement('div');
+      host.appendChild(element);
+      document.body.appendChild(host);
+      Object.defineProperty(host, 'clientWidth', { configurable: true, value: 276 });
+
+      try {
+        const rendering = google.renderButton(element, () => undefined, 'filled_black');
+        await settle();
+        httpTesting.expectOne(url('/v1/auth/attempts')).flush(attemptResponse());
+        await rendering;
+        expect(renderButton.mock.calls[0][1]).toMatchObject({ theme: 'filled_black', type: 'standard', size: 'large', width: 276 });
+        expect(element.children.length).toBe(1);
+
+        // Cambio de tema: mismo intento (ni petición ni initialize nuevo), un único botón dentro del contenedor.
+        expect(google.restyleButton(element, 'outline')).toBe(true);
+        httpTesting.expectNone(url('/v1/auth/attempts'));
+        expect(window.google?.accounts.id.initialize).toHaveBeenCalledTimes(1);
+        expect(renderButton.mock.calls[1][1]).toMatchObject({ theme: 'outline' });
+        expect(element.children.length).toBe(1);
+
+        // Límites oficiales: ni menos de 200 ni más de 400 px.
+        Object.defineProperty(host, 'clientWidth', { configurable: true, value: 120 });
+        google.restyleButton(element, 'outline');
+        Object.defineProperty(host, 'clientWidth', { configurable: true, value: 900 });
+        google.restyleButton(element, 'outline');
+        expect(renderButton.mock.calls[2][1]['width']).toBe(200);
+        expect(renderButton.mock.calls[3][1]['width']).toBe(400);
+
+        // Otro contenedor, o sin botón vigente: no se puede re-estilizar; el llamador renderiza completo.
+        expect(google.restyleButton(document.createElement('div'), 'outline')).toBe(false);
+      } finally {
+        host.remove();
+      }
     });
 
     it('ignora el callback de GIS de un intento sustituido al cambiar a registro', async () => {
