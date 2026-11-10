@@ -1,6 +1,6 @@
 {
- "source": "a-calderon-org/ms-users-market-tec main 8707f03 controllers (PR #34 merge; the 22 routes of be4595c plus 5 password routes)",
- "sha": "8707f03cf61c1e0bbe042a24ae6a2d721609e6f7",
+ "source": "a-calderon-org/ms-users-market-tec main 75303f4 controllers (PR #35 merge; same 27 routes as 8707f03: the 22 of be4595c plus 5 password routes)",
+ "sha": "75303f4361eadd7167dc6b86fffbcabeb0728394",
  "routes": [
   [
    "GET",
