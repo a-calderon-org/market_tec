@@ -1,5 +1,7 @@
 # Revisión `abuse_protection` — ms-users `f56ba7e`, staging (candidato, no liberable)
 
+**Registrado (solo staging):** la evidencia aprobada es [`evidence/abuse_protection.f56ba7e.staging.json`](../evidence/abuse_protection.f56ba7e.staging.json), `review_id` `a-calderon-org/market_tec#53/reviews/5846066513` (decisión del responsable, `COMMENTED`); aprobación técnica independiente: review `5846448643` (SebastianVD32, `APPROVED`). El texto siguiente es el expediente revisado y no cambia.
+
 **Estado: Proposed. Candidato de revisión. No es evidencia aprobada.** Este documento y
 [`abuse_protection.f56ba7e.candidate.json`](abuse_protection.f56ba7e.candidate.json) existen para que una
 persona autorizada apruebe (o rechace) en GitHub el alcance descrito abajo. El candidato tiene

@@ -1,7 +1,7 @@
 """Review candidate staging/review/abuse_protection.f56ba7e.* (Proposed, not releasable).
 
 Proves the candidate is bound to the staging inputs and can never act as evidence: it is not an approval and does
-not replace a reviewed `review_id`. The PR that later records real evidence must delete or update this test.
+not replace a reviewed `review_id`. Real evidence is recorded in staging/evidence (RegisteredEvidenceTest).
 """
 import json
 import shutil
@@ -85,6 +85,27 @@ class ApprovalScopeTest(unittest.TestCase):
     def test_anonymous_admission_set_is_exactly_the_seven_documented_operations(self):
         anonymous = {op["id"] for op in MANIFEST["operations"] if op["anonymous_admission"]}
         self.assertEqual(GOOGLE_AND_MAGIC_LINK | PASSWORD_ANONYMOUS, anonymous)
+
+
+class RegisteredEvidenceTest(unittest.TestCase):
+    """The recorded evidence: the candidate's binding plus the responsible's real GitHub review (state COMMENTED,
+    on the PR head it names). The independent technical approval of that head is a separate review."""
+    REVIEW_ID = "a-calderon-org/market_tec#53/reviews/5846066513"
+
+    def test_evidence_is_the_candidate_binding_with_the_recorded_review(self):
+        claim = MANIFEST["approvals"]["abuse_protection"]
+        path = HERE / "staging" / "evidence" / claim["evidence_file"]
+        data = path.read_bytes()
+        self.assertEqual(claim["evidence_sha256"], gp.hashlib.sha256(data).hexdigest())
+        doc = json.loads(data)
+        self.assertEqual(gp.EVIDENCE_FIELDS, set(doc))
+        self.assertEqual({k: CANDIDATE[k] for k in gp.EVIDENCE_FIELDS - {"review_id"}},
+                         {k: doc[k] for k in gp.EVIDENCE_FIELDS - {"review_id"}})
+        self.assertEqual(self.REVIEW_ID, doc["review_id"])
+
+    def test_generator_accepts_the_staging_evidence(self):
+        _, approvals = gp._prepare(MANIFEST, OPENAPI_BYTES, ROUTES, HERE / "staging" / "evidence", EXTENSION_BYTES)
+        self.assertTrue(approvals["abuse_protection"])
 
 
 if __name__ == "__main__":

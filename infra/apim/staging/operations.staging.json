@@ -3,10 +3,13 @@
   "backend": "ms-users",
   "approvals": {
     "abuse_protection": {
-      "evidence_file": "abuse_protection.staging.json",
-      "evidence_sha256": "8c91019c027bed6ddf3cee1d0d68ac7a06847984e89b4c3f55cef954ddbef3de"
+      "evidence_file": "abuse_protection.f56ba7e.staging.json",
+      "evidence_sha256": "e889c24bc2e5651d260d450e89e380de961b1b5bb19a8b1e15c907f33fcc6da5"
     },
-    "ms_users_contract": null
+    "ms_users_contract": {
+      "evidence_file": "ms_users_contract.f56ba7e.staging.json",
+      "evidence_sha256": "69bef00c844b71e7c7484ced23472784af5e86a2feeaa43dce3fae6dcfde7177"
+    }
   },
   "target": {
     "environment": "staging",

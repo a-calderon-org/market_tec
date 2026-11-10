@@ -1,8 +1,8 @@
 """Review candidate staging/review/ms_users_contract.f56ba7e.* (Proposed, not releasable).
 
 Pins the reconciliation of the five password operations across manifest, security reference, contract, backend
-routes and client calls, and proves the candidate can never act as evidence. The PR that later records real
-evidence must delete or update this test.
+routes and client calls, and proves the candidate can never act as evidence. Real evidence is recorded in
+staging/evidence (RegisteredEvidenceTest).
 """
 import json
 import shutil
@@ -59,7 +59,7 @@ class CandidateTest(unittest.TestCase):
             self.assertIn(value, text)
 
     def test_manifest_does_not_reference_the_candidate(self):
-        self.assertIsNone(MANIFEST["approvals"]["ms_users_contract"])
+        self.assertNotEqual(CANDIDATE_PATH.name, MANIFEST["approvals"]["ms_users_contract"]["evidence_file"])
         self.assertFalse((HERE / "staging" / "evidence" / CANDIDATE_PATH.name).exists())
 
     def test_verifier_rejects_the_candidate_even_when_referenced(self):
@@ -130,6 +130,27 @@ class ApprovalScopeTest(unittest.TestCase):
             self.assertEqual("blocked", d[op_id]["status"], op_id)
             self.assertEqual(["not_in_release_profile"], d[op_id]["blocked_reasons"], op_id)
         self.assertEqual("OPERATION_NOT_RELEASED", NOT_RELEASED[2])
+
+
+class RegisteredEvidenceTest(unittest.TestCase):
+    """The recorded evidence: the candidate's binding plus the responsible's real GitHub review (state COMMENTED,
+    on the PR head it names). The independent technical approval of that head is a separate review."""
+    REVIEW_ID = "a-calderon-org/market_tec#54/reviews/5846068230"
+
+    def test_evidence_is_the_candidate_binding_with_the_recorded_review(self):
+        claim = MANIFEST["approvals"]["ms_users_contract"]
+        path = HERE / "staging" / "evidence" / claim["evidence_file"]
+        data = path.read_bytes()
+        self.assertEqual(claim["evidence_sha256"], gp.hashlib.sha256(data).hexdigest())
+        doc = json.loads(data)
+        self.assertEqual(gp.EVIDENCE_FIELDS, set(doc))
+        self.assertEqual({k: CANDIDATE[k] for k in gp.EVIDENCE_FIELDS - {"review_id"}},
+                         {k: doc[k] for k in gp.EVIDENCE_FIELDS - {"review_id"}})
+        self.assertEqual(self.REVIEW_ID, doc["review_id"])
+
+    def test_generator_accepts_the_staging_evidence(self):
+        _, approvals = gp._prepare(MANIFEST, OPENAPI_BYTES, ROUTES, HERE / "staging" / "evidence", EXTENSION_BYTES)
+        self.assertTrue(approvals["ms_users_contract"])
 
 
 if __name__ == "__main__":

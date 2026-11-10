@@ -12,10 +12,21 @@ package built from the previous inputs (backend `be4595c`, 22 operations). Polic
 generated from those inputs (Git history before this change) match all 22 operation
 exports and the API scope after XML canonicalization. ms-users runs image `be4595c`.
 
-**Proposed: password activation (`ms-users-password-v1`). Not approved, not deployed.**
-The existing `abuse_protection` evidence is bound to `be4595c` and to `users.json`
-alone, so generation with these inputs is **refused** until the operator records, after
-explicit authorization, new evidence documents in `evidence/`:
+**Password activation (`ms-users-password-v1`): approved for staging only, not deployed.** Both approvals are
+recorded in `evidence/` and referenced by `operations.staging.json`; each `review_id` is the responsible's real GitHub
+review (state `COMMENTED`) on the PR head that carried the candidate, and that head also has an independent `APPROVED`
+review. Branch protection on `main` requires one approval, including for administrators. Not valid for production.
+
+| Approval | Evidence | `review_id` | Independent approval |
+|---|---|---|---|
+| `abuse_protection` | `evidence/abuse_protection.f56ba7e.staging.json` | `a-calderon-org/market_tec#53/reviews/5846066513` (head `186387a`) | review `5846448643`, SebastianVD32 |
+| `ms_users_contract` | `evidence/ms_users_contract.f56ba7e.staging.json` | `a-calderon-org/market_tec#54/reviews/5846068230` (head `cf1585b`) | review `5846443018`, SebastianVD32 |
+
+Accepted scope and residual risks: [`review/abuse_protection.f56ba7e.md`](review/abuse_protection.f56ba7e.md),
+[`review/ms_users_contract.f56ba7e.md`](review/ms_users_contract.f56ba7e.md). `evidence/abuse_protection.staging.json`
+(bound to `be4595c`, `users.json` only) is kept for history and is no longer referenced.
+
+Binding rules (the generator refuses anything else):
 
 * `abuse_protection`: backend `f56ba7e`, contract binding with the extension (below). Evidence bound
   to `8707f03` is rejected: that build leaked account existence through recovery requests (fixed in PR #35).
@@ -31,11 +42,9 @@ Compute the contract binding (version and SHA-256) the evidence must contain:
 python3 -c "import sys; sys.path.insert(0, 'infra/apim'); import generate_policies as g; print(*g.contract_binding(open('contracts/openapi/users.json','rb').read(), open('contracts/openapi/users-password.json','rb').read()))"
 ```
 
-**Review provenance.** The previous deployment snapshot rebound the `abuse_protection`
-record to the deployed backend and OpenAPI bytes, carrying forward the historical
-reference [ms-users PR #32](https://github.com/a-calderon-org/ms-users-market-tec/pull/32);
-a separate approval for that binding was not verified. A new binding needs its own
-reviewed `review_id`; reusing PR #32 does not cover the password operations.
+**Review provenance.** The `be4595c` record carried forward the historical reference
+[ms-users PR #32](https://github.com/a-calderon-org/ms-users-market-tec/pull/32); a separate approval for that
+binding was not verified. The `f56ba7e` records above have their own reviews.
 
 Set `UPSTREAM_GLOBAL_XML` and `UPSTREAM_API_XML` to fresh APIM scope exports and
 `OUTPUT_DIR` to a new local directory. Generate the candidate package locally.
