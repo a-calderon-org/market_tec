@@ -1,9 +1,8 @@
 # ms-catalog
 
-Servicio de catalogo de MarketTec. Usa Node.js 24 (la version declarada en el `.nvmrc` de la raiz), TypeScript y Express 5. Incluye el nucleo local de publicaciones; solo `/health` esta conectado a HTTP. No contiene chats ni integraciones Azure.
-
-El arranque normal conserva ese alcance. Existe tambien un adaptador HTTP de
-lectura optativo para pruebas, descrito en la seccion MTEC-32 siguiente.
+Servicio de catalogo de MarketTec. Usa Node.js 24 (la version declarada en el `.nvmrc` de la raiz), TypeScript y Express 5. Incluye el nucleo de publicaciones. Sin configuracion solo expone `/health`; con la
+configuracion de la seccion "Autenticacion real" expone publicaciones autenticadas
+con el JWT interno de ms-users. No contiene chats ni integraciones Azure.
 
 ## Requisitos y ejecucion
 
@@ -161,8 +160,52 @@ npm run check
 node --test dist/tests/publication-write-http.test.js
 ```
 
-**Pendiente para cerrar MTEC-32:** integracion y conformidad de autenticacion real,
-incluyendo perfil por entorno, confianza de claves y composicion del snapshot de
-vendedor; revision contractual final. Los tests aislados no certifican APIM, JWT,
-Cosmos ni conexion Angular. OpenAPI 0.2.0-draft conserva `proposed`; la aprobacion
-de las interfaces POST/PUT no aprueba parametros de seguridad ni otras interfaces.
+## Autenticacion real con el JWT interno de ms-users
+
+**Verificado localmente (pruebas):** `npm start` monta `GET/POST /v1/publicaciones` y
+`GET/PUT /v1/publicaciones/{id}` solo si se configuran las variables siguientes; sin
+ninguna, el servidor sigue exponiendo solo `/health`. Una configuracion parcial
+detiene el arranque.
+
+| Variable | Valor |
+|---|---|
+| `CATALOG_JWT_ISSUER` | `iss` de ms-users (staging: `https://markettec-api.azure-api.net/users`) |
+| `CATALOG_JWT_AUDIENCE` | `aud` de ms-users (staging: `markettec-api`) |
+| `CATALOG_JWT_JWKS_URI` o `CATALOG_JWT_JWKS_JSON` | JWKS publicado, o el documento revisado (`infra/apim/staging/jwks/`) |
+| `CATALOG_USERS_PROFILE_URL` | `GET /v1/me/profile` de ms-users a traves de su gateway |
+| `CATALOG_PUBLICATIONS_STORE` | `memory` (unico valor; ver limitaciones) |
+| `CATALOG_PLACEHOLDER_IMAGE_URL` | URL HTTPS de imagen predeterminada |
+
+- `Authorization: Bearer <JWT>` se verifica en ms-catalog: RS256 con `kid` del JWKS,
+  `typ=at+jwt`, `iss`, `aud`, `exp`, `iat`, `sub`, `sid` y `jti`. Firma alterada,
+  token expirado, otra clave, otro emisor/audiencia o `alg` distinto producen 401.
+  Google y Magic Link usan el mismo JWT; el `userId` es el `sub`, nunca el correo.
+- El propietario es el `sub`. Body, `X-User-Id` u otras cabeceras no autentican ni
+  asignan propiedad. `PUT` sobre una publicacion ajena devuelve 403.
+- Snapshot del vendedor: en POST/PUT se consulta el perfil propio en ms-users con el
+  mismo token (no se accede a sus tablas). `nombre` = nombre + apellidos,
+  `verificado` del perfil. ms-users no tiene ID numerico ni carrera: `vendedor.id`
+  es `null` y `carrera` es `""`. Si ms-users rechaza el token: 401; si no responde o
+  el perfil no es del principal: 503 `SELLER_PROFILE_UNAVAILABLE`, sin escritura.
+  Las lecturas no consultan ms-users.
+- Imagenes: sin adaptador Blob (MTEC-14), solo se aceptan publicaciones sin imagenes.
+
+**Limitaciones:** el unico almacenamiento es en memoria; los datos se pierden al
+reiniciar y no se comparten entre replicas. Cosmos DB (MTEC-29) no existe todavia.
+Un despliegue con este almacenamiento no constituye integracion E2E persistente.
+
+```bash
+CATALOG_JWT_ISSUER=https://markettec-api.azure-api.net/users \
+CATALOG_JWT_AUDIENCE=markettec-api \
+CATALOG_JWT_JWKS_JSON="$(cat ../../infra/apim/staging/jwks/stg-jwt-2026-11.json)" \
+CATALOG_USERS_PROFILE_URL=https://markettec-api.azure-api.net/users/v1/me/profile \
+CATALOG_PUBLICATIONS_STORE=memory \
+CATALOG_PLACEHOLDER_IMAGE_URL=https://example.invalid/placeholder.svg \
+npm start
+```
+
+`tests/internal-jwt-auth.test.ts` firma tokens con la forma de `InternalJwtService`
+de ms-users y cubre ambos metodos, propiedad, rechazos 401/403/404 y fallos del
+perfil. El SPA lo consume con el flag `catalogInternalJwt` mediante el proxy
+same-origin `/api/catalog-v2/v1` (`MTEC_CATALOG_V2_UPSTREAM`); el camino heredado
+`/api/catalog/v1` con ID Token de Google no cambia.

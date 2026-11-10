@@ -7,7 +7,7 @@ import type { ImageStoragePort } from '../ports/out/image-storage-port.js';
 function validateActor(actor: PublicationActor): void {
   if (!actor || typeof actor !== 'object' || Array.isArray(actor)) invalid('Invalid actor');
   validateText(actor.userId, 'userId', 64, true);
-  if (!actor.seller || !Number.isSafeInteger(actor.seller.id) || typeof actor.seller.verificado !== 'boolean') invalid('Invalid seller snapshot');
+  if (!actor.seller || (actor.seller.id !== null && !Number.isSafeInteger(actor.seller.id)) || typeof actor.seller.verificado !== 'boolean') invalid('Invalid seller snapshot');
   validateText(actor.seller.nombre, 'nombre', 160, true);
   validateText(actor.seller.carrera, 'carrera', 160);
 }

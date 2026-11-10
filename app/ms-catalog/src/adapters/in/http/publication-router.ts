@@ -1,18 +1,19 @@
 import { Router, json, type Request } from 'express';
-import type { Publications, PublicationActor } from '../../../application/ports/in/publications.js';
+import { ActorResolutionError } from '../../../application/ports/in/publications.js';
+import type { AuthenticatedPrincipal, Publications, PublicationActor } from '../../../application/ports/in/publications.js';
 import { PublicationError, invalid } from '../../../domain/publication.js';
 import type { PublicationFilter, PublicationContent } from '../../../domain/publication.js';
 
 export interface PublicationWrites {
   readonly publications: Pick<Publications, 'create' | 'update'>;
-  readonly resolveActor: (userId: string) => Promise<PublicationActor>;
+  readonly resolveActor: (principal: AuthenticatedPrincipal) => Promise<PublicationActor>;
 }
 
 export interface PublicationHttpDependencies {
   readonly publications: Pick<Publications, 'list' | 'get'>;
   // Must verify credentials before returning an opaque internal userId.
   // This callback is trusted server composition, never a browser identity header.
-  readonly authenticate: (request: Request) => Promise<{ readonly userId: string } | undefined>;
+  readonly authenticate: (request: Request) => Promise<AuthenticatedPrincipal | undefined>;
   readonly writes?: PublicationWrites;
 }
 
@@ -50,15 +51,19 @@ function parseFilter(request: Request): PublicationFilter {
 
 export function createPublicationRouter(dependencies: PublicationHttpDependencies): Router {
   const router = Router();
-  const identities = new WeakMap<Request, string>();
+  const identities = new WeakMap<Request, AuthenticatedPrincipal>();
+  const unauthenticated = (request: Request, response: import('express').Response) => {
+    response.status(401).set('WWW-Authenticate', 'Bearer').json({ error: { code: 'UNAUTHENTICATED',
+      message: 'Authentication required.', details: [], correlationId: request.correlationId,
+      timestamp: Math.floor(Date.now() / 1000) } });
+  };
   router.use(async (request, response, next) => {
     const principal = await dependencies.authenticate(request);
     if (!principal || typeof principal.userId !== 'string' || !principal.userId.trim() || principal.userId.length > 64) {
-      response.status(401).json({ error: { code: 'UNAUTHENTICATED', message: 'Authentication required.',
-        details: [], correlationId: request.correlationId, timestamp: Math.floor(Date.now() / 1000) } });
+      unauthenticated(request, response);
       return;
     }
-    identities.set(request, principal.userId);
+    identities.set(request, principal);
     next();
   });
   if (dependencies.writes) {
@@ -66,9 +71,9 @@ export function createPublicationRouter(dependencies: PublicationHttpDependencie
     // Parse after authentication, with a bounded body, never before principal verification.
     router.use(json({ limit: '1mb' }));
     async function actor(request: Request): Promise<PublicationActor> {
-      const userId = identities.get(request)!;
-      const result = await writes.resolveActor(userId);
-      if (result.userId !== userId) throw new Error('Actor resolution mismatch');
+      const principal = identities.get(request)!;
+      const result = await writes.resolveActor(principal);
+      if (result.userId !== principal.userId) throw new Error('Actor resolution mismatch');
       return result;
     }
     router.post('/', async (request, response) => {
@@ -94,6 +99,13 @@ export function createPublicationRouter(dependencies: PublicationHttpDependencie
         message: 'Invalid request body.', details: [], correlationId: request.correlationId,
         timestamp: Math.floor(Date.now() / 1000),
       } });
+      return;
+    }
+    if (error instanceof ActorResolutionError) {
+      if (error.code === 'UNAUTHENTICATED') { unauthenticated(request, response); return; }
+      response.status(503).set('Retry-After', '5').json({ error: { code: error.code,
+        message: 'Seller profile unavailable.', details: [], correlationId: request.correlationId,
+        timestamp: Math.floor(Date.now() / 1000) } });
       return;
     }
     if (!(error instanceof PublicationError)) { next(error); return; }

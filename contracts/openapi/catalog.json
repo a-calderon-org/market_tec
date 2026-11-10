@@ -3,8 +3,8 @@
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "info": {
     "title": "MarketTec Catalog API",
-    "version": "0.2.0-draft",
-    "description": "Contrato de diseño compatible con los consumidores Angular actuales. Solo GET /health está implementado."
+    "version": "0.3.0-draft",
+    "description": "Contrato compatible con los consumidores Angular actuales. ms-catalog implementa GET /health y, cuando se configura su composición de publicaciones, listado, detalle, alta y actualización autenticados con el JWT interno de ms-users (Google o Magic Link). La identidad procede solo del token verificado."
   },
   "x-contract-status": "draft-pending-team-approval",
   "servers": [
@@ -58,8 +58,8 @@
         "post": {
           "operationId": "createPublication",
           "summary": "Crear publicación",
-          "x-implementation-status": "proposed",
-          "description": "Interfaces de escritura aprobadas por el responsable el 2026-11-09. Adaptador local con identidad inyectada; pendiente integración de autenticación y conformidad completa. Propietario y snapshot vendedor nunca proceden del body. imagenes omitido se interpreta como [] también en PUT.",
+          "x-implementation-status": "implemented",
+          "description": "Interfaces de escritura aprobadas el 2026-11-09. El propietario es el `sub` del JWT interno verificado; el snapshot vendedor se obtiene del perfil propio en ms-users (`GET /v1/me/profile`) con el mismo token. Propietario, vendedor, ID y fecha nunca proceden del body. imagenes omitido se interpreta como [] también en PUT; sin adaptador de imágenes solo se aceptan publicaciones sin imágenes (400).",
           "security": [
             {
               "bearerAuth": [],
@@ -143,6 +143,9 @@
                 }
               }
             },
+            "503": {
+              "$ref": "#/components/responses/SellerProfileUnavailable"
+            },
             "500": {
               "description": "Error interno",
               "content": {
@@ -159,7 +162,7 @@
         "operationId": "listPublications",
         "summary": "Listar y filtrar publicaciones",
         "description": "Mantiene la paginación plana consumida por Angular. Los filtros nuevos son opcionales y aditivos.",
-        "x-implementation-status": "proposed",
+        "x-implementation-status": "implemented",
         "x-public-apim-path": "/publicaciones",
         "security": [
           {
@@ -299,8 +302,8 @@
         "put": {
           "operationId": "updatePublication",
           "summary": "Actualizar contenido completo de una publicación",
-          "x-implementation-status": "proposed",
-          "description": "Interfaces de escritura aprobadas por el responsable el 2026-11-09. Adaptador local con identidad inyectada; pendiente integración de autenticación y conformidad completa. Propietario y snapshot vendedor nunca proceden del body. imagenes omitido se interpreta como [] también en PUT.",
+          "x-implementation-status": "implemented",
+          "description": "Interfaces de escritura aprobadas el 2026-11-09. El propietario es el `sub` del JWT interno verificado; el snapshot vendedor se obtiene del perfil propio en ms-users (`GET /v1/me/profile`) con el mismo token. Propietario, vendedor, ID y fecha nunca proceden del body. imagenes omitido se interpreta como [] también en PUT; sin adaptador de imágenes solo se aceptan publicaciones sin imágenes (400).",
           "security": [
             {
               "bearerAuth": [],
@@ -401,6 +404,9 @@
                 }
               }
             },
+            "503": {
+              "$ref": "#/components/responses/SellerProfileUnavailable"
+            },
             "500": {
               "description": "Error interno",
               "content": {
@@ -416,7 +422,7 @@
       "get": {
         "operationId": "getPublicationDetail",
         "summary": "Consultar el detalle de una publicación",
-        "x-implementation-status": "proposed",
+        "x-implementation-status": "implemented",
         "x-public-apim-path": "/publicaciones/{publicationId}",
         "security": [
           {
@@ -496,7 +502,7 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT",
-        "description": "JWT interno propuesto. No se aceptan headers de identidad del navegador."
+        "description": "JWT interno emitido por ms-users para usuarios Google o Magic Link: RS256, `typ` at+jwt, `kid` del JWKS publicado por ms-users, `iss` y `aud` configurados, `exp` vigente y `sub` = userId opaco. Tokens alterados, expirados o de otro emisor/audiencia producen 401. No se aceptan ID Tokens de Google ni headers de identidad del navegador (X-User-Id u otros)."
       },
       "apimSubscriptionKey": {
         "type": "apiKey",
@@ -554,6 +560,16 @@
       }
     },
     "responses": {
+      "SellerProfileUnavailable": {
+        "description": "No se pudo obtener el perfil propio en ms-users para el snapshot del vendedor; no se escribió nada. Código SELLER_PROFILE_UNAVAILABLE, con Retry-After.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
       "Unauthorized": {
         "description": "Principal autenticado ausente o inválido",
         "content": {
@@ -687,12 +703,12 @@
         "required": ["id", "nombre", "carrera", "verificado"],
         "properties": {
           "id": {
-            "type": "integer",
-            "description": "Identificador numérico preservado para Angular v1."
+            "type": ["integer", "null"],
+            "description": "Identificador numérico heredado de Angular v1. Es null para vendedores autenticados con el JWT interno: ms-users no asigna IDs numéricos y no se inventan."
           },
           "userId": {
             "$ref": "#/components/schemas/UserId",
-            "description": "Campo aditivo para migración; no sustituye id sin versión coordinada."
+            "description": "Propietario: `sub` del JWT interno verificado. Es la identidad autoritativa de la publicación."
           },
           "nombre": {
             "type": "string",

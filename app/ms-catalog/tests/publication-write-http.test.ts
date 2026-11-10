@@ -37,7 +37,7 @@ before(async () => {
       if (request.headers.authorization === 'Bearer mismatch-test') return { userId: 'usr-mismatch' };
       return undefined;
     },
-    writes: { publications: service, async resolveActor(userId) {
+    writes: { publications: service, async resolveActor({ userId }) {
       return { userId: userId === 'usr-mismatch' ? 'usr-owner' : userId,
         seller: { id: 101, nombre: 'Ana', carrera: '', verificado: false } };
     } },
