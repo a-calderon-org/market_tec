@@ -35,6 +35,7 @@ import { bindDeadline } from './request-deadline';
 import { SESSION_COORDINATOR_CONFIG } from './session-coordinator';
 import { InMemoryLock, SignalHub } from './auth-v2.testing';
 import { AUTH_V2_BUSINESS_TRANSPORT, BusinessTransportBlockedError } from './business-transport';
+import { EmailLinkCsrf } from './email-link-csrf';
 import { CLIENT_BUDGET_HEADER, HttpAuthApiAdapter } from './http-auth-api.adapter';
 import { provideAuthCoreV2 } from './provide-auth-core-v2';
 import { SessionLock } from './session-lock';
@@ -203,6 +204,122 @@ describe('HttpAuthApiAdapter + núcleo v2 contra ms-users (HttpTestingController
       .flush(authResponse(INTERNAL_JWT, SESSION_CSRF, userId));
     await done;
   }
+
+  describe('Magic Link institucional', () => {
+    const EMAIL_CSRF = 'e'.repeat(64);
+    const TOKEN = 'f'.repeat(64);
+
+    beforeEach(() => {
+      localStorage.clear();
+      configure();
+    });
+
+    async function requestLink(csrfToken = EMAIL_CSRF): Promise<void> {
+      const pending = TestBed.inject(AuthSessionService).requestEmailLink('ana@estudiantec.cr');
+      const req = httpTesting.expectOne(url('/v1/auth/email/requests'));
+      expectCookieRequest(req, 'POST');
+      expect(req.request.body).toEqual({ email: 'ana@estudiantec.cr' });
+      expect(req.request.headers.has('X-CSRF-Token')).toBe(false);
+      req.flush({ status: 'accepted', csrfToken }, { status: 202, statusText: 'Accepted' });
+      await pending;
+    }
+
+    it('solicita el enlace y confirma con la cookie de intento y su CSRF: sesión interna en memoria', async () => {
+      await requestLink();
+      // Solo el CSRF del intento se comparte con la pestaña del enlace; nunca attemptId ni token.
+      expect(JSON.stringify(localStorage)).toContain(EMAIL_CSRF);
+      expect(JSON.stringify(localStorage)).not.toContain(ATTEMPT_ID);
+      expect(JSON.stringify(localStorage)).not.toContain(TOKEN);
+
+      // Otra pestaña comparte localStorage pero arranca con un núcleo de sesión nuevo.
+      httpTesting.verify();
+      TestBed.resetTestingModule();
+      configure();
+
+      const session = TestBed.inject(AuthSessionService);
+      const done = session.confirmEmailLink({ attemptId: ATTEMPT_ID, token: TOKEN });
+      await settle();
+      const req = httpTesting.expectOne(url('/v1/auth/email/confirm'));
+      expectCookieRequest(req, 'POST');
+      expect(req.request.headers.get('X-CSRF-Token')).toBe(EMAIL_CSRF);
+      expect(req.request.body).toEqual({ attemptId: ATTEMPT_ID, token: TOKEN });
+      req.flush(authResponse());
+      await done;
+
+      expect(session.currentIdentity()?.userId).toBe(USER_ID);
+      expect(await session.getAccessToken()).toBe(INTERNAL_JWT);
+      expect(JSON.stringify(localStorage)).not.toContain(EMAIL_CSRF);
+      expect(JSON.stringify(localStorage)).not.toContain(TOKEN);
+    });
+
+    it('desde otro navegador (sin el intento) no envía nada ni gasta el enlace', async () => {
+      const session = TestBed.inject(AuthSessionService);
+      await expect(session.confirmEmailLink({ attemptId: ATTEMPT_ID, token: TOKEN }))
+        .rejects.toMatchObject({ status: 403, code: 'EMAIL_LINK_OTHER_BROWSER' });
+      httpTesting.expectNone(url('/v1/auth/email/confirm'));
+      expect(session.currentIdentity()).toBeNull();
+    });
+
+    it('enlace consumido, expirado o de otra cuenta Google: error de Java y ninguna sesión', async () => {
+      for (const [status, code] of [[409, 'ATTEMPT_CONSUMED'], [410, 'ATTEMPT_EXPIRED'],
+        [409, 'CONTINUITY_REQUIRED'], [403, 'CSRF_INVALID']] as const) {
+        await requestLink();
+        const session = TestBed.inject(AuthSessionService);
+        const done = session.confirmEmailLink({ attemptId: ATTEMPT_ID, token: TOKEN });
+        await settle();
+        httpTesting.expectOne(url('/v1/auth/email/confirm')).flush(envelope(code), { status, statusText: 'x' });
+        await expect(done).rejects.toMatchObject({ status, code });
+        expect(session.currentIdentity()).toBeNull();
+        expect(JSON.stringify(localStorage)).not.toContain(EMAIL_CSRF);
+      }
+    });
+
+    it('conserva el CSRF vigente al abrir un enlace anterior', async () => {
+      await requestLink();
+      const session = TestBed.inject(AuthSessionService);
+      const done = session.confirmEmailLink({ attemptId: ATTEMPT_ID, token: TOKEN });
+      const req = httpTesting.expectOne(url('/v1/auth/email/confirm'));
+      req.flush(envelope('AUTH_PROOF_INVALID'), { status: 401, statusText: 'Unauthorized' });
+      await expect(done).rejects.toMatchObject({ code: 'AUTH_PROOF_INVALID' });
+      expect(TestBed.inject(EmailLinkCsrf).read()).toBe(EMAIL_CSRF);
+    });
+
+    it('una respuesta tardía no borra el CSRF de un intento nuevo', async () => {
+      await requestLink();
+      const session = TestBed.inject(AuthSessionService);
+      const done = session.confirmEmailLink({ attemptId: ATTEMPT_ID, token: TOKEN });
+      const req = httpTesting.expectOne(url('/v1/auth/email/confirm'));
+      await requestLink(ROTATED_CSRF);
+      req.flush(envelope('ATTEMPT_EXPIRED'), { status: 410, statusText: 'Gone' });
+      await expect(done).rejects.toMatchObject({ code: 'ATTEMPT_EXPIRED' });
+      expect(TestBed.inject(EmailLinkCsrf).read()).toBe(ROTATED_CSRF);
+    });
+
+    it('descarta el CSRF vencido después de diez minutos sin confirmar el enlace', async () => {
+      const start = Date.now();
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(start);
+      await requestLink();
+      clock.mockReturnValue(start + 10 * 60 * 1000);
+      const session = TestBed.inject(AuthSessionService);
+      await expect(session.confirmEmailLink({ attemptId: ATTEMPT_ID, token: TOKEN }))
+        .rejects.toMatchObject({ code: 'EMAIL_LINK_OTHER_BROWSER' });
+      httpTesting.expectNone(url('/v1/auth/email/confirm'));
+      expect(JSON.stringify(localStorage)).not.toContain(EMAIL_CSRF);
+    });
+
+    it('fallo del proveedor (503) o 202 malformado no se informan como enviados', async () => {
+      const session = TestBed.inject(AuthSessionService);
+      let pending = session.requestEmailLink('ana@estudiantec.cr');
+      httpTesting.expectOne(url('/v1/auth/email/requests'))
+        .flush(envelope('AUTH_TEMPORARILY_UNAVAILABLE'), { status: 503, statusText: 'x' });
+      await expect(pending).rejects.toMatchObject({ status: 503 });
+
+      pending = session.requestEmailLink('ana@estudiantec.cr');
+      httpTesting.expectOne(url('/v1/auth/email/requests')).flush({ status: 'accepted' });
+      await expect(pending).rejects.toMatchObject({ status: 0, code: 'INVALID_RESPONSE' });
+      expect(JSON.stringify(localStorage)).not.toContain('csrfToken');
+    });
+  });
 
   describe('autenticación Google', () => {
     beforeEach(() => configure());

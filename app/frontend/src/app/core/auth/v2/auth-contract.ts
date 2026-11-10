@@ -79,6 +79,17 @@ export interface GoogleExchangeRequest {
   readonly purpose: GoogleAttemptPurpose;
 }
 
+/** `202` de `POST /v1/auth/email/requests`: el CSRF deriva de la cookie HttpOnly `__Host-mtec-email-attempt`. */
+export interface EmailLinkRequested {
+  readonly csrfToken: string;
+}
+
+/** Datos del fragmento del Magic Link (`#attempt=…&token=…`). Solo en memoria; nunca se persisten ni registran. */
+export interface EmailLinkProof {
+  readonly attemptId: string;
+  readonly token: string;
+}
+
 /** `status === 0` representa red/CORS, timeout o respuesta perdida. */
 export class AuthApiError extends Error {
   constructor(

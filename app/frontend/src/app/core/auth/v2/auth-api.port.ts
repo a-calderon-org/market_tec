@@ -1,5 +1,7 @@
 import {
   AuthResponse,
+  EmailLinkProof,
+  EmailLinkRequested,
   GoogleAttemptPurpose,
   GoogleExchangeRequest,
   GoogleLoginAttempt,
@@ -23,6 +25,16 @@ export abstract class AuthApiPort {
 
   abstract exchangeGoogle(
     request: GoogleExchangeRequest,
+    attemptCsrfToken: string,
+    signal?: AbortSignal,
+  ): Promise<AuthResponse>;
+
+  /** `POST /v1/auth/email/requests`: envía el Magic Link institucional y fija la cookie de intento. */
+  abstract requestEmailLink(email: string, signal?: AbortSignal): Promise<EmailLinkRequested>;
+
+  /** `POST /v1/auth/email/confirm` con la cookie de intento y su CSRF: sesión nueva o del mismo userId. */
+  abstract confirmEmailLink(
+    proof: EmailLinkProof,
     attemptCsrfToken: string,
     signal?: AbortSignal,
   ): Promise<AuthResponse>;

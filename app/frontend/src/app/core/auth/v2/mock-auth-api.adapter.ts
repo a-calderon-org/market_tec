@@ -4,6 +4,8 @@ import {
   AuthApiError,
   AuthenticatedUser,
   AuthResponse,
+  EmailLinkProof,
+  EmailLinkRequested,
   GoogleAttemptPurpose,
   GoogleExchangeRequest,
   GoogleLoginAttempt,
@@ -189,6 +191,20 @@ export class MockAuthApiAdapter extends AuthApiPort {
   exchangeGoogle(request: GoogleExchangeRequest): Promise<AuthResponse> {
     if (!request.credential) {
       return Promise.reject(new AuthApiError(401, 'AUTH_REQUIRED'));
+    }
+
+    return Promise.resolve(this.backend.startSession());
+  }
+
+  requestEmailLink(email: string): Promise<EmailLinkRequested> {
+    return email.includes('@')
+      ? Promise.resolve({ csrfToken: 'mock-email-attempt-csrf' })
+      : Promise.reject(new AuthApiError(400, 'INVALID_REQUEST'));
+  }
+
+  confirmEmailLink(proof: EmailLinkProof, attemptCsrfToken: string): Promise<AuthResponse> {
+    if (!proof.token || attemptCsrfToken !== 'mock-email-attempt-csrf') {
+      return Promise.reject(new AuthApiError(403, 'CSRF_INVALID'));
     }
 
     return Promise.resolve(this.backend.startSession());

@@ -797,7 +797,6 @@
       },
       "schema": "AuthErrorEnvelope",
       "validatesAgainstOpenapi": false,
-      "statusDeclaredInOpenapi": false,
       "outOfEnumCodes": [
         "INSTITUTIONAL_EMAIL_REQUIRED"
       ],

@@ -17,6 +17,8 @@ EXPECTED_CALLS = {
     "createAuthenticationAttempt": ("POST", "/auth/attempts", "/v1/auth/attempts"),
     "exchangeGoogleCredential": ("POST", "/auth/google", "/v1/auth/google"),
     "legacyGoogleRegistrationCompatibility": ("POST", "/auth/google/registrations", "/v1/auth/google/registrations"),
+    "requestInstitutionalEmailLink": ("POST", "/auth/email/requests", "/v1/auth/email/requests"),
+    "confirmInstitutionalEmailLink": ("POST", "/auth/email/confirm", "/v1/auth/email/confirm"),
     "getSessionState": ("GET", "/auth/session", "/v1/auth/session"),
     "refreshSession": ("POST", "/auth/refresh", "/v1/auth/refresh"),
     "logoutSession": ("POST", "/auth/logout", "/v1/auth/logout"),

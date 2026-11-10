@@ -14,6 +14,8 @@ import {
   AuthApiError,
   AuthenticatedUser,
   AuthResponse,
+  EmailLinkProof,
+  EmailLinkRequested,
   GoogleAttemptPurpose,
   GoogleExchangeRequest,
   GoogleLoginAttempt,
@@ -60,8 +62,8 @@ const HEX_64 = /^[0-9a-f]{64}$/;
  * - `withCredentials: true` en las cinco operaciones, porque las cinco dependen
  *   de cookies `__Host-` HttpOnly (`mtec-attempt` o `mtec-refresh`) que el
  *   navegador envía/recibe. El cliente nunca lee ni escribe esas cookies.
- * - `X-MTEC-Client: web` en todas; `X-CSRF-Token` en intercambio Google (CSRF del
- *   intento), refresh y logout (CSRF de sesión, si existe). `Origin` lo pone el
+ * - `X-MTEC-Client: web` en todas; `X-CSRF-Token` en intercambio Google y confirmación
+ *   del Magic Link (CSRF del intento), refresh y logout (CSRF de sesión, si existe). `Origin` lo pone el
  *   navegador; no se fija a mano.
  * - Solo se repite `503 BACKEND_WARMING` (el proxy garantiza que no envió nada), dentro del tope total;
  *   cualquier otro error, incluido TIMEOUT, se propaga sin reintento.
@@ -122,6 +124,24 @@ export class HttpAuthApiAdapter extends AuthApiPort {
         body: { attemptId: request.attemptId, credential: request.credential },
         csrfToken: attemptCsrfToken,
       },
+      parseAuthResponse,
+      signal,
+    );
+  }
+
+  requestEmailLink(email: string, signal?: AbortSignal): Promise<EmailLinkRequested> {
+    return this.send('POST', '/auth/email/requests', { body: { email } }, parseEmailLinkRequested, signal);
+  }
+
+  confirmEmailLink(
+    proof: EmailLinkProof,
+    attemptCsrfToken: string,
+    signal?: AbortSignal,
+  ): Promise<AuthResponse> {
+    return this.send(
+      'POST',
+      '/auth/email/confirm',
+      { body: { attemptId: proof.attemptId, token: proof.token }, csrfToken: attemptCsrfToken },
       parseAuthResponse,
       signal,
     );
@@ -352,6 +372,19 @@ function parseAttempt(body: unknown, purpose: GoogleAttemptPurpose): Parsed<Goog
     expiresAt: body['expiresAt'],
     csrfToken: body['csrfToken'],
   };
+}
+
+function parseEmailLinkRequested(body: unknown): Parsed<EmailLinkRequested> {
+  if (
+    !isObject(body) ||
+    body['status'] !== 'accepted' ||
+    typeof body['csrfToken'] !== 'string' ||
+    !HEX_64.test(body['csrfToken'])
+  ) {
+    return INVALID;
+  }
+
+  return { csrfToken: body['csrfToken'] };
 }
 
 function parseUser(value: unknown): AuthenticatedUser | null {

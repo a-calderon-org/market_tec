@@ -94,6 +94,34 @@ test('returns __Host- cookies as host-only first-party cookies of the SPA origin
   assert.equal(res.headers['content-type'], 'application/json');
 });
 
+test('Magic Link: request sets the email attempt cookie; confirm forwards it with CSRF and gets the session', async () => {
+  const attempt = '__Host-mtec-email-attempt=' + '7'.repeat(64) + '; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=600';
+  const up = upstream((url) => (url.endsWith('/auth/email/requests')
+    ? { status: 202, setCookies: [attempt], body: '{"status":"accepted"}', java: true,
+      headers: { 'content-type': 'application/json' } }
+    : { status: 200, setCookies: [REFRESH, '__Host-mtec-email-attempt=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0'],
+      body: '{"token":"t"}', java: true, headers: { 'content-type': 'application/json' } }));
+  await handle(req('POST', '/api/users/v1/auth/email/requests', { origin: ORIGIN }), CONFIG, up.deps); // warm-up only
+  const requested = await handle(req('POST', '/api/users/v1/auth/email/requests', {
+    origin: ORIGIN, 'content-type': 'application/json', 'x-mtec-client': 'web', 'sec-fetch-site': 'same-origin',
+  }, '{"email":"ana@estudiantec.cr"}'), CONFIG, up.deps);
+  assert.equal(requested.status, 202);
+  assert.equal(up.calls.at(-1).url, 'https://markettec-api.azure-api.net/users/v1/auth/email/requests');
+  assert.deepEqual(requested.cookies, [{ name: '__Host-mtec-email-attempt', value: '7'.repeat(64), path: '/',
+    secure: true, httpOnly: true, sameSite: 'Lax', maxAge: 600 }]);
+  const confirmed = await handle(req('POST', '/api/users/v1/auth/email/confirm', {
+    origin: ORIGIN, 'content-type': 'application/json', 'x-mtec-client': 'web', 'sec-fetch-site': 'same-origin',
+    cookie: `__Host-mtec-email-attempt=${'7'.repeat(64)}`, 'x-csrf-token': 'c'.repeat(64),
+  }, `{"attemptId":"${'a'.repeat(32)}","token":"${'b'.repeat(64)}"}`), CONFIG, up.deps);
+  assert.equal(confirmed.status, 200);
+  const sent = up.calls.at(-1);
+  assert.equal(sent.url, 'https://markettec-api.azure-api.net/users/v1/auth/email/confirm');
+  assert.equal(sent.init.headers.cookie, `__Host-mtec-email-attempt=${'7'.repeat(64)}`);
+  assert.equal(sent.init.headers['x-csrf-token'], 'c'.repeat(64));
+  assert.deepEqual(confirmed.cookies.map((c) => [c.name, c.maxAge]),
+    [['__Host-mtec-refresh', 28800], ['__Host-mtec-email-attempt', 0]]);
+});
+
 test('Set-Cookie translation refuses Domain, malformed __Host- and unknown SameSite', () => {
   assert.equal(parseSetCookie('__Host-a=1; Path=/; Secure; Domain=x.net'), null);
   assert.equal(parseSetCookie('__Host-a=1; Path=/app; Secure'), null);

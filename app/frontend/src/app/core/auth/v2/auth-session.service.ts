@@ -3,15 +3,25 @@ import { Router } from '@angular/router';
 import { AuthApiPort } from './auth-api.port';
 import {
   AuthenticatedUser,
+  AuthApiError,
   AuthRequiredError,
+  EmailLinkProof,
   GoogleAttemptPurpose,
   GoogleCredential,
   GoogleLoginAttempt,
 } from './auth-contract';
 import { AuthSessionStore } from './auth-session.store';
+import { EmailLinkCsrf } from './email-link-csrf';
 import { SessionCoordinator } from './session-coordinator';
 
 const LEGACY_GOOGLE_TOKEN_KEY = 'google_token';
+
+/** Código local: el enlace se abrió en un navegador sin el intento (cookie + CSRF) que lo pidió. */
+export const EMAIL_LINK_OTHER_BROWSER = 'EMAIL_LINK_OTHER_BROWSER';
+
+const EMAIL_LINK_TERMINAL_ERRORS = new Set([
+  'ATTEMPT_CONSUMED', 'ATTEMPT_EXPIRED', 'CONTINUITY_REQUIRED', 'CSRF_INVALID',
+]);
 
 /** Access JWT junto con la generación de sesión (epoch) en la que se leyó. */
 export interface AccessCredential {
@@ -36,6 +46,7 @@ export class AuthSessionService {
   private readonly store = inject(AuthSessionStore);
   private readonly coordinator = inject(SessionCoordinator);
   private readonly router = inject(Router, { optional: true });
+  private readonly emailLinkCsrf = inject(EmailLinkCsrf);
 
   /** Usuario interno (userId opaco). Nunca el `sub` de Google, el correo ni `USR-001`. */
   readonly user = this.store.user;
@@ -88,6 +99,39 @@ export class AuthSessionService {
 
     if (!this.store.applyAuthResponse(response, epoch)) {
       // Hubo un logout mientras el intercambio estaba en vuelo: no se repone la sesión.
+      throw new AuthRequiredError('cancelled');
+    }
+  }
+
+  /** Pide el Magic Link institucional. La respuesta es idéntica para correos nuevos, existentes o limitados. */
+  async requestEmailLink(email: string): Promise<void> {
+    const requested = await this.api.requestEmailLink(email);
+    this.emailLinkCsrf.save(requested.csrfToken);
+  }
+
+  /**
+   * Confirma el Magic Link (POST explícito) desde el navegador que lo pidió. Sin el CSRF de ese navegador se
+   * rechaza localmente con `EMAIL_LINK_OTHER_BROWSER`, sin gastar el enlace. La sesión resultante es la misma
+   * que la de Google: JWT/CSRF internos solo en memoria.
+   */
+  async confirmEmailLink(proof: EmailLinkProof): Promise<void> {
+    const csrfToken = this.emailLinkCsrf.read();
+    if (!csrfToken) throw new AuthApiError(403, EMAIL_LINK_OTHER_BROWSER);
+
+    const epoch = this.store.beginLogin();
+    let response;
+    try {
+      response = await this.api.confirmEmailLink(proof, csrfToken);
+    } catch (error) {
+      // Una prueba inválida puede pertenecer a un enlace anterior y no invalida el intento vigente.
+      if (error instanceof AuthApiError && error.code !== null && EMAIL_LINK_TERMINAL_ERRORS.has(error.code)) {
+        this.emailLinkCsrf.clearIfCurrent(csrfToken);
+      }
+      throw error;
+    }
+    this.emailLinkCsrf.clearIfCurrent(csrfToken);
+
+    if (!this.store.applyAuthResponse(response, epoch)) {
       throw new AuthRequiredError('cancelled');
     }
   }

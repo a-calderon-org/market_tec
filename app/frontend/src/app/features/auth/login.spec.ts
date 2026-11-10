@@ -6,6 +6,9 @@ import { LoginService } from './services/login.service';
 import { GoogleAuthService } from './services/google-auth.service';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ThemeService } from '../../core/theme.service';
+import { FEATURE_FLAGS } from '../../core/feature-flags';
+import { AuthSessionService } from '../../core/auth/v2/auth-session.service';
+import { AuthApiError } from '../../core/auth/v2/auth-contract';
 
 describe('Login', () => {
   let fixture:
@@ -74,19 +77,6 @@ describe('Login', () => {
     expect(element.textContent).not.toContain('Tec Digital');
   });
 
-  it('should place institutional credentials before Google access', () => {
-    const element: HTMLElement = fixture.nativeElement;
-    const form = element.querySelector('.login-form');
-    const googleAccess = element.querySelector('.google-access');
-
-    expect(form).not.toBeNull();
-    expect(googleAccess).not.toBeNull();
-    expect(
-      form!.compareDocumentPosition(googleAccess!) &
-      Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
-  });
-
   it('should render the Google button for the active color theme', async () => {
     await fixture.whenStable();
     expect(googleAuth.renderButton.mock.lastCall?.[2]).toBe('outline');
@@ -114,242 +104,108 @@ describe('Login', () => {
     expect(component.errorMessage()).toBe('Credencial inválida.');
     expect(component.submitting()).toBe(false);
   });
-  it('should initialize with an empty form', () => {
-    expect(
-      component.loginForm
-        .getRawValue()
-    ).toEqual({
-      correo: '',
-      password: '',
-      rememberSession: false
-    });
+  it('hides the institutional email form without the v2 session core', () => {
+    expect(component.emailLoginAvailable).toBe(false);
+    expect(fixture.nativeElement.querySelector('.login-form')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.google-access')).not.toBeNull();
   });
 
-  it('should enable login only after entering valid credentials', () => {
-    const button = fixture.nativeElement.querySelector('.login-submit') as HTMLButtonElement;
+  it('accepts only exact institutional domains', () => {
+    const correo = component.loginForm.controls.correo;
+    for (const ok of ['usuario@estudiantec.cr', 'usuario@itcr.ac.cr', 'usuario@tec.ac.cr']) {
+      correo.setValue(ok);
+      expect(correo.valid).toBe(true);
+    }
+    for (const bad of ['usuario@gmail.com', 'usuario@tec.ac.cr.evil.com']) {
+      correo.setValue(bad);
+      expect(correo.hasError('institutionalEmail')).toBe(true);
+    }
+  });
+});
 
-    expect(button.textContent).toContain('Ingresar');
-    expect(button.disabled).toBe(true);
+describe('Login — Magic Link institucional (authCoreV2)', () => {
+  let fixture: ComponentFixture<Login>;
+  let component: Login;
+  const session = { requestEmailLink: vi.fn() };
+  const googleAuth = {
+    renderButton: vi.fn().mockResolvedValue(undefined),
+    signIn: vi.fn().mockResolvedValue(undefined)
+  };
 
-    component.loginForm.setValue({
-      correo: 'usuario@estudiantec.cr',
-      password: 'password123',
-      rememberSession: false
-    });
+  beforeEach(async () => {
+    session.requestEmailLink.mockReset().mockResolvedValue(undefined);
+    await TestBed.configureTestingModule({
+      imports: [Login],
+      providers: [
+        provideRouter([]),
+        LoginService,
+        { provide: FEATURE_FLAGS, useValue: { authCoreV2: true } },
+        { provide: AuthSessionService, useValue: session },
+        { provide: GoogleAuthService, useValue: googleAuth }
+      ]
+    }).compileComponents();
+    fixture = TestBed.createComponent(Login);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  });
+
+  function text(): string {
+    return (fixture.nativeElement as HTMLElement).textContent ?? '';
+  }
+
+  it('offers «Continuar con correo institucional» before Google, then the email form', () => {
+    const open = fixture.nativeElement.querySelector('.login-submit') as HTMLButtonElement;
+    expect(open.textContent).toContain('Continuar con correo institucional');
+    expect(open.compareDocumentPosition(fixture.nativeElement.querySelector('.google-access'))
+      & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    open.click();
     fixture.detectChanges();
 
-    expect(button.disabled).toBe(false);
+    const submit = fixture.nativeElement.querySelector('.login-form .login-submit') as HTMLButtonElement;
+    expect(submit.textContent).toContain('Enviar enlace de acceso');
+    expect(submit.disabled).toBe(true);
+    component.loginForm.setValue({ correo: 'ana@estudiantec.cr' });
+    fixture.detectChanges();
+    expect(submit.disabled).toBe(false);
   });
 
-  it('should keep Google access available when institutional credentials are empty', async () => {
+  it('sends the normalized address and shows «Revisa tu correo institucional»', async () => {
+    component.openEmailForm();
+    component.loginForm.setValue({ correo: 'Ana@EstudianTEC.cr' });
+    await component.submit();
+    fixture.detectChanges();
+
+    expect(session.requestEmailLink).toHaveBeenCalledWith('Ana@estudiantec.cr');
+    expect(text()).toContain('Revisa tu correo institucional');
+    expect(fixture.nativeElement.querySelector('.login-form input')).toBeNull();
+
+    component.requestAnotherLink();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.login-form input')).not.toBeNull();
+  });
+
+  it('never calls the backend for a non institutional address', async () => {
+    component.loginForm.setValue({ correo: 'ana@gmail.com' });
+    await component.submit();
+    expect(session.requestEmailLink).not.toHaveBeenCalled();
+  });
+
+  it('reports a provider failure without claiming the link was sent', async () => {
+    session.requestEmailLink.mockRejectedValueOnce(new AuthApiError(503, 'AUTH_TEMPORARILY_UNAVAILABLE'));
+    component.openEmailForm();
+    component.loginForm.setValue({ correo: 'ana@tec.ac.cr' });
+    await component.submit();
+    fixture.detectChanges();
+
+    expect(component.linkSentTo()).toBeNull();
+    expect(component.errorMessage()).toContain('No se pudo enviar el enlace');
+    expect(component.sendingLink()).toBe(false);
+  });
+
+  it('keeps Google sign-in available as the alternative', async () => {
     await fixture.whenStable();
-
-    const institutionalButton = fixture.nativeElement.querySelector('.login-submit') as HTMLButtonElement;
-    const googleButton = fixture.nativeElement.querySelector('.google-button') as HTMLElement;
-
-    expect(institutionalButton.disabled).toBe(true);
-    expect(googleButton.hidden).toBe(false);
     expect(googleAuth.renderButton).toHaveBeenCalled();
-  });
-
-  it('should start with password hidden', () => {
-    expect(
-      component.showPassword()
-    ).toBe(false);
-  });
-
-  it('should toggle password visibility', () => {
-    component
-      .togglePasswordVisibility();
-
-    expect(
-      component.showPassword()
-    ).toBe(true);
-
-    component
-      .togglePasswordVisibility();
-
-    expect(
-      component.showPassword()
-    ).toBe(false);
-  });
-
-  it('should not submit an empty form', () => {
-    component.submit();
-
-    expect(
-      router.navigate
-    ).not.toHaveBeenCalled();
-
-    expect(
-      component.loginForm
-        .invalid
-    ).toBe(true);
-  });
-
-  it('should reject a non institutional email', () => {
-    component.loginForm
-      .setValue({
-        correo:
-          'usuario@gmail.com',
-
-        password:
-          'password123',
-
-        rememberSession:
-          false
-      });
-
-    component.submit();
-
-    expect(
-      router.navigate
-    ).not.toHaveBeenCalled();
-
-    expect(
-      component.loginForm
-        .controls
-        .correo
-        .hasError(
-          'institutionalEmail'
-        )
-    ).toBe(true);
-  });
-
-  it('should reject a short password', () => {
-    component.loginForm
-      .setValue({
-        correo:
-          'usuario@estudiantec.cr',
-
-        password:
-          '1234567',
-
-        rememberSession:
-          false
-      });
-
-    component.submit();
-
-    expect(
-      router.navigate
-    ).not.toHaveBeenCalled();
-
-    expect(
-      component.loginForm
-        .controls
-        .password
-        .hasError(
-          'minlength'
-        )
-    ).toBe(true);
-  });
-
-  it('should accept estudiantec.cr email', () => {
-    component.loginForm
-      .controls
-      .correo
-      .setValue(
-        'usuario@estudiantec.cr'
-      );
-
-    expect(
-      component.loginForm
-        .controls
-        .correo
-        .valid
-    ).toBe(true);
-  });
-
-  it('should accept tec.ac.cr email', () => {
-    component.loginForm
-      .controls
-      .correo
-      .setValue(
-        'usuario@tec.ac.cr'
-      );
-
-    expect(
-      component.loginForm
-        .controls
-        .correo
-        .valid
-    ).toBe(true);
-  });
-
-  it('should not bypass Google authentication with prototype credentials', () => {
-    component.loginForm
-      .setValue({
-        correo:
-          'usuario@estudiantec.cr',
-
-        password:
-          'password123',
-
-        rememberSession:
-          false
-      });
-
-    component.submit();
-
-    expect(router.navigate).not.toHaveBeenCalled();
-    expect(component.error()).toBe(true);
-    expect(component.errorMessage()).toContain(
-      'Ingresa con el botón de Google'
-    );
-  });
-
-  it('should allow remember session checkbox selection', () => {
-    component.loginForm
-      .controls
-      .rememberSession
-      .setValue(true);
-
-    expect(
-      component.loginForm
-        .controls
-        .rememberSession
-        .value
-    ).toBe(true);
-  });
-
-  it('should expose invalid email state after touch', () => {
-    component.loginForm
-      .controls
-      .correo
-      .setValue(
-        'usuario@gmail.com'
-      );
-
-    component.loginForm
-      .controls
-      .correo
-      .markAsTouched();
-
-    expect(
-      component.isControlInvalid(
-        'correo'
-      )
-    ).toBe(true);
-  });
-
-  it('should expose invalid password state after touch', () => {
-    component.loginForm
-      .controls
-      .password
-      .setValue(
-        '123'
-      );
-
-    component.loginForm
-      .controls
-      .password
-      .markAsTouched();
-
-    expect(
-      component.isControlInvalid(
-        'password'
-      )
-    ).toBe(true);
+    expect((fixture.nativeElement.querySelector('.google-button') as HTMLElement).hidden).toBe(false);
   });
 });

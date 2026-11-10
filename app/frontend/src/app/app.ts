@@ -1,5 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { filter } from 'rxjs';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { ThemeService } from './core/theme.service';
 import { GoogleAuthService } from './features/auth/services/google-auth.service';
 import { Profile } from './features/profile/profile';
@@ -31,6 +33,17 @@ export class App {
       : words[0].slice(0, 2)
     ).toUpperCase();
   });
+
+  constructor() {
+    // Tras el login por Magic Link se navega con `state.openProfile` para mostrar el perfil.
+    this.router.events
+      .pipe(filter((event) => event instanceof NavigationEnd), takeUntilDestroyed())
+      .subscribe(() => {
+        if (this.router.lastSuccessfulNavigation()?.extras.state?.['openProfile'] === true) {
+          this.openProfile();
+        }
+      });
+  }
 
   protected useProfileInitials(): void {
     this.profileImageFailed.set(true);

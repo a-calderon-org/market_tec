@@ -56,13 +56,13 @@ describe('LoginService', () => {
     ).toBe(true);
   });
 
-  it('should normalize an email', () => {
+  it('should normalize the domain and preserve the local part', () => {
     expect(
       service.normalizeEmail(
         '  USUARIO@ESTUDIANTEC.CR  '
       )
     ).toBe(
-      'usuario@estudiantec.cr'
+      'USUARIO@estudiantec.cr'
     );
   });
 });

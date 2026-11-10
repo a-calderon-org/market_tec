@@ -1,4 +1,4 @@
-"""MTEC-12/MTEC-41: release profile ms-users-google-v1 (eight operations, keyless candidate API)."""
+"""MTEC-12/MTEC-41: release profile ms-users-google-v1 (ten operations incl. Magic Link, keyless candidate API)."""
 import copy
 import json
 import re
@@ -38,11 +38,11 @@ def definitions(result):
 
 
 class ScopeTest(unittest.TestCase):
-    def test_exactly_eight_http_operations_in_seven_capabilities(self):
+    def test_exactly_ten_http_operations_in_nine_capabilities(self):
         ops = {o["id"]: o for o in MANIFEST["operations"]}
-        self.assertEqual(8, len(RELEASED))
+        self.assertEqual(10, len(RELEASED))
         self.assertEqual(RELEASED, set(EXPECTED_CALLS))
-        self.assertEqual(7, len({ops[i]["backend_path"] for i in RELEASED}))
+        self.assertEqual(9, len({ops[i]["backend_path"] for i in RELEASED}))
         for op_id, (method, _, java) in EXPECTED_CALLS.items():
             self.assertEqual((method, java), (ops[op_id]["method"], ops[op_id]["backend_path"]))
             self.assertIn([method, java], ROUTES["routes"])  # merged ms-users controllers serve it
@@ -56,20 +56,21 @@ class ScopeTest(unittest.TestCase):
             log = simulate(result["policies"][d["id"]])
             self.assertEqual(("404", False, []), (log["denied"], log["backend"], log["parent_actions"]), d["id"])
             self.assertIn("OPERATION_NOT_RELEASED", result["policies"][d["id"]])
-        for blocked in ("requestInstitutionalEmailLink", "createMethodProofAttempt", "linkOwnAuthMethod",
+        for blocked in ("requestEmailMethodProof", "createMethodProofAttempt", "linkOwnAuthMethod",
                         "recordSessionActivity", "getUserProfile", "getUsersHealth"):
             self.assertEqual("blocked", definitions(result)[blocked]["status"])
 
     def test_release_never_lifts_approval_blocks(self):
         result = release()  # committed manifest: no approvals
         defs = definitions(result)
-        for op_id in ("createAuthenticationAttempt", "exchangeGoogleCredential", "legacyGoogleRegistrationCompatibility"):
+        anonymous = {"createAuthenticationAttempt", "exchangeGoogleCredential", "legacyGoogleRegistrationCompatibility",
+                     "requestInstitutionalEmailLink", "confirmInstitutionalEmailLink"}
+        for op_id in anonymous:
             self.assertEqual(["abuse_protection_unapproved"], defs[op_id]["blocked_reasons"])
-        for op_id in RELEASED - {"createAuthenticationAttempt", "exchangeGoogleCredential",
-                                 "legacyGoogleRegistrationCompatibility"}:
+        for op_id in RELEASED - anonymous:
             self.assertEqual("enabled", defs[op_id]["status"], op_id)
 
-    def test_with_evidence_all_eight_enabled_and_reach_backend(self):
+    def test_with_evidence_all_ten_enabled_and_reach_backend(self):
         result = approved(self)
         for op_id in RELEASED:
             self.assertEqual("enabled", definitions(result)[op_id]["status"])
@@ -98,14 +99,15 @@ class RouteChainTest(unittest.TestCase):
         adapter = (FRONTEND / "core/auth/v2/http-auth-api.adapter.ts").read_text()
         profile = (FRONTEND / "features/profile/services/user.service.ts").read_text()
         self.assertRegex(adapter, r"purpose === 'register' \? '/auth/google/registrations' : '/auth/google'")
-        for path in ("/auth/attempts", "/auth/session", "/auth/refresh", "/auth/logout"):
+        for path in ("/auth/attempts", "/auth/session", "/auth/refresh", "/auth/logout", "/auth/email/requests",
+                     "/auth/email/confirm"):
             self.assertIn(f"'{path}'", adapter)
         self.assertIn("versionedApiUrl(environment.apiBaseUrl, '/me/profile')", profile)
 
-    def test_all_eight_resolve_with_base_with_or_without_v1(self):
+    def test_all_ten_resolve_with_base_with_or_without_v1(self):
         for base in (GATEWAY + "/users", GATEWAY + "/users/", GATEWAY + "/users/v1"):
             table = self.chain(base=base)
-            self.assertEqual(8, len(table))
+            self.assertEqual(10, len(table))
             for row in table:
                 self.assertEqual(USERS + EXPECTED_CALLS[row["id"]][2], row["backend_url"])
                 self.assertEqual(GATEWAY + "/users/v1" + EXPECTED_CALLS[row["id"]][1], row["browser_url"])

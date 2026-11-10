@@ -6,6 +6,8 @@ import { FEATURE_FLAGS } from '../../core/feature-flags';
 import { AbstractControl, NonNullableFormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { LoginService } from './services/login.service';
+import { AuthSessionService } from '../../core/auth/v2/auth-session.service';
+import { describeEmailLinkFailure } from './services/email-link-errors';
 import { ThemeService } from '../../core/theme.service';
 
 @Component({
@@ -110,11 +112,24 @@ export class Login implements AfterViewInit {
   private readonly router =
     inject(Router);
 
-  readonly showPassword =
+  /** Magic Link institucional: solo con el núcleo v2 (sesión interna en memoria). */
+  private readonly session = this.authCoreV2 ? inject(AuthSessionService) : null;
+
+  readonly emailLoginAvailable = this.authCoreV2;
+
+  /** El formulario de correo se muestra tras «Continuar con correo institucional». */
+  readonly emailFormOpen =
     signal(false);
 
   readonly submitting =
     signal(false);
+
+  readonly sendingLink =
+    signal(false);
+
+  /** Dirección a la que se pidió el último enlace (solo para el mensaje de confirmación). */
+  readonly linkSentTo =
+    signal<string | null>(null);
 
   readonly error =
     signal(false);
@@ -137,39 +152,26 @@ export class Login implements AfterViewInit {
                 )
             ]
           }
-        ),
-
-      password:
-        this.formBuilder.control(
-          '',
-          {
-            validators: [
-              Validators.required,
-              Validators.minLength(8),
-              Validators.maxLength(128)
-            ]
-          }
-        ),
-
-      rememberSession:
-        this.formBuilder.control(
-          false
         )
     });
 
-  togglePasswordVisibility(): void {
-    this.showPassword.update(
-      (visible) =>
-        !visible
-    );
+  openEmailForm(): void {
+    this.emailFormOpen.set(true);
   }
 
-  submit(): void {
+  /** Vuelve al formulario para pedir otro enlace (p. ej. tras abrirlo en otro navegador). */
+  requestAnotherLink(): void {
+    this.linkSentTo.set(null);
+    this.emailFormOpen.set(true);
+  }
+
+  async submit(): Promise<void> {
     this.error.set(false);
     this.errorMessage.set('');
 
     if (
       this.loginForm.invalid ||
+      this.sendingLink() ||
       this.submitting()
     ) {
       this.loginForm
@@ -178,14 +180,10 @@ export class Login implements AfterViewInit {
       return;
     }
 
-    const value =
-      this.loginForm
-        .getRawValue();
-
     const correo =
       this.loginService
         .normalizeEmail(
-          value.correo
+          this.loginForm.getRawValue().correo
         );
 
     if (
@@ -195,7 +193,6 @@ export class Login implements AfterViewInit {
         )
     ) {
       this.error.set(true);
-
       this.errorMessage.set(
         'Debes utilizar un correo institucional del TEC.'
       );
@@ -203,16 +200,30 @@ export class Login implements AfterViewInit {
       return;
     }
 
-    this.error.set(true);
-    this.errorMessage.set(
-      'El acceso con credenciales TEC aún no está disponible. Ingresa con el botón de Google.'
-    );
+    if (!this.session) {
+      this.error.set(true);
+      this.errorMessage.set(
+        'El acceso con correo institucional no está disponible en este momento. Ingresa con Google.'
+      );
+
+      return;
+    }
+
+    this.sendingLink.set(true);
+    try {
+      await this.session.requestEmailLink(correo);
+      this.linkSentTo.set(correo);
+    } catch (error) {
+      this.error.set(true);
+      this.errorMessage.set(describeEmailLinkFailure(error));
+    } finally {
+      this.sendingLink.set(false);
+    }
   }
 
   isControlInvalid(
     controlName:
-      'correo' |
-      'password'
+      'correo'
   ): boolean {
     const control =
       this.loginForm.controls[

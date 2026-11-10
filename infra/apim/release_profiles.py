@@ -12,12 +12,15 @@ the services that still depend on it. Nothing here is applied to Azure.
 
 RELEASE_PROFILES = {
     "ms-users-google-v1": {
-        "description": "Google login/registration, session, refresh, logout and own profile (MTEC-12/MTEC-41)",
-        # Eight HTTP operations, seven functional capabilities.
+        "description": "Google login/registration, institutional Magic Link login, session, refresh, logout and own "
+                       "profile (MTEC-12/MTEC-41)",
+        # Ten HTTP operations, nine functional capabilities. The profile name is kept for operator continuity.
         "operations": (
             "createAuthenticationAttempt",            # POST /v1/auth/attempts
             "exchangeGoogleCredential",               # POST /v1/auth/google
             "legacyGoogleRegistrationCompatibility",  # POST /v1/auth/google/registrations
+            "requestInstitutionalEmailLink",          # POST /v1/auth/email/requests
+            "confirmInstitutionalEmailLink",          # POST /v1/auth/email/confirm
             "getSessionState",                        # GET  /v1/auth/session
             "refreshSession",                         # POST /v1/auth/refresh
             "logoutSession",                          # POST /v1/auth/logout
