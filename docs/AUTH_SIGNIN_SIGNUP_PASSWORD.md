@@ -38,7 +38,9 @@ botón duplicado ni intento nuevo.
 ## Favicon y título
 
 El logo oficial es el SVG del encabezado (`app.html`): se reutilizó tal cual en `public/favicon.svg`, `favicon.ico` (16/32/48) y
-`apple-touch-icon.png`. Se reemplazó el logo de Angular. Título `MarketTEC`. Los `<link>` llevan `?v=2` para saltar la caché del navegador.
+`apple-touch-icon.png`. Se reemplazó el logo de Angular. Título `MarketTEC`. Los `<link>` usan rutas absolutas (`/favicon.svg?v=3`, `/favicon.ico?v=3`, `/apple-touch-icon.png?v=3`): Safari guarda el
+icono por URL de página y conservaba el logo de Angular en `/` aunque el HTML servido en `/` y `/login` fuera idéntico; al cambiar
+la URL del icono se fuerza la nueva descarga. Si se vuelve a cambiar el logo, incrementar `?v=`.
 
 ## Dependencias y límites conocidos
 
