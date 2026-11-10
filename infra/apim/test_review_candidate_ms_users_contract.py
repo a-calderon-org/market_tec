@@ -1,4 +1,4 @@
-"""Review candidate staging/review/ms_users_contract.75303f4.* (Proposed, not releasable).
+"""Review candidate staging/review/ms_users_contract.f56ba7e.* (Proposed, not releasable).
 
 Pins the reconciliation of the five password operations across manifest, security reference, contract, backend
 routes and client calls, and proves the candidate can never act as evidence. The PR that later records real
@@ -19,10 +19,10 @@ from test_password_extension import (EXTENSION_BYTES, MANIFEST, OPENAPI_BYTES, P
 
 HERE = Path(__file__).parent
 REVIEW = HERE / "staging" / "review"
-CANDIDATE_PATH = REVIEW / "ms_users_contract.75303f4.candidate.json"
+CANDIDATE_PATH = REVIEW / "ms_users_contract.f56ba7e.candidate.json"
 CANDIDATE = json.loads(CANDIDATE_PATH.read_text())
 EXTENSION = json.loads(EXTENSION_BYTES)
-BACKEND = "75303f4361eadd7167dc6b86fffbcabeb0728394"
+BACKEND = "f56ba7ec43d345cbd152705c53d2a7a8108a5add"
 VERSION = "0.3.0-draft+users-password-0.1.0-draft"
 DIGEST = "4b57f6460a42b6c47ecae725da83a79442e8b889c5078fdfa9db755420eb8950"
 PR23 = {"createMethodProofAttempt", "verifyGoogleMethodProof", "requestEmailMethodProof", "verifyEmailMethodProof",
@@ -54,7 +54,7 @@ class CandidateTest(unittest.TestCase):
                           CANDIDATE["review_id"]))
 
     def test_dossier_states_the_same_binding(self):
-        text = (REVIEW / "ms_users_contract.75303f4.md").read_text()
+        text = (REVIEW / "ms_users_contract.f56ba7e.md").read_text()
         for value in (BACKEND, VERSION, DIGEST, "markettec-users-v1:1", "Proposed", *PASSWORD_OPS):
             self.assertIn(value, text)
 

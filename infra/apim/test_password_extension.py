@@ -63,8 +63,8 @@ def defs(result):
 
 
 class InventoryTest(unittest.TestCase):
-    def test_staging_inventory_is_75303f4_with_27_routes(self):
-        self.assertEqual("75303f4361eadd7167dc6b86fffbcabeb0728394", ROUTES["sha"])
+    def test_staging_inventory_is_f56ba7e_with_27_routes(self):
+        self.assertEqual("f56ba7ec43d345cbd152705c53d2a7a8108a5add", ROUTES["sha"])
         self.assertEqual(27, len(ROUTES["routes"]))
         self.assertEqual(27, len(MANIFEST["operations"]))
         password = {(o["method"], o["backend_path"]) for o in MANIFEST["operations"] if o["id"] in PASSWORD_OPS}
