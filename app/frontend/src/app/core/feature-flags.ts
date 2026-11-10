@@ -36,6 +36,12 @@ export interface FeatureFlags {
    * correo, y no existe ningún formulario de contraseña. Solo tiene efecto con `authCoreV2` y el adaptador `http`.
    */
   readonly passwordAuth?: boolean;
+  /**
+   * Opción «Continuar con correo institucional» (Magic Link de acceso y registro). Activa por defecto bajo `authCoreV2`;
+   * un build la apaga con `false` cuando ms-users no puede entregar correo (`USERS_EMAIL_ENABLED=false`), para no ofrecer
+   * un formulario que no puede completar el envío.
+   */
+  readonly emailLinkAuth?: boolean;
 }
 
 export const DEFAULT_FEATURE_FLAGS: FeatureFlags = Object.freeze({
@@ -44,6 +50,7 @@ export const DEFAULT_FEATURE_FLAGS: FeatureFlags = Object.freeze({
   authCoreV2HttpTopologyVerified: false,
   catalogInternalJwt: false,
   passwordAuth: false,
+  emailLinkAuth: true,
 });
 
 /**
@@ -70,6 +77,8 @@ export function resolveFeatureFlags(source: unknown): FeatureFlags {
         : DEFAULT_FEATURE_FLAGS.catalogInternalJwt,
     passwordAuth:
       typeof raw['passwordAuth'] === 'boolean' ? raw['passwordAuth'] : DEFAULT_FEATURE_FLAGS.passwordAuth,
+    emailLinkAuth:
+      typeof raw['emailLinkAuth'] === 'boolean' ? raw['emailLinkAuth'] : DEFAULT_FEATURE_FLAGS.emailLinkAuth,
   });
 }
 
