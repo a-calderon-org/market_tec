@@ -3,9 +3,12 @@ import { resolveHttpApiBase } from '../auth/v2/auth-v2-config';
 import { apiRelativePath } from './api-url';
 
 /**
- * Destino de publicaciones bajo `authCoreV2`: el proxy same-origin `/api/catalog/v1`, que añade en el servidor
- * la clave de APIM y entrega a `markettec-api-v1` el ID Token de Google. ms-users (`apiBaseUrl`) no atiende
- * publicaciones y el negocio no valida el JWT interno, así que nunca se mezclan los destinos.
+ * Destino de publicaciones bajo `authCoreV2`, dos modos que nunca se mezclan:
+ * - Heredado: el proxy same-origin `/api/catalog/v1`, que añade en el servidor la clave de APIM y entrega a
+ *   `markettec-api-v1` el ID Token de Google (cabecera siguiente).
+ * - `catalogInternalJwt`: el proxy same-origin `/api/catalog-v2/v1` hacia el ms-catalog propio, que valida el JWT
+ *   interno de ms-users (Google o Magic Link). El JWT viaja en `X-MTEC-Authorization` (ver `bearerHeaderName`).
+ * ms-users (`apiBaseUrl`) no atiende publicaciones.
  *
  * Static Web Apps sustituye `Authorization` antes de la Function: el token viaja en esta cabecera propia.
  */
@@ -28,13 +31,24 @@ const CATALOG_OPERATIONS: readonly { readonly method: string; readonly route: Re
   { method: 'GET', route: new RegExp(`^/publicaciones/${SEGMENT}$`) },
   { method: 'POST', route: /^\/publicaciones$/ },
 ];
+/** Solo el ms-catalog propio (JWT interno) admite actualizar una publicación propia. */
+const INTERNAL_JWT_OPERATIONS: readonly { readonly method: string; readonly route: RegExp }[] = [
+  ...CATALOG_OPERATIONS,
+  { method: 'PUT', route: new RegExp(`^/publicaciones/${SEGMENT}$`) },
+];
 
 /** ¿Es la petición una operación de publicaciones autorizada hacia la base del catálogo? */
-export function isCatalogOperation(requestUrl: string, method: string, catalogBase: string | null): boolean {
+export function isCatalogOperation(
+  requestUrl: string,
+  method: string,
+  catalogBase: string | null,
+  internalJwt = false,
+): boolean {
   if (!catalogBase) return false;
 
   const route = apiRelativePath(requestUrl, catalogBase);
   const upper = method.toUpperCase();
+  const operations = internalJwt ? INTERNAL_JWT_OPERATIONS : CATALOG_OPERATIONS;
 
-  return route !== null && CATALOG_OPERATIONS.some((op) => op.method === upper && op.route.test(route));
+  return route !== null && operations.some((op) => op.method === upper && op.route.test(route));
 }

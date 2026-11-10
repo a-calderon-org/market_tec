@@ -7,7 +7,9 @@ export interface PublicationSpecifications {
 }
 
 export interface PublicationDetailSeller {
-  id: number;
+  /** null para vendedores del ms-catalog propio: ms-users no asigna IDs numéricos. */
+  id: number | null;
+  userId?: string;
   nombre: string;
   carrera: string;
   verificado: boolean;

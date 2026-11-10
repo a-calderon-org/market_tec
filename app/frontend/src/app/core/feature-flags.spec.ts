@@ -10,12 +10,17 @@ describe('resolveFeatureFlags', () => {
   it('applies the staging HTTP configuration', () => {
     expect(
       resolveFeatureFlags({ authCoreV2: true, authCoreV2Adapter: 'http', authCoreV2HttpTopologyVerified: true }),
-    ).toEqual({ authCoreV2: true, authCoreV2Adapter: 'http', authCoreV2HttpTopologyVerified: true });
+    ).toEqual({ authCoreV2: true, authCoreV2Adapter: 'http', authCoreV2HttpTopologyVerified: true, catalogInternalJwt: false });
+  });
+
+  it('enables the internal-JWT catalog only with an explicit boolean', () => {
+    expect(resolveFeatureFlags({ catalogInternalJwt: true }).catalogInternalJwt).toBe(true);
+    expect(resolveFeatureFlags({ catalogInternalJwt: 'true' }).catalogInternalJwt).toBe(false);
   });
 
   it('ignores values of the wrong type', () => {
     expect(
-      resolveFeatureFlags({ authCoreV2: 'true', authCoreV2Adapter: 'grpc', authCoreV2HttpTopologyVerified: 1 }),
+      resolveFeatureFlags({ authCoreV2: 'true', authCoreV2Adapter: 'grpc', authCoreV2HttpTopologyVerified: 1, catalogInternalJwt: 1 }),
     ).toEqual(DEFAULT_FEATURE_FLAGS);
   });
 });

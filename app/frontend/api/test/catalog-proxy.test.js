@@ -110,3 +110,62 @@ test('fails closed when unconfigured and answers 504 on an upstream timeout', as
   const res = await handle(req('GET', '/api/catalog/v1/publicaciones', headers), CONFIG, up.deps);
   assert.equal(res.status, 504);
 });
+
+// internal-jwt mode: /api/catalog-v2 -> ms-catalog with the ms-users internal JWT, never the Google token.
+const V2 = { mode: 'internal-jwt', upstream: 'https://ca-ms-catalog.example.test', publicOrigin: ORIGIN };
+const INTERNAL = 'Bearer internal.jwt.value';
+
+test('internal-jwt mode forwards only the internal JWT to the ms-catalog upstream, with PUT on detail', async () => {
+  const up = upstream();
+  const base = { origin: ORIGIN, 'sec-fetch-site': 'same-origin', 'x-mtec-authorization': INTERNAL,
+    'x-mtec-google-authorization': GOOGLE, cookie: '__Host-mtec-refresh=abc', 'x-csrf-token': 'csrf',
+    authorization: 'Bearer swa.platform.token', 'content-type': 'application/json' };
+  const list = await handle(req('GET', '/api/catalog-v2/v1/publicaciones?page=1', base), V2, up.deps);
+  const created = await handle(req('POST', '/api/catalog-v2/v1/publicaciones', base, '{"titulo":"x"}'), V2, up.deps);
+  const updated = await handle(req('PUT', '/api/catalog-v2/v1/publicaciones/PUB-1', base, '{"titulo":"y"}'), V2, up.deps);
+  assert.deepEqual([list.status, created.status, updated.status], [200, 200, 200]);
+  assert.deepEqual(up.calls.map((c) => [c.init.method, c.url]), [
+    ['GET', 'https://ca-ms-catalog.example.test/v1/publicaciones?page=1'],
+    ['POST', 'https://ca-ms-catalog.example.test/v1/publicaciones'],
+    ['PUT', 'https://ca-ms-catalog.example.test/v1/publicaciones/PUB-1'],
+  ]);
+  for (const call of up.calls) {
+    assert.deepEqual(call.init.headers, { authorization: INTERNAL, 'content-type': 'application/json' });
+  }
+  assert.equal(up.calls[2].init.body, '{"titulo":"y"}');
+});
+
+test('internal-jwt mode adds an optional APIM key and accepts an API base path upstream', async () => {
+  const up = upstream();
+  const config = { ...V2, upstream: 'https://markettec-api.azure-api.net/catalog-v2', subscriptionKey: 'k2' };
+  await handle(req('GET', '/api/catalog-v2/v1/publicaciones/PUB-1', { 'x-mtec-authorization': INTERNAL }), config, up.deps);
+  assert.equal(up.calls[0].url, 'https://markettec-api.azure-api.net/catalog-v2/v1/publicaciones/PUB-1');
+  assert.equal(up.calls[0].init.headers['ocp-apim-subscription-key'], 'k2');
+});
+
+test('modes never cross: each route and credential header belongs to exactly one mode', async () => {
+  const up = upstream();
+  const cases = [
+    // A Google token alone never authenticates against ms-catalog, nor the internal JWT against the legacy API.
+    [V2, 'GET', '/api/catalog-v2/v1/publicaciones', { 'x-mtec-google-authorization': GOOGLE }, 401],
+    [CONFIG, 'GET', '/api/catalog/v1/publicaciones', { 'x-mtec-authorization': INTERNAL }, 401],
+    [V2, 'GET', '/api/catalog/v1/publicaciones', { 'x-mtec-authorization': INTERNAL }, 404],
+    [CONFIG, 'GET', '/api/catalog-v2/v1/publicaciones', { 'x-mtec-google-authorization': GOOGLE }, 404],
+    [V2, 'GET', '/api/catalog-v2/v1/publicaciones', { 'x-mtec-authorization': INTERNAL, 'x-user-id': 'u' }, 504],
+    [V2, 'PUT', '/api/catalog-v2/v1/publicaciones', { 'x-mtec-authorization': INTERNAL }, 405],
+    [V2, 'DELETE', '/api/catalog-v2/v1/publicaciones/PUB-1', { 'x-mtec-authorization': INTERNAL }, 405],
+    [V2, 'GET', '/api/catalog-v2/v1/chats', { 'x-mtec-authorization': INTERNAL }, 404],
+    [V2, 'GET', '/api/catalog-v2/v1/publicaciones', { origin: 'https://evil.example', 'x-mtec-authorization': INTERNAL }, 403],
+    [{ ...V2, upstream: 'https://ca-ms-catalog.example.test/' }, 'GET', '/api/catalog-v2/v1/publicaciones',
+      { 'x-mtec-authorization': INTERNAL }, 503],
+  ];
+  const hanging = upstream(200, '', true);
+  for (const [config, method, path, headers, status] of cases) {
+    const res = await handle(req(method, path, headers), config, hanging.deps);
+    assert.equal(res.status, status, `${method} ${path}`);
+  }
+  // The only forwarded request (504 case) carried no identity header besides the internal JWT.
+  assert.equal(hanging.calls.length, 1);
+  assert.deepEqual(hanging.calls[0].init.headers, { authorization: INTERNAL });
+  assert.equal(up.calls.length, 0);
+});
