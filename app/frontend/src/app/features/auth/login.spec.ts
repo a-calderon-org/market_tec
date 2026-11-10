@@ -233,6 +233,43 @@ describe('Login — Magic Link institucional (authCoreV2)', () => {
   });
 });
 
+describe('Login — Google only (authCoreV2, emailLinkAuth: false)', () => {
+  let fixture: ComponentFixture<Login>;
+  const googleAuth = {
+    renderButton: vi.fn().mockResolvedValue(undefined),
+    restyleButton: vi.fn().mockReturnValue(true),
+    signIn: vi.fn().mockResolvedValue(undefined)
+  };
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [Login],
+      providers: [
+        provideRouter([]),
+        LoginService,
+        { provide: FEATURE_FLAGS, useValue: { authCoreV2: true, authCoreV2Adapter: 'http', emailLinkAuth: false } },
+        { provide: AuthSessionService, useValue: { requestEmailLink: vi.fn() } },
+        { provide: GoogleAuthService, useValue: googleAuth }
+      ]
+    }).compileComponents();
+    fixture = TestBed.createComponent(Login);
+    fixture.detectChanges();
+  });
+
+  it('offers no institutional email or password form in either tab, only Google', () => {
+    for (const mode of ['signin', 'signup'] as const) {
+      fixture.componentInstance.selectMode(mode);
+      fixture.detectChanges();
+      const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+      expect(text).not.toContain('Continuar con correo institucional');
+      expect(fixture.nativeElement.querySelector('input[type="email"]')).toBeNull();
+      expect(fixture.nativeElement.querySelector('input[type="password"]')).toBeNull();
+      expect(fixture.nativeElement.querySelector('.google-button')).not.toBeNull();
+    }
+    expect(fixture.componentInstance.emailLoginAvailable).toBe(false);
+  });
+});
+
 describe('Login — Iniciar sesión / Crear cuenta con contraseña (authCoreV2 + passwordAuth)', () => {
   let fixture: ComponentFixture<Login>;
   let component: Login;

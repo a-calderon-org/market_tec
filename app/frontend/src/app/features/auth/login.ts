@@ -169,7 +169,7 @@ export class Login implements AfterViewInit {
   /** Magic Link institucional: solo con el núcleo v2 (sesión interna en memoria). */
   private readonly session = this.authCoreV2 ? inject(AuthSessionService) : null;
 
-  readonly emailLoginAvailable = this.authCoreV2;
+  readonly emailLoginAvailable = this.authCoreV2 && inject(FEATURE_FLAGS).emailLinkAuth !== false;
 
   /** El formulario de correo se muestra tras «Continuar con correo institucional». */
   readonly emailFormOpen =

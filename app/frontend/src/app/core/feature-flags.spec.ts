@@ -12,8 +12,14 @@ describe('resolveFeatureFlags', () => {
       resolveFeatureFlags({ authCoreV2: true, authCoreV2Adapter: 'http', authCoreV2HttpTopologyVerified: true }),
     ).toEqual({
       authCoreV2: true, authCoreV2Adapter: 'http', authCoreV2HttpTopologyVerified: true,
-      catalogInternalJwt: false, passwordAuth: false,
+      catalogInternalJwt: false, passwordAuth: false, emailLinkAuth: true,
     });
+  });
+
+  it('keeps the institutional email link unless a build disables it with an explicit boolean', () => {
+    expect(DEFAULT_FEATURE_FLAGS.emailLinkAuth).toBe(true);
+    expect(resolveFeatureFlags({ emailLinkAuth: false }).emailLinkAuth).toBe(false);
+    expect(resolveFeatureFlags({ emailLinkAuth: 'false' }).emailLinkAuth).toBe(true);
   });
 
   it('enables the internal-JWT catalog only with an explicit boolean', () => {
