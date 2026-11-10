@@ -1,9 +1,8 @@
 # ms-catalog
 
-Servicio de catalogo de MarketTec. Usa Node.js 24 (la version declarada en el `.nvmrc` de la raiz), TypeScript y Express 5. Incluye el nucleo local de publicaciones; solo `/health` esta conectado a HTTP. No contiene chats ni integraciones Azure.
-
-El arranque normal conserva ese alcance. Existe tambien un adaptador HTTP de
-lectura optativo para pruebas, descrito en la seccion MTEC-32 siguiente.
+Servicio de catalogo de MarketTec. Usa Node.js 24 (la version declarada en el `.nvmrc` de la raiz), TypeScript y Express 5. Incluye el nucleo de publicaciones. Sin configuracion solo expone `/health`; con la
+configuracion de la seccion "Autenticacion real" expone publicaciones autenticadas
+con el JWT interno de ms-users. No contiene chats ni integraciones Azure.
 
 ## Requisitos y ejecucion
 
@@ -161,8 +160,119 @@ npm run check
 node --test dist/tests/publication-write-http.test.js
 ```
 
-**Pendiente para cerrar MTEC-32:** integracion y conformidad de autenticacion real,
-incluyendo perfil por entorno, confianza de claves y composicion del snapshot de
-vendedor; revision contractual final. Los tests aislados no certifican APIM, JWT,
-Cosmos ni conexion Angular. OpenAPI 0.2.0-draft conserva `proposed`; la aprobacion
-de las interfaces POST/PUT no aprueba parametros de seguridad ni otras interfaces.
+## Autenticacion real con el JWT interno de ms-users
+
+**Estado:** implementado y verificado con pruebas locales. **No desplegado.** No
+existe prueba E2E en staging ni en ningun entorno Azure.
+
+`npm start` monta `GET/POST /v1/publicaciones` y `GET/PUT /v1/publicaciones/{id}`
+solo si se configuran las variables siguientes; sin ninguna, el servidor sigue
+exponiendo solo `/health`. Una configuracion parcial detiene el arranque.
+
+| Variable | Valor |
+|---|---|
+| `CATALOG_JWT_ISSUER` | `iss` exacto de ms-users para el entorno |
+| `CATALOG_JWT_AUDIENCE` | `aud` exacto del entorno (staging: `markettec-api`, excepcion aprobada solo para staging) |
+| `CATALOG_JWT_JWKS_URI` o `CATALOG_JWT_JWKS_JSON` | JWKS publicado, o el snapshot revisado (ver rotacion) |
+| `CATALOG_USERS_PROFILE_URL` | Exactamente `<CATALOG_JWT_ISSUER>/v1/me/profile` (ruta del gateway); HTTP solo en loopback local |
+| `CATALOG_PUBLICATIONS_STORE` | `memory` (unico valor; provisional) |
+| `CATALOG_PLACEHOLDER_IMAGE_URL` | URL HTTPS de imagen predeterminada |
+
+### Perfil de token aceptado
+
+Conforme al [contrato de identidad §6](../../contracts/identity/IDENTITY_CONTRACT.md#6-jwt-jwks-y-metadata-perfil-aprobado-interfaz-draft)
+y a `InternalJwtService` de ms-users: `Authorization: Bearer <JWT>` con RS256,
+`typ=at+jwt`, `kid` presente en el JWKS configurado, `iss` y `aud` (string unica)
+iguales a la configuracion, `sub` de 1 a 64 caracteres, `sid` y `jti` hexadecimales
+de 32, `iat`/`exp` enteros con `0 < exp-iat <= 240`, `exp` ya vencido en igualdad y
+sin tolerancia positiva de reloj (como `clock-skew="0"` de APIM). Se rechazan
+`alg` distinto, claves embebidas o remotas (`jwk`, `jku`, `x5u`, `x5c`) y `crit`.
+Google y Magic Link producen el mismo JWT; el propietario es el `sub`, nunca el
+correo, el body ni cabeceras como `X-User-Id`.
+
+- **Alta:** el snapshot del vendedor sale del perfil propio en ms-users
+  (`GET /v1/me/profile`, mismo token). `nombre` = nombre + apellidos y
+  `verificado` del perfil; ms-users no tiene ID numerico ni carrera, por lo que
+  `vendedor.id` es `null` y `carrera` es `""`. Perfil 401 → 401; perfil no
+  disponible o de otro usuario → 503 `SELLER_PROFILE_UNAVAILABLE`, sin escritura.
+- **Actualizacion:** solo el propietario (`sub`); conserva propietario, fecha y
+  snapshot. No consulta ms-users. Lecturas tampoco.
+- **Imagenes:** sin adaptador Blob (MTEC-14) solo se aceptan publicaciones sin imagenes.
+
+### Valores reales de staging — verificacion de solo lectura, 2026-11-10
+
+| Dato | Valor | Evidencia |
+|---|---|---|
+| `iss` | `https://markettec-api.azure-api.net/users` | `USERS_INTERNAL_JWT_ISSUER` de `ca-ms-users-stg` y `<issuer>` de la politica APIM `getOwnUserProfile` |
+| `aud` | `markettec-api` | `USERS_INTERNAL_JWT_AUDIENCE` y `<audience>` de la misma politica |
+| `kid` activo | `stg-jwt-2026-11` | `USERS_INTERNAL_JWT_ACTIVE_KID` |
+| Clave publica | `infra/apim/staging/jwks/stg-jwt-2026-11.json` | `kid`, `n` y `e` identicos a la `<key>` de `validate-jwt` en APIM `markettec-users-v1` |
+| JWKS publico | No disponible | `GET https://markettec-api.azure-api.net/users/v1/.well-known/jwks.json` responde 404 `OPERATION_NOT_RELEASED`; el Container App exige autenticacion de gateway |
+
+Imagen de ms-users en staging: `ms-users:be4595c`. El secreto de claves se
+actualizo por ultima vez el 2026-11-09T17:53Z, antes del commit del snapshot
+(2026-11-09T20:04Z). **Inferido, no verificado criptograficamente:** el snapshot es
+la clave publica real porque APIM valida con ella los JWT reales de staging. La
+verificacion directa requiere un JWT real de staging (paso 1 de la validacion E2E).
+No se leyo el secreto privado.
+
+**Aprobado el 2026-11-10, solo staging** ([ADR-004 §10](../../context/decisions/ADR-004-seguridad-autenticacion.md#aprobaciones-delimitadas-ms-users--ms-catalog--2026-11-10)):
+
+- **Audiencia:** ms-catalog acepta `aud=markettec-api`, la audiencia compartida
+  del entorno, con la validacion estricta anterior. No autoriza recursos (la
+  propiedad la decide el `sub`) ni se aplica a produccion. El codigo no fija ningun valor.
+- **Delegacion acotada:** el JWT, ya verificado, solo se reenvia a
+  `GET <issuer>/v1/me/profile` por el gateway. `settings.ts` rechaza cualquier otra
+  URL o query; la llamada usa `redirect: 'error'`, solo envia `Authorization` y
+  `Accept`, no guarda ni registra el token, y exige `id = sub`. No se reutiliza para
+  otras operaciones entre servicios.
+- **Topologia (lectura de politica APIM, 2026-11-10):** `markettec-users-v1`
+  `getOwnUserProfile` no exige Origin ni cookies, elimina `X-User-Id`, valida el
+  mismo perfil JWT y reenvia a ms-users con identidad administrada. Una peticion sin
+  token responde 401 `Invalid internal token`. **No verificado:** respuesta 200 con
+  un JWT real desde ms-catalog.
+- **Tiempo:** la consulta del perfil se corta a los 20 s, por debajo del limite de
+  38 s del proxy same-origin; si ms-users arranca en frio (35-47 s medidos), el alta
+  responde 503 `SELLER_PROFILE_UNAVAILABLE` sin escribir y puede reintentarse.
+
+### Fuente de claves y rotacion
+
+- **Preferida:** `CATALOG_JWT_JWKS_URI` con el JWKS publico de ms-users. Cache de
+  5 min, refresco ante `kid` desconocido como maximo cada 30 s y confianza en las
+  ultimas claves verificadas solo hasta 10 min tras su obtencion; despues, rechazo.
+  Requiere liberar `getPublicSigningKeys` en APIM (no realizado).
+- **Provisional:** `CATALOG_JWT_JWKS_JSON` con el mismo snapshot revisado que usa
+  APIM (`infra/apim/staging/jwks/`). Se rechaza material privado y `kid` duplicado.
+  Antes de cada despliegue, comparar el snapshot con la clave de APIM:
+
+```bash
+az rest --method get --url "https://management.azure.com/subscriptions/<sub>/resourceGroups/markettec-dev/providers/Microsoft.ApiManagement/service/markettec-api/apis/markettec-users-v1/operations/getOwnUserProfile/policies/policy?api-version=2022-08-01&format=rawxml" \
+  --query properties.value -o tsv | grep -o '<key id="[^"]*" n="[^"]*" e="[^"]*"'
+jq -r '.keys[] | "\(.kid) \(.n) \(.e)"' infra/apim/staging/jwks/stg-jwt-2026-11.json
+```
+
+Rotacion normal con snapshot (ADR-004 §3.3): (1) agregar la nueva clave publica
+al snapshot junto a la actual; (2) desplegar ese JWKS en APIM y en ms-catalog y
+verificar ambos; (3) cambiar `USERS_INTERNAL_JWT_ACTIVE_KID` en ms-users; (4) tras
+al menos 240 s mas la cache de APIM, retirar la clave anterior en ambos. Ante
+compromiso: retirar la clave en APIM y ms-catalog a la vez o suspender rutas.
+
+**Cuerpos HTTP (CAT-001, resuelto):** `body-parser@2.4.0` (corrige
+GHSA-27r3-jxmh-p828; `npm audit` sin vulnerabilidades). POST/PUT admiten JSON
+plano o comprimido (`gzip`, `deflate`, `br`) hasta 1 MiB tras descomprimir.
+JSON vacio, invalido o truncado y datos comprimidos corruptos dan 400; mas de 1 MiB
+da 413 `PAYLOAD_TOO_LARGE`; codificacion o charset no soportados dan 415
+`UNSUPPORTED_MEDIA_TYPE`. Ningun error repite el cuerpo recibido.
+
+**Limitaciones:** el almacenamiento es en memoria y provisional; los datos se
+pierden al reiniciar y no se comparten entre replicas. Cosmos DB (MTEC-29) no
+existe. Ningun despliegue con este almacenamiento constituye integracion E2E
+persistente.
+
+### Pruebas
+
+`npm run check` incluye `tests/internal-jwt-auth.test.ts`, que firma tokens con la
+forma de `InternalJwtService` y cubre ambos metodos, propiedad, rechazos 401/403/404,
+fallos del perfil y la cache del JWKS. Ademas se verifico localmente un token firmado
+con Nimbus 10.10 (la libreria de ms-users) contra el servidor compilado, con el
+perfil de ms-users simulado en loopback.
