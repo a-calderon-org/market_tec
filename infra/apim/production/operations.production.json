@@ -1,0 +1,403 @@
+{
+  "version": 3,
+  "backend": "ms-users",
+  "approvals": {
+    "abuse_protection": null,
+    "ms_users_contract": null
+  },
+  "target": {
+    "environment": "production",
+    "apim_revision": "markettec-users-prod-v1:1"
+  },
+  "upstream_scopes": [
+    "global",
+    "product",
+    "api"
+  ],
+  "external_requirements": [
+    "exported global, product and api policy XML for every scope in the real hierarchy (see README.md)",
+    "named value allowed-origins (comma-separated exact origins)",
+    "reviewed public JWKS snapshot plus issuer and audience",
+    "target environment and APIM revision recorded in the manifest",
+    "abuse-protection evidence document (works on APIM Consumption; rate-limit-by-key is unavailable there)",
+    "ms-users contract-reconciliation evidence document (B07)",
+    "gateway validation of policies and expressions, and operator deployment approval"
+  ],
+  "operations": [
+    {
+      "id": "getUsersHealth",
+      "method": "GET",
+      "public_path": "/health",
+      "backend_path": "/health",
+      "auth": "public",
+      "cookies": [],
+      "cookie_mode": "none",
+      "origin": false,
+      "csrf": "none",
+      "anonymous_admission": false,
+      "contract_status": "reconciled"
+    },
+    {
+      "id": "getPublicSigningKeys",
+      "method": "GET",
+      "public_path": "/.well-known/jwks.json",
+      "backend_path": "/.well-known/jwks.json",
+      "auth": "public",
+      "cookies": [],
+      "cookie_mode": "none",
+      "origin": false,
+      "csrf": "none",
+      "anonymous_admission": false,
+      "contract_status": "reconciled"
+    },
+    {
+      "id": "getIdentityMetadata",
+      "method": "GET",
+      "public_path": "/.well-known/markettec-identity",
+      "backend_path": "/.well-known/markettec-identity",
+      "auth": "public",
+      "cookies": [],
+      "cookie_mode": "none",
+      "origin": false,
+      "csrf": "none",
+      "anonymous_admission": false,
+      "contract_status": "reconciled"
+    },
+    {
+      "id": "createAuthenticationAttempt",
+      "method": "POST",
+      "public_path": "/auth/attempts",
+      "backend_path": "/v1/auth/attempts",
+      "auth": "public",
+      "cookies": [],
+      "cookie_mode": "none",
+      "origin": true,
+      "csrf": "none",
+      "anonymous_admission": true,
+      "contract_status": "reconciled"
+    },
+    {
+      "id": "exchangeGoogleCredential",
+      "method": "POST",
+      "public_path": "/auth/google",
+      "backend_path": "/v1/auth/google",
+      "auth": "cookie",
+      "cookies": [
+        "attempt"
+      ],
+      "cookie_mode": "required",
+      "origin": true,
+      "csrf": "required",
+      "anonymous_admission": true,
+      "contract_status": "reconciled"
+    },
+    {
+      "id": "legacyGoogleRegistrationCompatibility",
+      "method": "POST",
+      "public_path": "/auth/google/registrations",
+      "backend_path": "/v1/auth/google/registrations",
+      "auth": "cookie",
+      "cookies": [
+        "attempt"
+      ],
+      "cookie_mode": "required",
+      "origin": true,
+      "csrf": "required",
+      "anonymous_admission": true,
+      "contract_status": "reconciled"
+    },
+    {
+      "id": "requestInstitutionalEmailLink",
+      "method": "POST",
+      "public_path": "/auth/email/requests",
+      "backend_path": "/v1/auth/email/requests",
+      "auth": "public",
+      "cookies": [],
+      "cookie_mode": "none",
+      "origin": true,
+      "csrf": "none",
+      "anonymous_admission": true,
+      "contract_status": "reconciled"
+    },
+    {
+      "id": "confirmInstitutionalEmailLink",
+      "method": "POST",
+      "public_path": "/auth/email/confirm",
+      "backend_path": "/v1/auth/email/confirm",
+      "auth": "cookie",
+      "cookies": [
+        "email_attempt"
+      ],
+      "cookie_mode": "required",
+      "origin": true,
+      "csrf": "required",
+      "anonymous_admission": true,
+      "contract_status": "reconciled"
+    },
+    {
+      "id": "getSessionState",
+      "method": "GET",
+      "public_path": "/auth/session",
+      "backend_path": "/v1/auth/session",
+      "auth": "cookie",
+      "cookies": [
+        "refresh"
+      ],
+      "cookie_mode": "optional",
+      "origin": false,
+      "csrf": "none",
+      "anonymous_admission": false,
+      "contract_status": "reconciled"
+    },
+    {
+      "id": "refreshSession",
+      "method": "POST",
+      "public_path": "/auth/refresh",
+      "backend_path": "/v1/auth/refresh",
+      "auth": "cookie",
+      "cookies": [
+        "refresh"
+      ],
+      "cookie_mode": "required",
+      "origin": true,
+      "csrf": "required",
+      "anonymous_admission": false,
+      "contract_status": "reconciled"
+    },
+    {
+      "id": "logoutSession",
+      "method": "POST",
+      "public_path": "/auth/logout",
+      "backend_path": "/v1/auth/logout",
+      "auth": "cookie",
+      "cookies": [
+        "refresh"
+      ],
+      "cookie_mode": "optional",
+      "origin": true,
+      "csrf": "if_cookie",
+      "anonymous_admission": false,
+      "contract_status": "reconciled"
+    },
+    {
+      "id": "recordSessionActivity",
+      "method": "POST",
+      "public_path": "/auth/session/activity",
+      "backend_path": "/v1/auth/session/activity",
+      "auth": "jwt_cookie",
+      "cookies": [
+        "refresh"
+      ],
+      "cookie_mode": "required",
+      "origin": true,
+      "csrf": "required",
+      "anonymous_admission": false,
+      "contract_status": "reconciled"
+    },
+    {
+      "id": "createMethodProofAttempt",
+      "method": "POST",
+      "public_path": "/auth/proofs/attempts",
+      "backend_path": "/v1/auth/proofs/attempts",
+      "auth": "jwt_cookie",
+      "cookies": [
+        "refresh"
+      ],
+      "cookie_mode": "required",
+      "origin": true,
+      "csrf": "required",
+      "anonymous_admission": false,
+      "contract_status": "pending_ms_users_pr23"
+    },
+    {
+      "id": "verifyGoogleMethodProof",
+      "method": "POST",
+      "public_path": "/auth/proofs/google",
+      "backend_path": "/v1/auth/proofs/google",
+      "auth": "jwt_cookie",
+      "cookies": [
+        "refresh"
+      ],
+      "cookie_mode": "required",
+      "origin": true,
+      "csrf": "required",
+      "anonymous_admission": false,
+      "contract_status": "pending_ms_users_pr23"
+    },
+    {
+      "id": "requestEmailMethodProof",
+      "method": "POST",
+      "public_path": "/auth/proofs/email/requests",
+      "backend_path": "/v1/auth/proofs/email/requests",
+      "auth": "jwt_cookie",
+      "cookies": [
+        "refresh"
+      ],
+      "cookie_mode": "required",
+      "origin": true,
+      "csrf": "required",
+      "anonymous_admission": false,
+      "contract_status": "pending_ms_users_pr23"
+    },
+    {
+      "id": "verifyEmailMethodProof",
+      "method": "POST",
+      "public_path": "/auth/proofs/email/confirm",
+      "backend_path": "/v1/auth/proofs/email/confirm",
+      "auth": "jwt_cookie",
+      "cookies": [
+        "refresh"
+      ],
+      "cookie_mode": "required",
+      "origin": true,
+      "csrf": "required",
+      "anonymous_admission": false,
+      "contract_status": "pending_ms_users_pr23"
+    },
+    {
+      "id": "linkOwnAuthMethod",
+      "method": "POST",
+      "public_path": "/me/auth-methods",
+      "backend_path": "/v1/me/auth-methods",
+      "auth": "jwt_cookie",
+      "cookies": [
+        "refresh"
+      ],
+      "cookie_mode": "required",
+      "origin": true,
+      "csrf": "required",
+      "anonymous_admission": false,
+      "contract_status": "pending_ms_users_pr23"
+    },
+    {
+      "id": "getOwnAuthMethods",
+      "method": "GET",
+      "public_path": "/me/auth-methods",
+      "backend_path": "/v1/me/auth-methods",
+      "auth": "jwt",
+      "cookies": [],
+      "cookie_mode": "none",
+      "origin": false,
+      "csrf": "none",
+      "anonymous_admission": false,
+      "contract_status": "reconciled"
+    },
+    {
+      "id": "getOwnUserProfile",
+      "method": "GET",
+      "public_path": "/me/profile",
+      "backend_path": "/v1/me/profile",
+      "auth": "jwt",
+      "cookies": [],
+      "cookie_mode": "none",
+      "origin": false,
+      "csrf": "none",
+      "anonymous_admission": false,
+      "contract_status": "reconciled"
+    },
+    {
+      "id": "updateOwnUserProfile",
+      "method": "PUT",
+      "public_path": "/me/profile",
+      "backend_path": "/v1/me/profile",
+      "auth": "jwt",
+      "cookies": [],
+      "cookie_mode": "none",
+      "origin": true,
+      "csrf": "none",
+      "anonymous_admission": false,
+      "contract_status": "reconciled"
+    },
+    {
+      "id": "getUserProfile",
+      "method": "GET",
+      "public_path": "/usuarios/{userId}",
+      "backend_path": "/v1/usuarios/{userId}",
+      "auth": "jwt",
+      "cookies": [],
+      "cookie_mode": "none",
+      "origin": false,
+      "csrf": "none",
+      "anonymous_admission": false,
+      "contract_status": "reconciled"
+    },
+    {
+      "id": "updateUserProfile",
+      "method": "PUT",
+      "public_path": "/usuarios/{userId}",
+      "backend_path": "/v1/usuarios/{userId}",
+      "auth": "jwt",
+      "cookies": [],
+      "cookie_mode": "none",
+      "origin": true,
+      "csrf": "none",
+      "anonymous_admission": false,
+      "contract_status": "reconciled"
+    },
+    {
+      "id": "loginWithPassword",
+      "method": "POST",
+      "public_path": "/auth/password/login",
+      "backend_path": "/v1/auth/password/login",
+      "auth": "public",
+      "cookies": [],
+      "cookie_mode": "none",
+      "origin": true,
+      "csrf": "none",
+      "anonymous_admission": true,
+      "contract_status": "pending_password_contract"
+    },
+    {
+      "id": "requestPasswordRecoveryLink",
+      "method": "POST",
+      "public_path": "/auth/password/recovery/requests",
+      "backend_path": "/v1/auth/password/recovery/requests",
+      "auth": "public",
+      "cookies": [],
+      "cookie_mode": "none",
+      "origin": true,
+      "csrf": "none",
+      "anonymous_admission": true,
+      "contract_status": "pending_password_contract"
+    },
+    {
+      "id": "getOwnPasswordStatus",
+      "method": "GET",
+      "public_path": "/me/password",
+      "backend_path": "/v1/me/password",
+      "auth": "jwt",
+      "cookies": [],
+      "cookie_mode": "none",
+      "origin": false,
+      "csrf": "none",
+      "anonymous_admission": false,
+      "contract_status": "pending_password_contract"
+    },
+    {
+      "id": "setOwnInitialPassword",
+      "method": "POST",
+      "public_path": "/me/password",
+      "backend_path": "/v1/me/password",
+      "auth": "jwt",
+      "cookies": [],
+      "cookie_mode": "none",
+      "origin": true,
+      "csrf": "session",
+      "anonymous_admission": false,
+      "contract_status": "pending_password_contract"
+    },
+    {
+      "id": "changeOwnPassword",
+      "method": "PUT",
+      "public_path": "/me/password",
+      "backend_path": "/v1/me/password",
+      "auth": "jwt",
+      "cookies": [],
+      "cookie_mode": "none",
+      "origin": true,
+      "csrf": "session",
+      "anonymous_admission": false,
+      "contract_status": "pending_password_contract"
+    }
+  ]
+}
