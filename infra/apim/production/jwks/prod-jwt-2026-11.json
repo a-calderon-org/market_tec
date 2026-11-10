@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "kty": "RSA",
+      "use": "sig",
+      "alg": "RS256",
+      "kid": "prod-jwt-2026-11",
+      "n": "zWRchdwQ4ufgRnF7-0dW1K7qw6YJdbib8AMtlTxhGMaM2ShxP21Lb9uRsP4UaJRuK2ASeY9xWekZA17mVd8gaXIkFASIHlJgUD7W3G82E_hGe322wSxc1diZEQIJJizjtflW8mG7o1x8fhxLhhwYk7kjpgJNsbq0KMt2UQt9xBWcBWfk2D6GLoT8h5CwRE_tlmCRlVHREsSph5QB0SX2nM29E7snsF8ENUq6Oe9sUh_hTpCTeMkyYyf0dz3ZO4B26Z0AgrEpXMoLYPLIj4Oq24dlHEp2v12_v9v_Jkuh4wwL9ncLrXboa66Wdj7hKfOfD4em3YyfzEArcaQ--xhSGw",
+      "e": "AQAB"
+    }
+  ]
+}
