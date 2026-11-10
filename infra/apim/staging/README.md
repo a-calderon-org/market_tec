@@ -1,8 +1,9 @@
 # Staging package (markettec-users-v1, revision 1)
 
 The `staging` inputs target `markettec-users-v1:1` on APIM `markettec-api`. The
-backend route inventory identifies [ms-users `8707f03cf61c1e0bbe042a24ae6a2d721609e6f7`](https://github.com/a-calderon-org/ms-users-market-tec/commit/8707f03cf61c1e0bbe042a24ae6a2d721609e6f7)
-(PR #34): the 22 routes of `be4595c` plus the five password routes (27). The manifest
+backend route inventory identifies [ms-users `75303f4361eadd7167dc6b86fffbcabeb0728394`](https://github.com/a-calderon-org/ms-users-market-tec/commit/75303f4361eadd7167dc6b86fffbcabeb0728394)
+(PR #35, uniform password-recovery acknowledgement): the same 27 routes as `8707f03` (PR #34), i.e.
+the 22 routes of `be4595c` plus the five password routes. The manifest
 lists the same 27 operations. The JWKS snapshot uses kid `stg-jwt-2026-11`.
 
 **Deployed state (2026-11-10, read-only check).** Azure runs the `ms-users-google-v1`
@@ -15,7 +16,8 @@ The existing `abuse_protection` evidence is bound to `be4595c` and to `users.jso
 alone, so generation with these inputs is **refused** until the operator records, after
 explicit authorization, new evidence documents in `evidence/`:
 
-* `abuse_protection`: backend `8707f03`, contract binding with the extension (below).
+* `abuse_protection`: backend `75303f4`, contract binding with the extension (below). Evidence bound
+  to `8707f03` is rejected: that build leaked account existence through recovery requests (fixed in PR #35).
   Without it every anonymous operation, including Google and Magic Link, is denied.
 * `ms_users_contract`: same binding. Without it the five password operations stay terminal
   503 `BACKEND_CONTRACT_PENDING` (the other ten are unaffected).

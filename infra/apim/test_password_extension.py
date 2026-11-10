@@ -39,7 +39,7 @@ def unapproved(manifest=MANIFEST):
 
 
 def approved_case(testcase, names=("abuse_protection", "ms_users_contract"), binding=None):
-    """Evidence bound to 8707f03 and to both contract files, in a temp dir (never in the repository)."""
+    """Evidence bound to the staging backend and to both contract files, in a temp dir (never in the repository)."""
     version, digest = binding or gp.contract_binding(OPENAPI_BYTES, EXTENSION_BYTES)
     directory = Path(tempfile.mkdtemp())
     testcase.addCleanup(lambda: shutil.rmtree(directory, ignore_errors=True))
@@ -63,8 +63,8 @@ def defs(result):
 
 
 class InventoryTest(unittest.TestCase):
-    def test_staging_inventory_is_8707f03_with_27_routes(self):
-        self.assertEqual("8707f03cf61c1e0bbe042a24ae6a2d721609e6f7", ROUTES["sha"])
+    def test_staging_inventory_is_75303f4_with_27_routes(self):
+        self.assertEqual("75303f4361eadd7167dc6b86fffbcabeb0728394", ROUTES["sha"])
         self.assertEqual(27, len(ROUTES["routes"]))
         self.assertEqual(27, len(MANIFEST["operations"]))
         password = {(o["method"], o["backend_path"]) for o in MANIFEST["operations"] if o["id"] in PASSWORD_OPS}
@@ -125,6 +125,20 @@ class FailClosedTest(unittest.TestCase):
         manifest, directory = approved_case(self, binding=base)
         with self.assertRaises(ValueError):
             package(manifest, directory)
+
+    def test_evidence_for_earlier_backends_is_rejected(self):
+        # 8707f03 leaked account existence through recovery requests (fixed in ms-users PR #35); be4595c lacks the routes.
+        for earlier in ("8707f03cf61c1e0bbe042a24ae6a2d721609e6f7", "be4595cfda702848fbd10dd8b2e8b36f126c548c"):
+            manifest, directory = approved_case(self)
+            for name in ("abuse_protection", "ms_users_contract"):
+                path = directory / f"{name}.json"
+                doc = json.loads(path.read_bytes())
+                doc["backend_sha"] = earlier
+                data = json.dumps(doc).encode()
+                path.write_bytes(data)
+                manifest["approvals"][name]["evidence_sha256"] = hashlib.sha256(data).hexdigest()
+            with self.assertRaisesRegex(ValueError, "another ms-users backend"):
+                package(manifest, directory)
 
     def test_binding_covers_both_files(self):
         version, digest = gp.contract_binding(OPENAPI_BYTES, EXTENSION_BYTES)
