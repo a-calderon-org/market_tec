@@ -14,6 +14,15 @@ Parámetros, demostraciones y conformidades siguen pendientes.
 
 No se encontraron ADR históricos verificables previos a Fase II. Las decisiones inferidas del código (Angular standalone, APIM, Express) no se atribuyen como decisiones formales.
 
+## Revisión de PR en `market_tec` sin aprobación independiente obligatoria — 2026-11-10
+
+**Estado: aprobado por el responsable del proyecto.** `main` de `market_tec` deja de exigir una aprobación de otro
+colaborador. Sigue exigiendo PR (sin push directo), el check `Validate Angular Build`, la regla también para
+administradores, y prohíbe force-push y borrado de la rama. Las aprobaciones APIM (`approvals.*`) se registran con una
+revisión GitHub real del responsable sobre el head que lleva el candidato; una revisión técnica independiente es
+opcional. No es retroactivo: las evidencias de staging de `f56ba7e` (#53, #54, #55) conservan sus revisiones
+independientes. No cambia otros repositorios.
+
 ## ms-catalog con JWT interno: audiencia de staging y delegación de perfil — 2026-11-10
 
 **Estado: aprobado por el responsable del proyecto, limitado a staging.**
