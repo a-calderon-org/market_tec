@@ -124,11 +124,24 @@ describe('Profile', () => {
         'Sebastián',
 
       apellidos:
-        'Murillo Rojas',
-
-      nombreUsuario:
-        'sebastianMR'
+        'Murillo Rojas'
     });
+  });
+
+  it('shows the username read-only and never as an editable field', () => {
+    const element: HTMLElement = fixture.nativeElement;
+
+    expect('nombreUsuario' in component.profileForm.controls).toBe(false);
+    expect(element.querySelector('input[formControlName="nombreUsuario"]')).toBeNull();
+    expect(element.textContent).toContain('sebastianMR');
+    expect(element.textContent).toContain('no se puede cambiar');
+  });
+
+  it('without passwordAuth there is no password control at all', () => {
+    const element: HTMLElement = fixture.nativeElement;
+
+    expect(component.passwordOptions()).toBe('hidden');
+    expect(element.querySelector('input[type="password"]')).toBeNull();
   });
 
   it('should calculate the full name', () => {
@@ -185,10 +198,7 @@ describe('Profile', () => {
             ' Sebastián ',
 
         apellidos:
-            ' Murillo Rojas ',
-
-        nombreUsuario:
-            'sebastianMR'
+            ' Murillo Rojas '
         });
 
     component.saveProfile();
@@ -245,13 +255,6 @@ describe('Profile', () => {
       .apellidos
       .setValue(
         'Murillo Rojas'
-      );
-
-    component.profileForm
-      .controls
-      .nombreUsuario
-      .setValue(
-        'sebastianMR'
       );
 
     component.saveProfile();

@@ -38,6 +38,16 @@ export class PasswordCredentialsService {
     await this.call(() => this.http.post<unknown>(this.url(), { newPassword }, { headers: this.headers(true) }));
   }
 
+  /**
+   * `PUT`: cambio con la contraseña actual (B02: nunca solo con el buzón). ms-users revoca las demás sesiones y
+   * conserva la actual. 401 `INVALID_CREDENTIALS` si la actual no coincide; 409 `PASSWORD_NOT_SET` sin contraseña.
+   */
+  async change(currentPassword: string, newPassword: string): Promise<void> {
+    await this.call(() =>
+      this.http.put<unknown>(this.url(), { currentPassword, newPassword }, { headers: this.headers(true) }),
+    );
+  }
+
   private async call<T>(request: () => Parameters<typeof firstValueFrom<T>>[0]): Promise<T> {
     try {
       return await firstValueFrom(request());

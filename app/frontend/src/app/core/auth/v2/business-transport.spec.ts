@@ -111,7 +111,6 @@ describe('P1-03: sesión simulada authCoreV2 ⇒ cero HTTP de negocio', () => {
       fixture.componentInstance.profileForm.setValue({
         nombre: 'Nombre',
         apellidos: 'Apellidos',
-        nombreUsuario: 'usuario.mock',
       });
       fixture.componentInstance.saveProfile();
       await settle();

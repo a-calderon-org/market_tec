@@ -7,6 +7,7 @@ import { Messenger } from './features/messenger/messenger';
 import { Login } from './features/auth/login';
 import { EmailLinkCallback } from './features/auth/email-link-callback';
 import { PasswordSetup } from './features/auth/password-setup';
+import { CompleteProfile } from './features/profile/complete-profile';
 import { authGuard, guestGuard } from './features/auth/auth.guard';
 
 export const routes: Routes = [
@@ -36,6 +37,12 @@ export const routes: Routes = [
     path: 'contrasena',
     canActivate: [authGuard],
     component: PasswordSetup
+  },
+  {
+    // Datos básicos tras el registro (nombre y apellidos); nunca nombre de usuario ni contraseña.
+    path: 'registro/datos',
+    canActivate: [authGuard],
+    component: CompleteProfile
   },
   {
     path: 'mis-publicaciones',

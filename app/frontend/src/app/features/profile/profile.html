@@ -263,46 +263,27 @@
 
           </div>
 
-          <label>
+          <div class="readonly-label">
             <span>
               Nombre de usuario
             </span>
 
-            <div class="input-with-icon">
-              <input
-                type="text"
-                formControlName="nombreUsuario"
-                autocomplete="username"
-                [class.input--error]="
-                  isControlInvalid(
-                    'nombreUsuario'
-                  )
-                "
-              >
+            <div class="readonly-field">
+              <span class="readonly-field__icon">
+                🔒
+              </span>
 
-              @if (
-                !isControlInvalid(
-                  'nombreUsuario'
-                )
-              ) {
-                <span>
-                  ✓
-                </span>
-              }
+              <div>
+                <strong>
+                  {{ currentUser.nombreUsuario }}
+                </strong>
+
+                <small>
+                  Asignado al crear la cuenta; no se puede cambiar
+                </small>
+              </div>
             </div>
-
-            @if (
-              isControlInvalid(
-                'nombreUsuario'
-              )
-            ) {
-              <small class="field-error">
-                Usa entre 3 y 40 caracteres.
-                Solo letras, números, punto,
-                guion y guion bajo.
-              </small>
-            }
-          </label>
+          </div>
 
           <label>
             <span>
@@ -364,67 +345,139 @@
           </div>
         </header>
 
-        <div class="security-notice">
-          <strong>
-            Cambio de contraseña
-          </strong>
-
-          <p>
-            Esta opción está temporalmente
-            no disponible porque el mock de
-            API Management no tiene
-            configurada correctamente la
-            operación de cambio de contraseña.
-          </p>
-        </div>
-
-        <div class="disabled-form">
-
-          <label>
+        @if (accessMethod()) {
+          <div class="readonly-label">
             <span>
-              Contraseña actual
+              Método de acceso
             </span>
 
-            <input
-              type="password"
-              placeholder="••••••••"
-              disabled
+            <div class="readonly-field">
+              <span class="readonly-field__icon">
+                🔑
+              </span>
+
+              <div>
+                <strong>
+                  {{ accessMethod() }}
+                </strong>
+
+                <small>
+                  {{ currentUser.correo }}
+                </small>
+              </div>
+            </div>
+          </div>
+        }
+
+        @switch (passwordOptions()) {
+          @case ('change') {
+            @if (passwordMessage()) {
+              <div
+                class="feedback"
+                [class.feedback--success]="passwordChanged()"
+                [class.feedback--error]="!passwordChanged()"
+                role="status"
+              >
+                {{ passwordChanged() ? '✓' : '!' }}
+                {{ passwordMessage() }}
+              </div>
+            }
+
+            <form
+              class="profile-form"
+              [formGroup]="passwordForm"
+              (ngSubmit)="changePassword()"
+              novalidate
             >
-          </label>
+              <label>
+                <span>
+                  Contraseña actual
+                </span>
 
-          <label>
-            <span>
-              Nueva contraseña
-            </span>
+                <input
+                  type="password"
+                  formControlName="actual"
+                  autocomplete="current-password"
+                  [class.input--error]="isPasswordControlInvalid('actual')"
+                >
 
-            <input
-              type="password"
-              placeholder="Mínimo 8 caracteres"
-              disabled
-            >
-          </label>
+                @if (isPasswordControlInvalid('actual')) {
+                  <small class="field-error">
+                    Ingresa tu contraseña actual.
+                  </small>
+                }
+              </label>
 
-          <label>
-            <span>
-              Confirmar nueva contraseña
-            </span>
+              <label>
+                <span>
+                  Nueva contraseña
+                </span>
 
-            <input
-              type="password"
-              placeholder="Repetir nueva contraseña"
-              disabled
-            >
-          </label>
+                <input
+                  type="password"
+                  formControlName="nueva"
+                  autocomplete="new-password"
+                  [attr.maxlength]="passwordMax"
+                  [class.input--error]="isPasswordControlInvalid('nueva')"
+                >
 
-          <button
-            class="secondary-button"
-            type="button"
-            disabled
-          >
-            🔑 Actualizar contraseña
-          </button>
+                @if (isPasswordControlInvalid('nueva')) {
+                  <small class="field-error">
+                    Usa entre {{ passwordMin }} y {{ passwordMax }} caracteres.
+                  </small>
+                }
+              </label>
 
-        </div>
+              <label>
+                <span>
+                  Confirmar nueva contraseña
+                </span>
+
+                <input
+                  type="password"
+                  formControlName="confirmacion"
+                  autocomplete="new-password"
+                  [attr.maxlength]="passwordMax"
+                  [class.input--error]="passwordMismatch()"
+                >
+
+                @if (passwordMismatch()) {
+                  <small class="field-error">
+                    Las contraseñas no coinciden.
+                  </small>
+                }
+              </label>
+
+              <button
+                class="secondary-button"
+                type="submit"
+                [disabled]="passwordForm.invalid || changingPassword()"
+              >
+                @if (changingPassword()) {
+                  Actualizando...
+                } @else {
+                  🔑 Actualizar contraseña
+                }
+              </button>
+            </form>
+          }
+          @case ('setup') {
+            <div class="security-notice">
+              <strong>
+                Contraseña
+              </strong>
+
+              <p>
+                Tu cuenta aún no tiene contraseña. Puedes crearla ahora para iniciar sesión con tu correo
+                institucional sin pedir un enlace.
+              </p>
+
+              <button class="secondary-button" type="button" (click)="openPasswordSetup()">
+                🔑 Crear contraseña
+              </button>
+            </div>
+          }
+        }
 
       </section>
 

@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, Injector, OnInit, inject, signal } from '@angular/core';
 import { Location } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AuthSessionService } from '../../core/auth/v2/auth-session.service';
@@ -6,6 +6,7 @@ import { PasswordCredentialsService } from '../../core/auth/v2/password-credenti
 import type { EmailLinkProof } from '../../core/auth/v2/auth-contract';
 import { FEATURE_FLAGS } from '../../core/feature-flags';
 import { describeEmailLinkFailure } from './services/email-link-errors';
+import { landingAfterSignIn } from '../profile/post-sign-in';
 
 const HEX_32 = /^[0-9a-f]{32}$/;
 const HEX_64 = /^[0-9a-f]{64}$/;
@@ -58,6 +59,7 @@ export class EmailLinkCallback implements OnInit {
   private readonly router = inject(Router);
   private readonly location = inject(Location);
   private readonly flags = inject(FEATURE_FLAGS);
+  private readonly injector = inject(Injector);
   private readonly session = this.flags.authCoreV2 ? inject(AuthSessionService) : null;
   private readonly passwords = this.flags.authCoreV2 && this.flags.passwordAuth ? inject(PasswordCredentialsService) : null;
   /** `/acceso/recuperar`: mismo canje del enlace, con mensajes de recuperación (B02). */
@@ -95,6 +97,11 @@ export class EmailLinkCallback implements OnInit {
     // se lleva al estudiante a configurarla. Cualquier fallo de la consulta no impide ingresar.
     if (this.passwords && await this.setupPending()) {
       if (await this.router.navigate(['/contrasena'], { replaceUrl: true })) return;
+    }
+
+    // Cuenta nueva sin contraseña pendiente (p. ej. se omitió): se piden solo nombre y apellidos si faltan.
+    if (await landingAfterSignIn(this.injector) === '/registro/datos') {
+      if (await this.router.navigate(['/registro/datos'], { replaceUrl: true })) return;
     }
 
     if (!await this.router.navigate(['/'], { replaceUrl: true, state: { openProfile: true } })) {

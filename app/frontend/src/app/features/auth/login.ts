@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, ElementRef, ViewChild, effect, inject, signal } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, Injector, ViewChild, effect, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { describeGoogleAuthFailure, GoogleAuthService, type GoogleButtonTheme } from './services/google-auth.service';
 import type { GoogleAttemptPurpose } from '../../core/auth/v2/auth-contract';
@@ -10,6 +10,7 @@ import { AuthSessionService } from '../../core/auth/v2/auth-session.service';
 import { describeEmailLinkFailure } from './services/email-link-errors';
 import { describePasswordLoginFailure, describeRecoveryRequestFailure } from './services/password-auth-errors';
 import { ThemeService } from '../../core/theme.service';
+import { landingAfterSignIn } from '../profile/post-sign-in';
 
 /** Operación visible de la pantalla: dos formularios y dos propósitos de Google bien diferenciados. */
 export type AuthMode = 'signin' | 'signup';
@@ -33,6 +34,7 @@ export function googleThemeFor(theme: 'light' | 'dark'): GoogleButtonTheme {
 export class Login implements AfterViewInit {
   private readonly googleAuth = inject(GoogleAuthService);
   private readonly themeService = inject(ThemeService);
+  private readonly injector = inject(Injector);
   private googleButtonReady = false;
   private renderingGoogleButton = false;
 
@@ -48,7 +50,8 @@ export class Login implements AfterViewInit {
   readonly googleLoading = signal(true);
   readonly googleLoadError = signal(false);
   /** Solo authCoreV2: cada propósito usa su propio intento y nonce (D-06). */
-  readonly authCoreV2 = inject(FEATURE_FLAGS).authCoreV2;
+  private readonly flags = inject(FEATURE_FLAGS);
+  readonly authCoreV2 = this.flags.authCoreV2;
   readonly googlePurpose = signal<GoogleAttemptPurpose>('login');
 
   /** Operación visible. Cada una usa su propio propósito de Google (intento y nonce propios) y su propio formulario. */
@@ -141,7 +144,11 @@ export class Login implements AfterViewInit {
     try {
       await this.googleAuth.signIn(credential);
       signedIn = true;
-      if (!await this.router.navigate(['/'])) throw new Error('No fue posible abrir MarketTec.');
+      // Registro Google: si Google no aportó nombre y apellidos, se piden solo esos datos (nunca usuario ni contraseña).
+      const destination = this.authCoreV2 && this.flags.authCoreV2Adapter === 'http'
+        ? await landingAfterSignIn(this.injector)
+        : '/';
+      if (!await this.router.navigate([destination])) throw new Error('No fue posible abrir MarketTec.');
     } catch (error) {
       this.error.set(true);
       this.errorMessage.set(error instanceof HttpErrorResponse
@@ -332,7 +339,7 @@ export class Login implements AfterViewInit {
       await this.session.signInWithPassword(this.loginService.normalizeEmail(correo), contrasena);
       signedIn = true;
       this.passwordForm.controls.contrasena.reset();
-      if (!await this.router.navigate(['/'])) throw new Error('No fue posible abrir MarketTec.');
+      if (!await this.router.navigate([await landingAfterSignIn(this.injector)])) throw new Error('No fue posible abrir MarketTec.');
     } catch (error) {
       this.error.set(true);
       this.errorMessage.set(signedIn ? 'Ingresaste, pero no fue posible abrir MarketTec. Recarga la página.'
