@@ -13,6 +13,7 @@ import {
 import { AuthSessionStore } from './auth-session.store';
 import { EmailLinkCsrf } from './email-link-csrf';
 import { SessionCoordinator } from './session-coordinator';
+import { SessionSignalChannel } from './session-signal-channel';
 
 const LEGACY_GOOGLE_TOKEN_KEY = 'google_token';
 
@@ -47,6 +48,7 @@ export class AuthSessionService {
   private readonly coordinator = inject(SessionCoordinator);
   private readonly router = inject(Router, { optional: true });
   private readonly emailLinkCsrf = inject(EmailLinkCsrf);
+  private readonly signals = inject(SessionSignalChannel);
 
   /** Usuario interno (userId opaco). Nunca el `sub` de Google, el correo ni `USR-001`. */
   readonly user = this.store.user;
@@ -153,6 +155,15 @@ export class AuthSessionService {
     if (!this.store.applyAuthResponse(response, epoch)) {
       throw new AuthRequiredError('cancelled');
     }
+    // El enlace suele abrirse en otra pestaña: la que lo pidió deja de mostrar «Revisa tu correo».
+    this.signals.post({ type: 'signed-in' });
+  }
+
+  /** Aviso de que otra pestaña de este navegador confirmó un enlace por correo. Devuelve la cancelación. */
+  onSignedInElsewhere(listener: () => void): () => void {
+    return this.signals.subscribe((signal) => {
+      if (signal.type === 'signed-in') listener();
+    });
   }
 
   /** Bootstrap + refresh dentro de la sección crítica; true si hay JWT interno vigente. */

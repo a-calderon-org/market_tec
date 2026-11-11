@@ -153,6 +153,15 @@
         } @else {
           @if (recoverySentTo(); as sentTo) {
             <div class="login-form email-link-sent" role="status">
+              @if (signedInElsewhere()) {
+              <p class="email-link-sent__title">Ya ingresaste en la otra pestaña</p>
+              <p class="google-login-note">
+                Abriste el enlace en otra pestaña y la sesión ya está activa allí. Puedes cerrar esta pestaña.
+              </p>
+              <button type="button" class="login-submit login-submit--centered" (click)="continueHere()" [disabled]="submitting()">
+                Continuar en esta pestaña
+              </button>
+            } @else {
               <p class="email-link-sent__title">
                 Revisa tu correo institucional
               </p>
@@ -166,6 +175,7 @@
               <button type="button" class="institutional-button" (click)="backToPasswordSignIn()">
                 Volver a iniciar sesión
               </button>
+              }
             </div>
           } @else {
             <form class="login-form" [formGroup]="recoveryForm" (ngSubmit)="submitRecovery()" novalidate>
@@ -220,6 +230,15 @@
 
         @if (linkSentTo(); as sentTo) {
           <div class="login-form email-link-sent" role="status">
+            @if (signedInElsewhere()) {
+              <p class="email-link-sent__title">Ya ingresaste en la otra pestaña</p>
+              <p class="google-login-note">
+                Abriste el enlace en otra pestaña y la sesión ya está activa allí. Puedes cerrar esta pestaña.
+              </p>
+              <button type="button" class="login-submit login-submit--centered" (click)="continueHere()" [disabled]="submitting()">
+                Continuar en esta pestaña
+              </button>
+            } @else {
             <p class="email-link-sent__title">
               Revisa tu correo institucional
             </p>
@@ -239,6 +258,7 @@
             <button type="button" class="institutional-button" (click)="requestAnotherLink()">
               Solicitar otro enlace
             </button>
+            }
           </div>
         } @else if (!emailFormOpen()) {
           <button type="button" class="login-submit login-submit--centered" (click)="openEmailForm()">

@@ -4,7 +4,11 @@ import { Injectable } from '@angular/core';
  * Señales entre pestañas (D-07). Solo llevan el tipo del evento: nunca JWT,
  * CSRF, refresh token, identidad ni ningún dato de sesión, y no son un mutex.
  */
-export type SessionSignal = { readonly type: 'session-rotated' } | { readonly type: 'logout' };
+export type SessionSignal =
+  | { readonly type: 'session-rotated' }
+  | { readonly type: 'logout' }
+  /** Otra pestaña confirmó un enlace por correo: la que lo pidió deja de esperar (sin datos de sesión). */
+  | { readonly type: 'signed-in' };
 
 export abstract class SessionSignalChannel {
   abstract post(signal: SessionSignal): void;
@@ -14,7 +18,7 @@ export abstract class SessionSignalChannel {
 
 export const SESSION_SIGNAL_CHANNEL_NAME = 'markettec.auth.signals';
 
-const SIGNAL_TYPES: readonly SessionSignal['type'][] = ['session-rotated', 'logout'];
+const SIGNAL_TYPES: readonly SessionSignal['type'][] = ['session-rotated', 'logout', 'signed-in'];
 
 /** Acepta únicamente `{type}` con un tipo conocido; descarta cualquier otra forma. */
 export function parseSessionSignal(data: unknown): SessionSignal | null {

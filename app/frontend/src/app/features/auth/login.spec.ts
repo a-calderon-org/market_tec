@@ -148,7 +148,15 @@ describe('Login', () => {
 describe('Login — Magic Link institucional (authCoreV2)', () => {
   let fixture: ComponentFixture<Login>;
   let component: Login;
-  const session = { requestEmailLink: vi.fn() };
+  let signedInElsewhere: (() => void) | null = null;
+  const session = {
+    requestEmailLink: vi.fn(),
+    restoreSession: vi.fn(),
+    onSignedInElsewhere: (listener: () => void) => {
+      signedInElsewhere = listener;
+      return () => { signedInElsewhere = null; };
+    },
+  };
   const googleAuth = {
     renderButton: vi.fn().mockResolvedValue(undefined),
     restyleButton: vi.fn().mockReturnValue(true),
@@ -208,6 +216,30 @@ describe('Login — Magic Link institucional (authCoreV2)', () => {
     expect(fixture.nativeElement.querySelector('.login-form input')).not.toBeNull();
   });
 
+  it('stops waiting when the link signed in from another tab and can continue here', async () => {
+    component.openEmailForm();
+    component.loginForm.setValue({ correo: 'ana@estudiantec.cr' });
+    await component.submit();
+    signedInElsewhere?.();
+    fixture.detectChanges();
+
+    expect(text()).toContain('Ya ingresaste en la otra pestaña');
+    expect(text()).not.toContain('Solicitar otro enlace');
+
+    session.restoreSession.mockResolvedValueOnce(true);
+    const router = TestBed.inject(Router);
+    const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    await component.continueHere();
+    expect(session.restoreSession).toHaveBeenCalledOnce();
+    expect(navigate).toHaveBeenCalled();
+  });
+
+  it('a sign-in elsewhere does not change a page that is not waiting for a link', () => {
+    signedInElsewhere?.();
+    fixture.detectChanges();
+    expect(component.signedInElsewhere()).toBe(false);
+  });
+
   it('never calls the backend for a non institutional address', async () => {
     component.loginForm.setValue({ correo: 'ana@gmail.com' });
     await component.submit();
@@ -248,7 +280,7 @@ describe('Login — Google only (authCoreV2, emailLinkAuth: false)', () => {
         provideRouter([]),
         LoginService,
         { provide: FEATURE_FLAGS, useValue: { authCoreV2: true, authCoreV2Adapter: 'http', emailLinkAuth: false } },
-        { provide: AuthSessionService, useValue: { requestEmailLink: vi.fn() } },
+        { provide: AuthSessionService, useValue: { requestEmailLink: vi.fn(), onSignedInElsewhere: () => () => undefined } },
         { provide: GoogleAuthService, useValue: googleAuth }
       ]
     }).compileComponents();
@@ -275,6 +307,7 @@ describe('Login — Iniciar sesión / Crear cuenta con contraseña (authCoreV2 +
   let component: Login;
   let router: Router;
   const session = {
+    onSignedInElsewhere: vi.fn(() => () => undefined),
     requestEmailLink: vi.fn(),
     signInWithPassword: vi.fn(),
     requestPasswordRecovery: vi.fn()
@@ -288,6 +321,7 @@ describe('Login — Iniciar sesión / Crear cuenta con contraseña (authCoreV2 +
   async function create(flags: object): Promise<void> {
     TestBed.resetTestingModule();
     for (const mock of Object.values(session)) mock.mockReset().mockResolvedValue(undefined);
+    session.onSignedInElsewhere.mockReset().mockReturnValue(() => undefined);
     googleAuth.renderButton.mockReset().mockResolvedValue(undefined);
     googleAuth.restyleButton.mockReset().mockReturnValue(true);
     await TestBed.configureTestingModule({
@@ -512,7 +546,7 @@ describe('Login — sin contraseñas (flag apagado) conserva Google y el enlace 
         provideRouter([]),
         LoginService,
         { provide: FEATURE_FLAGS, useValue: { authCoreV2: true, authCoreV2Adapter: 'http' } },
-        { provide: AuthSessionService, useValue: { requestEmailLink: vi.fn() } },
+        { provide: AuthSessionService, useValue: { requestEmailLink: vi.fn(), onSignedInElsewhere: () => () => undefined } },
         { provide: GoogleAuthService, useValue: { renderButton: vi.fn().mockResolvedValue(undefined), restyleButton: vi.fn(), signIn: vi.fn() } }
       ]
     }).compileComponents();
@@ -534,7 +568,7 @@ describe('Login — sin contraseñas (flag apagado) conserva Google y el enlace 
         provideRouter([]),
         LoginService,
         { provide: FEATURE_FLAGS, useValue: { authCoreV2: true, authCoreV2Adapter: 'mock', passwordAuth: true } },
-        { provide: AuthSessionService, useValue: { requestEmailLink: vi.fn() } },
+        { provide: AuthSessionService, useValue: { requestEmailLink: vi.fn(), onSignedInElsewhere: () => () => undefined } },
         { provide: GoogleAuthService, useValue: { renderButton: vi.fn().mockResolvedValue(undefined), restyleButton: vi.fn(), signIn: vi.fn() } }
       ]
     }).compileComponents();

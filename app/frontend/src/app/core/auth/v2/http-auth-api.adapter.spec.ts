@@ -239,6 +239,7 @@ describe('HttpAuthApiAdapter + núcleo v2 contra ms-users (HttpTestingController
       configure();
 
       const session = TestBed.inject(AuthSessionService);
+      const posted = vi.spyOn(TestBed.inject(SessionSignalChannel), 'post');
       const done = session.confirmEmailLink({ attemptId: ATTEMPT_ID, token: TOKEN });
       await settle();
       const req = httpTesting.expectOne(url('/v1/auth/email/confirm'));
@@ -250,6 +251,8 @@ describe('HttpAuthApiAdapter + núcleo v2 contra ms-users (HttpTestingController
 
       expect(session.currentIdentity()?.userId).toBe(USER_ID);
       expect(await session.getAccessToken()).toBe(INTERNAL_JWT);
+      // La pestaña que pidió el enlace deja de esperar; la señal no lleva ningún dato de sesión.
+      expect(posted).toHaveBeenCalledExactlyOnceWith({ type: 'signed-in' });
       expect(JSON.stringify(localStorage)).not.toContain(EMAIL_CSRF);
       expect(JSON.stringify(localStorage)).not.toContain(TOKEN);
     });

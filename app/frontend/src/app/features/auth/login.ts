@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, ElementRef, Injector, ViewChild, effect, inject, signal } from '@angular/core';
+import { AfterViewInit, Component, DestroyRef, ElementRef, Injector, ViewChild, effect, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { describeGoogleAuthFailure, GoogleAuthService, type GoogleButtonTheme } from './services/google-auth.service';
 import type { GoogleAttemptPurpose } from '../../core/auth/v2/auth-contract';
@@ -178,6 +178,35 @@ export class Login implements AfterViewInit {
 
   readonly emailLoginAvailable = this.authCoreV2 && inject(FEATURE_FLAGS).emailLinkAuth !== false;
 
+  /**
+   * El enlace por correo se abrió en otra pestaña de este navegador y ya inició sesión allí. Esta pestaña deja de
+   * esperar: el navegador no permite cerrarla desde la página, así que se ofrece cerrarla o continuar aquí.
+   */
+  readonly signedInElsewhere = signal(false);
+
+  private readonly stopSignedInListener = this.session?.onSignedInElsewhere(() => {
+    if (this.linkSentTo() !== null || this.recoverySentTo() !== null) this.signedInElsewhere.set(true);
+  });
+
+  private readonly releaseSignedInListener = inject(DestroyRef).onDestroy(() => this.stopSignedInListener?.());
+
+  /** Continuar en esta pestaña: recupera la sesión que creó la otra (misma cookie de este navegador). */
+  async continueHere(): Promise<void> {
+    if (!this.session || this.submitting()) return;
+    this.submitting.set(true);
+    try {
+      const restored = await this.session.restoreSession();
+      if (restored && await this.router.navigate([await landingAfterSignIn(this.injector)])) return;
+      this.error.set(true);
+      this.errorMessage.set('No fue posible continuar en esta pestaña. Usa la pestaña donde abriste el enlace.');
+    } catch {
+      this.error.set(true);
+      this.errorMessage.set('No fue posible continuar en esta pestaña. Usa la pestaña donde abriste el enlace.');
+    } finally {
+      this.submitting.set(false);
+    }
+  }
+
   /** El formulario de correo se muestra tras «Continuar con correo institucional». */
   readonly emailFormOpen =
     signal(false);
@@ -222,6 +251,7 @@ export class Login implements AfterViewInit {
 
   /** Vuelve al formulario para pedir otro enlace (p. ej. tras abrirlo en otro navegador). */
   requestAnotherLink(): void {
+    this.signedInElsewhere.set(false);
     this.linkSentTo.set(null);
     this.emailFormOpen.set(true);
   }
