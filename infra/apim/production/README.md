@@ -7,11 +7,11 @@ exists only in Key Vault `kv-mtec-users-prod`). Issuer `https://markettec-api.az
 `markettec-api`. Allowed origin: `https://victorious-beach-0a55f0c1e.2.azurestaticapps.net` only.
 
 **Rebound to ms-users `c0bac32` (PR #38 merge; same 27 routes, same contract binding; tree identical to the image
-validated in staging).** Target release: `ms-users-password-v1`. **Both approvals are pending:** the `f56ba7e`
-`abuse_protection` record (`evidence/abuse_protection.f56ba7e.production.json`, review `#57/reviews/5849713398`) is
-kept as history and does not cover `c0bac32`, so `approvals` are both `null` and a package generated now denies every
-anonymous and password operation. Case file and candidates: [`review/ms_users_c0bac32.production.md`](review/ms_users_c0bac32.production.md).
-The deployed APIM (`ms-users-google-v1` for `f56ba7e`) is unchanged until the evidence is registered.
+validated in staging).** Target release: `ms-users-password-v1`. **Both approvals are registered** from the
+responsible's review `a-calderon-org/market_tec#61/reviews/5854106910` (`COMMENTED`, head `8945b6b`):
+`evidence/abuse_protection.c0bac32.production.json` and `evidence/ms_users_contract.c0bac32.production.json`. The
+`f56ba7e` record (`#57/reviews/5849713398`) is kept as history and does not cover `c0bac32`. Case file and candidates: [`review/ms_users_c0bac32.production.md`](review/ms_users_c0bac32.production.md).
+Generate only with `--release ms-users-password-v1` (H1).
 
 **Shared runtime (decision 2026-11-10).** The subscription allows a single Container Apps environment, so
 `ca-ms-users-prod` runs in `cae-ms-users-stg2` next to `ca-ms-users-stg`. Identities, databases, Key Vaults, JWT/CSRF

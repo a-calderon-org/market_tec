@@ -1,4 +1,6 @@
-# Revisión de producción — ms-users `c0bac32`, perfil `ms-users-password-v1` (candidato, no liberable)
+# Revisión de producción — ms-users `c0bac32`, perfil `ms-users-password-v1`
+
+**Registrado:** decisión del responsable `a-calderon-org/market_tec#61/reviews/5854106910` (`COMMENTED`, head `8945b6b`, 2026-11-11); evidencias `../evidence/abuse_protection.c0bac32.production.json` y `../evidence/ms_users_contract.c0bac32.production.json`. El texto siguiente es el expediente revisado y no cambia.
 
 **Estado: Proposed. Candidato de revisión. No es evidencia aprobada.** Los candidatos
 [`abuse_protection.c0bac32.production.candidate.json`](abuse_protection.c0bac32.production.candidate.json) y

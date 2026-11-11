@@ -2,8 +2,14 @@
   "version": 3,
   "backend": "ms-users",
   "approvals": {
-    "abuse_protection": null,
-    "ms_users_contract": null
+    "abuse_protection": {
+      "evidence_file": "abuse_protection.c0bac32.production.json",
+      "evidence_sha256": "a2ef61a0a5906f2335e9c120e553190104da5ae68a360700f4fb30b6cc887dc4"
+    },
+    "ms_users_contract": {
+      "evidence_file": "ms_users_contract.c0bac32.production.json",
+      "evidence_sha256": "ca17a23d16fba7b13470175ab2e2948f1a3b26fed195a45274caf31df69c14f6"
+    }
   },
   "target": {
     "environment": "production",

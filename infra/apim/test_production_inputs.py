@@ -43,9 +43,18 @@ class ProductionInputsTest(unittest.TestCase):
             self.assertEqual((ROUTES["sha"], "production", "markettec-users-prod-v1:1", None),
                              (candidate["backend_sha"], candidate["environment"], candidate["apim_revision"],
                               candidate["review_id"]))
-        self.assertEqual({"abuse_protection": None, "ms_users_contract": None}, MANIFEST["approvals"])
+
+    def test_registered_c0bac32_evidence_matches_the_candidates_and_is_accepted(self):
+        for name, candidate in CANDIDATES.items():
+            entry = MANIFEST["approvals"][name]
+            self.assertEqual(f"{name}.c0bac32.production.json", entry["evidence_file"])
+            doc = json.loads((PROD / "evidence" / entry["evidence_file"]).read_text())
+            self.assertEqual(gp.EVIDENCE_FIELDS, set(doc))
+            self.assertEqual("a-calderon-org/market_tec#61/reviews/5854106910", doc["review_id"])
+            self.assertEqual({k: candidate[k] for k in gp.EVIDENCE_FIELDS - {"review_id"}},
+                             {k: doc[k] for k in gp.EVIDENCE_FIELDS - {"review_id"}})
         _, approvals = gp._prepare(MANIFEST, OPENAPI_BYTES, ROUTES, PROD / "evidence", EXTENSION_BYTES)
-        self.assertEqual({"abuse_protection": False, "ms_users_contract": False}, approvals)
+        self.assertEqual({"abuse_protection": True, "ms_users_contract": True}, approvals)
 
     def test_f56ba7e_production_evidence_does_not_cover_the_new_backend(self):
         doc = json.loads((PROD / "evidence" / "abuse_protection.f56ba7e.production.json").read_text())
