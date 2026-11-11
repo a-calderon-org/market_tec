@@ -1,8 +1,10 @@
 # ms-catalog
 
-Servicio de catalogo de MarketTec. Usa Node.js 24 (la version declarada en el `.nvmrc` de la raiz), TypeScript y Express 5. Incluye el nucleo de publicaciones. Sin configuracion solo expone `/health`; con la
-configuracion de la seccion "Autenticacion real" expone publicaciones autenticadas
-con el JWT interno de ms-users. No contiene chats ni integraciones Azure.
+Servicio de catalogo de MarketTec. Usa Node.js 24, TypeScript y Express 5.
+Incluye los nucleos de publicaciones y mensajeria y un adaptador optativo Cosmos
+DB for NoSQL. Sin configuracion, el servidor expone solo /health. La seccion
+"Autenticacion real" describe como habilitar publicaciones autenticadas con el JWT
+interno de ms-users y almacenamiento en memoria.
 
 ## Requisitos y ejecucion
 
@@ -27,7 +29,7 @@ npm start
 
 El router HTTP de salud es un adaptador de entrada que invoca `GetHealthQuery`; `GetHealthService` implementa ese puerto y devuelve el modelo sin dependencias `ServiceHealth`. `config/container.ts` realiza la composicion manual. No se crean puertos de salida sin comportamiento real.
 
-Las rutas de negocio futuras usarán `/v1`. Cosmos DB, Blob Storage y Azure Queue se incorporarán mediante puertos de salida cuando existan casos de uso. El middleware propaga o genera `X-Correlation-ID`, emite logs JSON, serializa timestamps en Epoch seconds y devuelve errores mediante un envelope estable.
+Las rutas de negocio usan `/v1` en la composicion optativa. Cosmos se conecta por puertos de salida. Blob Storage y Azure Queue pertenecen a MTEC-14 y MTEC-31. El middleware propaga o genera `X-Correlation-ID`, emite logs JSON, serializa timestamps en Epoch seconds y devuelve errores mediante un envelope estable.
 
 ## Publicaciones — MTEC-28
 
@@ -63,9 +65,58 @@ El campo adicional no convierte ADR-003 en Accepted.
 
 **Pendiente:** MTEC-32 debe conectar y validar DTO/rutas con el contrato en
 revision (`contracts/openapi/catalog.json`); alta y actualizacion aun no tienen
-contrato HTTP versionado. No hay endpoints de negocio ni autenticacion real y
-el servicio no conecta el repositorio en memoria al servidor de produccion.
-Cosmos DB corresponde a MTEC-29; imagenes/Blob a MTEC-14.
+contrato HTTP versionado. La seccion "Autenticacion real" describe el flujo HTTP y sus limites. Imagenes/Blob corresponde a MTEC-14.
+
+## Persistencia Cosmos — MTEC-29
+
+**Verificado localmente (2026-11-10):** `composeCosmosCatalog(client, settings)`
+valida los contenedores existentes y devuelve repositorios para publicaciones,
+chats y mensajes. La composicion recibe un cliente reutilizable y los nombres de
+base/contenedores. Inyectar los repositorios en `PublicationService` y
+`MessagingService`. El primero puede conectarse a `createApp` mediante el mismo
+puerto HTTP de MTEC-32, mediante la opcion repository de composePublications.
+El arranque por variables conserva el almacenamiento en memoria. El SDK oficial `@azure/cosmos` esta fijado en el lockfile.
+
+El [ADR-005](../../context/decisions/ADR-005-persistencia-cosmos-catalog.md)
+documenta claves, politicas de indexacion, consistencia, paginacion, alcance
+transaccional y limites del incremento. `catalogContainerDefinitions()` devuelve
+las definiciones aplicadas por la prueba. Las consultas acotan la particion, cuentan
+con los mismos filtros que el listado y mantienen el orden estable. El conteo y
+el listado son lecturas separadas.
+
+### Validacion reproducible
+
+Ejecutar desde `app/ms-catalog` con Node 24:
+
+```powershell
+npm ci
+npm run check
+# Proporcionar COSMOS_TEST_ENDPOINT y COSMOS_TEST_KEY en el entorno del proceso.
+# Para emulador HTTPS, NODE_EXTRA_CA_CERTS debe apuntar a su cadena PEM confiable.
+npm run test:cosmos
+```
+
+`test:cosmos` requiere un emulador NoSQL o cuenta dedicada de pruebas con permiso
+para crear y borrar una base temporal. Genera un nombre unico `mtec29-test-*`,
+crea los tres contenedores y borra solo la base creada en esa ejecucion.
+La prueba falla si faltan las variables. Usar credenciales externas al repositorio.
+Para reproducir el emulador verificado, ejecutar la
+[imagen oficial vNext](https://learn.microsoft.com/en-us/azure/cosmos-db/emulator-linux)
+en modo HTTPS y publicar su puerto 8081 solo en loopback. Digest probado
+`sha256:db53613dae19d0a3d5ad50688d14aa6e957af082dafea56b52e1bd3a6b3f1406`.
+
+**Resultado verificado:** la suite local y la integracion contra el emulador citado pasan. La prueba reutiliza el contrato de repositorios ejecutado contra los fakes y
+verifica SQL, conteo, paginacion, colisiones entre clientes, rollback de
+mensaje/evento y lectura desde un cliente nuevo. Tambien prueba POST/PUT HTTP con
+dos JWT RS256 firmados para la prueba y verifica la revision persistida despues de un 403.
+El servidor de pruebas simula el perfil de ms-users con ID numerico nulo.
+Los dobles de SDK de `cosmos-repositories.test.ts` cubren errores y reconciliacion.
+
+**Pendiente para la version funcional en Azure:** revisar particiones, rendimiento
+de indices y RU con datos representativos. vNext no valida esas propiedades
+operativas. El JWT y la resolucion de vendedor se prueban con fixtures. Falta
+verificarlos con los servicios de staging. La entrega del evento queda en MTEC-31 y la configuracion
+de despliegue en MTEC-33.
 
 ### Validacion de los criterios de MTEC-28
 
@@ -82,6 +133,69 @@ validacion completa JSON Schema ni conformidad HTTP de MTEC-32. CI observa tambi
 `contracts/openapi/catalog.json` para ejecutar esta comprobacion ante cambios del
 borrador. Los casos nulos/malformados producen `INVALID_PUBLICATION`, y las
 actualizaciones rechazadas conservan el contenido anterior.
+
+## Mensajeria — incremento local de MTEC-30
+
+**Verificado 2026-11-09:** `MessagingService` implementa iniciar conversacion,
+listar chats del principal, listar mensajes y enviar texto. Las entidades `Chat`,
+`Message` y `MessageSent` y sus puertos son independientes de Express, Azure y
+ms-users. Los repositorios en memoria son exclusivos del modulo de mensajeria.
+No se monta ningun endpoint de chat ni se modifica el servidor o el contrato HTTP.
+
+El principal autenticado se inyecta desde una frontera confiable. La conversacion
+se inicia entre el solicitante y el propietario real de una publicacion existente;
+se rechaza contactar consigo mismo. Una pareja `(publicationId, buyerId)` tiene
+un solo chat, incluso con llamadas concurrentes sobre el mismo repositorio fake.
+Los participantes quedan fijados al iniciar la conversacion. No hay transferencia
+de propiedad, incorporacion de participantes ni conversaciones grupales.
+
+Solo participantes pueden leer/enviar mensajes. Remitente y destinatario se derivan
+del principal y del chat; no hay parametros de entrada para suplantarlos. El caso
+de uso autoriza antes de consultar el repositorio de mensajes. Los listados filtran
+por participante/chat antes de contar y paginar. Pagina predeterminada 1, tamano 12,
+maximo 100; pagina fuera de rango devuelve lista vacia con total conservado.
+Chats: creacion descendente; mensajes: envio ascendente; empates por ID ascendente.
+Se usa paginacion offset local, sin garantizar una instantanea entre solicitudes
+con escrituras concurrentes ni eficiencia equivalente en Cosmos.
+
+Reglas locales: texto no vacio de hasta 5000 unidades UTF-16, sin recortar contenido;
+IDs de recursos hasta 128, `userId` hasta 64, correlacion no vacia hasta 128.
+Reloj inyectado en Epoch seconds enteros (0..9999999999). Los errores internos son
+`INVALID_MESSAGE`, `CHAT_NOT_FOUND`, `CHAT_FORBIDDEN` y `CHAT_CONFLICT`; aun no tienen
+mapping HTTP contractual. Estos limites y modelos internos no aprueban una API.
+
+`MessageRepository.append(message, event)` exige preparar ambos o ninguno.
+El fake comprueba IDs duplicados y correspondencia mensaje/evento antes de insertar,
+y copia entradas/salidas. `preparedEvents()` permite inspeccion en tests; no envia,
+confirma ni reintenta eventos. `MessageSent` incluye IDs, destinatario derivado,
+correlacion y fecha, omitiendo texto/perfiles. Es un evento interno, no el envelope
+`message.sent.v1`: admite IDs/correlacion opacos locales, mientras el borrador externo
+exige UUID para `eventId`/`correlationId`. La traduccion/validacion corresponde a
+MTEC-31 y no debe reenviar valores incompatibles silenciosamente.
+
+**Limites y pendientes para cerrar MTEC-30:** acordar y ampliar Catalog OpenAPI con
+inicio/listado de chats y listado/envio de mensajes; definir snapshots confiables
+de presentacion, ultimo mensaje y no leidos compatibles con Angular; implementar
+adaptador HTTP/DTO y pruebas de integracion; conectar EventPublisher con semantica
+de fallo acordada para MTEC-31. El dominio no inventa perfiles, nombres ni contadores
+no leidos. La atomicidad del fake no decide almacenamiento productivo, outbox,
+transacciones Cosmos o entrega durable. La persistencia de pruebas se documenta
+en [MTEC-29](#persistencia-cosmos--mtec-29). JWT, Queue y conformidad del consumidor
+ms-notifications siguen pendientes para el flujo integrado.
+
+Validacion reproducible con Node 24 desde `app/ms-catalog`:
+
+```powershell
+npm run check
+# Solo mensajeria, despues de compilar:
+node --test dist/tests/messaging.test.js
+```
+
+**Verificado:** tipos, compilacion y 89/89 pruebas locales correctas, incluidas
+20 de mensajeria: aislamiento, ambos sentidos, concurrencia entre casos de uso
+con repositorio compartido, paginacion, validacion, colisiones, fallo de persistencia
+y copias defensivas. La prueba de arquitectura cubre tambien el nuevo modulo.
+No se ejecutaron CI remoto, Azure ni pruebas HTTP de chat inexistentes.
 
 ## MTEC-32 — incremento de lectura HTTP en pruebas
 

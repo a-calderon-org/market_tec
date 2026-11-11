@@ -40,6 +40,24 @@ Esta extension no agrega rutas HTTP, adaptadores Azure ni autenticacion; la tabl
 anterior conserva la evidencia historica de la fundacion, no el total actual de pruebas.
 MTEC-32 agrego despues las rutas HTTP y la autenticacion con JWT interno (README).
 
+### Extension local de mensajeria — 2026-11-09
+
+**Verificado localmente:** MTEC-30 incorpora entidades y casos de uso de chat y
+mensajes con principal inyectado, repositorios propios en memoria, aislamiento de
+participantes y preparacion local conjunta de mensaje/evento. Alcance, reglas,
+validacion y pendientes en [README de ms-catalog](../../app/ms-catalog/README.md#mensajeria--incremento-local-de-mtec-30).
+No hay endpoints de chat, EventPublisher/Queue ni persistencia productiva; no se
+declara completado MTEC-30 ni se aprueban contratos o decisiones de almacenamiento.
+
+### Adaptador Cosmos de ms-catalog — 2026-11-10
+
+**Verificado localmente:** MTEC-29 incorpora repositorios Cosmos NoSQL detras de
+los tres puertos existentes. La prueba optativa contra emulador ejercita consultas,
+persistencia, transacciones y ownership HTTP con JWT firmados para la prueba. La
+[ejecucion reproducible](../../app/ms-catalog/README.md#persistencia-cosmos--mtec-29)
+y el [ADR-005 Proposed](../decisions/ADR-005-persistencia-cosmos-catalog.md)
+describen el alcance y la revision de capacidad pendiente.
+
 ## Convenciones tecnicas implementadas
 
 - Health uniforme: `GET /health`, sin prefijo de version por ser endpoint tecnico.
@@ -77,7 +95,7 @@ No contienen pasos de despliegue ni alteran el workflow existente de Angular.
 ## Extensiones futuras y decisiones pendientes
 
 - `ms-users`: puertos de persistencia, verificacion Google y emision JWT solo despues de validar el flujo `Google ID Token -> ms-users -> JWT interno -> APIM -> microservicios`.
-- `ms-catalog`: puertos Cosmos DB, Blob Storage y publicacion en Queue al implementar casos de uso reales.
+- `ms-catalog`: validacion Cosmos en Azure y adaptadores Blob Storage y Queue.
 - `ms-notifications`: puertos Queue/Table y entrega SSE. Antes de SSE debe definirse autenticacion compatible con `EventSource`, navegador y APIM; no se aceptan tokens permanentes en URL.
 - SQL Database frente a PostgreSQL para `ms-users` sigue **No determinado**.
 - ADR-001 fue **Accepted** el 2026-10-29; ADR-002 y ADR-003 continúan `Proposed`.

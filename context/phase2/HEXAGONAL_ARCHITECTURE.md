@@ -14,6 +14,18 @@
 > Solo `/health` esta conectado a HTTP; las estructuras siguientes siguen siendo
 > propuestas salvo esta implementacion concreta.
 
+> **Actualizacion MTEC-30 (2026-11-09), Verificado localmente:** `ms-catalog`
+> incorpora nucleo de mensajeria con principal inyectado, puertos de chat/mensajes
+> y fakes propios. El [README del servicio](../../app/ms-catalog/README.md#mensajeria--incremento-local-de-mtec-30)
+> delimita reglas, pruebas y pendientes. No implementa controladores de chat,
+> Cosmos ni publicador Queue; el arbol conceptual siguiente sigue siendo propuesta.
+
+> **Actualizacion MTEC-29 (2026-11-10), Verificado localmente:** los repositorios
+> Cosmos para publicaciones, chats y mensajes implementan los puertos existentes
+> en `app/ms-catalog/src/adapters/out/cosmos/`. La composicion optativa reside en
+> `config/cosmos-catalog.ts`. El [README del servicio](../../app/ms-catalog/README.md#persistencia-cosmos--mtec-29)
+> documenta la prueba de integracion y la revision previa a Azure.
+
 ## 1. Principios generales
 
 La arquitectura hexagonal (Ports & Adapters, Alistair Cockburn) establece que el nucleo de la aplicacion (dominio + casos de uso) es independiente de cualquier tecnologia de infraestructura. Las dependencias siempre apuntan hacia adentro.
