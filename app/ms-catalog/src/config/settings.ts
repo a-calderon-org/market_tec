@@ -1,9 +1,12 @@
+import { cosmosOrigin, defaultCatalogContainers, type CosmosConnectionSettings } from './cosmos-catalog.js';
+
 export interface Settings {
   readonly port: number;
   readonly serviceName: string;
   readonly logLevel: LogLevel;
   // Present only when the business routes are explicitly configured (see loadPublicationSettings).
   readonly publications?: PublicationSettings;
+  readonly cosmos?: CosmosConnectionSettings;
 }
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'silent';
@@ -16,8 +19,7 @@ export interface PublicationSettings {
   readonly jwksJson?: string;
   // ms-users `GET /v1/me/profile` (through its gateway) used to build the seller snapshot.
   readonly usersProfileUrl: string;
-  // Only `memory` exists today: data is lost on restart and is not shared between replicas.
-  readonly store: 'memory';
+  readonly store: 'memory' | 'cosmos';
   readonly placeholderImageUrl: string;
 }
 
@@ -68,6 +70,39 @@ function profileUrl(value: string | undefined, issuer: string): string {
 
 const PUBLICATION_VARIABLES = ['CATALOG_JWT_ISSUER', 'CATALOG_JWT_AUDIENCE', 'CATALOG_JWT_JWKS_URI', 'CATALOG_JWT_JWKS_JSON',
   'CATALOG_USERS_PROFILE_URL', 'CATALOG_PUBLICATIONS_STORE', 'CATALOG_PLACEHOLDER_IMAGE_URL'];
+const COSMOS_VARIABLES = ['CATALOG_COSMOS_ENDPOINT', 'CATALOG_COSMOS_DATABASE', 'CATALOG_COSMOS_KEY',
+  'CATALOG_COSMOS_MANAGED_IDENTITY_CLIENT_ID', 'CATALOG_COSMOS_PUBLICATIONS_CONTAINER',
+  'CATALOG_COSMOS_CHATS_CONTAINER', 'CATALOG_COSMOS_MESSAGES_CONTAINER'];
+
+function loadCosmosSettings(environment: NodeJS.ProcessEnv, store?: PublicationSettings['store']): CosmosConnectionSettings | undefined {
+  if (store !== 'cosmos') {
+    if (COSMOS_VARIABLES.some(name => environment[name]?.trim())) {
+      throw new Error('CATALOG_COSMOS settings require CATALOG_PUBLICATIONS_STORE=cosmos');
+    }
+    return undefined;
+  }
+  const endpoint = cosmosOrigin(environment.CATALOG_COSMOS_ENDPOINT?.trim());
+  const database = environment.CATALOG_COSMOS_DATABASE?.trim();
+  const containers = {
+    publications: environment.CATALOG_COSMOS_PUBLICATIONS_CONTAINER?.trim() || defaultCatalogContainers.publications,
+    chats: environment.CATALOG_COSMOS_CHATS_CONTAINER?.trim() || defaultCatalogContainers.chats,
+    messages: environment.CATALOG_COSMOS_MESSAGES_CONTAINER?.trim() || defaultCatalogContainers.messages,
+  };
+  const names = Object.values(containers);
+  const validName = (name: string) => /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/.test(name);
+  if (!database || !validName(database) || names.some(name => !validName(name)) || new Set(names).size !== 3) {
+    throw new Error('Set a valid CATALOG_COSMOS_DATABASE and three distinct, valid container names');
+  }
+  const key = environment.CATALOG_COSMOS_KEY?.trim();
+  const clientId = environment.CATALOG_COSMOS_MANAGED_IDENTITY_CLIENT_ID?.trim();
+  if (key && clientId) throw new Error('Configure either a Cosmos key or a managed identity client ID');
+  if (clientId && !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(clientId)) {
+    throw new Error('CATALOG_COSMOS_MANAGED_IDENTITY_CLIENT_ID must be a UUID');
+  }
+  return { endpoint: endpoint.origin, database, containers, authentication: key
+    ? { type: 'key', key }
+    : { type: 'managed-identity', ...(clientId ? { clientId } : {}) } };
+}
 
 // Business routes stay unmounted unless configured; a partial configuration fails startup instead of degrading.
 function loadPublicationSettings(environment: NodeJS.ProcessEnv): PublicationSettings | undefined {
@@ -79,25 +114,28 @@ function loadPublicationSettings(environment: NodeJS.ProcessEnv): PublicationSet
   const jwksUri = environment.CATALOG_JWT_JWKS_URI?.trim();
   const jwksJson = environment.CATALOG_JWT_JWKS_JSON?.trim();
   if (!jwksUri === !jwksJson) throw new Error('Set exactly one of CATALOG_JWT_JWKS_URI or CATALOG_JWT_JWKS_JSON');
-  if (environment.CATALOG_PUBLICATIONS_STORE?.trim() !== 'memory') {
-    throw new Error('CATALOG_PUBLICATIONS_STORE must be "memory": no persistent publication store is implemented');
+  const store = environment.CATALOG_PUBLICATIONS_STORE?.trim();
+  if (store !== 'memory' && store !== 'cosmos') {
+    throw new Error('CATALOG_PUBLICATIONS_STORE must be "memory" or "cosmos"');
   }
   return {
     jwtIssuer: issuer,
     jwtAudience: audience,
     ...(jwksUri ? { jwksUri: secureUrl(jwksUri, 'CATALOG_JWT_JWKS_URI') } : { jwksJson: jwksJson! }),
     usersProfileUrl: profileUrl(environment.CATALOG_USERS_PROFILE_URL?.trim(), issuer),
-    store: 'memory',
+    store,
     placeholderImageUrl: secureUrl(environment.CATALOG_PLACEHOLDER_IMAGE_URL?.trim(), 'CATALOG_PLACEHOLDER_IMAGE_URL'),
   };
 }
 
 export function loadSettings(environment: NodeJS.ProcessEnv = process.env): Settings {
   const publications = loadPublicationSettings(environment);
+  const cosmos = loadCosmosSettings(environment, publications?.store);
   return {
     port: parsePort(environment.PORT),
     serviceName: environment.SERVICE_NAME?.trim() || 'ms-catalog',
     logLevel: parseLogLevel(environment.LOG_LEVEL),
     ...(publications ? { publications } : {}),
+    ...(cosmos ? { cosmos } : {}),
   };
 }

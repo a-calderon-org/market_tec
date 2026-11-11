@@ -69,18 +69,37 @@ contrato HTTP versionado. La seccion "Autenticacion real" describe el flujo HTTP
 
 ## Persistencia Cosmos — MTEC-29
 
-**Verificado localmente (2026-11-10):** `composeCosmosCatalog(client, settings)`
-valida los contenedores existentes y devuelve repositorios para publicaciones,
-chats y mensajes. La composicion recibe un cliente reutilizable y los nombres de
-base/contenedores. Inyectar los repositorios en `PublicationService` y
-`MessagingService`. El primero puede conectarse a `createApp` mediante el mismo
-puerto HTTP de MTEC-32, mediante la opcion repository de composePublications.
-El arranque por variables conserva el almacenamiento en memoria. El SDK oficial `@azure/cosmos` esta fijado en el lockfile.
+Con `CATALOG_PUBLICATIONS_STORE=cosmos`, `npm start` compone publicaciones
+y mensajeria con repositorios Cosmos. Usa un cliente por proceso, valida el acceso
+y la particion de los tres contenedores antes de abrir el puerto HTTP y cierra el
+cliente al parar el servicio. Un fallo de configuracion o de acceso detiene el
+arranque. La composicion de mensajeria queda disponible para el adaptador HTTP
+de MTEC-30.
+
+Configurar las variables JWT, perfil y placeholder de la seccion de autenticacion,
+mas `CATALOG_COSMOS_ENDPOINT` (origen HTTPS) y `CATALOG_COSMOS_DATABASE`. Los
+nombres de contenedor y sus valores por defecto estan en `.env.example`. El
+proceso lee el entorno al arrancar. Con Node 24 tambien puede cargarse un archivo
+local mediante `node --env-file=.env dist/src/server.js` despues de `npm run build`.
+
+Cosmos usa Managed Identity asignada por el sistema por defecto. Indicar
+`CATALOG_COSMOS_MANAGED_IDENTITY_CLIENT_ID` si se configura una identidad
+asignada por el usuario. Para emulador o un entorno autorizado con clave, inyectar
+`CATALOG_COSMOS_KEY` desde fuera del repositorio. El operador prepara la base, los
+tres contenedores y los permisos de metadata, consulta y escritura antes del
+arranque. El servicio no aprovisiona recursos al arrancar.
 
 El [ADR-005](../../context/decisions/ADR-005-persistencia-cosmos-catalog.md)
 documenta claves, politicas de indexacion, consistencia, paginacion, alcance
 transaccional y limites del incremento. `catalogContainerDefinitions()` devuelve
-las definiciones aplicadas por la prueba. Las consultas acotan la particion, cuentan
+las definiciones para provisionar los contenedores. Tras compilar se pueden
+inspeccionar desde `app/ms-catalog` con:
+
+```powershell
+node --input-type=module -e "import { catalogContainerDefinitions } from './dist/src/config/cosmos-catalog.js'; console.log(JSON.stringify(catalogContainerDefinitions(), null, 2))"
+```
+
+Las consultas acotan la particion, cuentan
 con los mismos filtros que el listado y mantienen el orden estable. El conteo y
 el listado son lecturas separadas.
 
@@ -105,10 +124,11 @@ Para reproducir el emulador verificado, ejecutar la
 en modo HTTPS y publicar su puerto 8081 solo en loopback. Digest probado
 `sha256:db53613dae19d0a3d5ad50688d14aa6e957af082dafea56b52e1bd3a6b3f1406`.
 
-**Resultado verificado:** la suite local y la integracion contra el emulador citado pasan. La prueba reutiliza el contrato de repositorios ejecutado contra los fakes y
+La prueba reutiliza el contrato de repositorios ejecutado contra los fakes y
 verifica SQL, conteo, paginacion, colisiones entre clientes, rollback de
-mensaje/evento y lectura desde un cliente nuevo. Tambien prueba POST/PUT HTTP con
-dos JWT RS256 firmados para la prueba y verifica la revision persistida despues de un 403.
+mensaje/evento y lectura desde un cliente nuevo. Usa la misma composicion que
+`npm start` para probar POST/PUT HTTP con dos JWT RS256, comprobar que un 403
+preserva la publicacion y enviar y recuperar un mensaje desde dos instancias.
 El servidor de pruebas simula el perfil de ms-users con ID numerico nulo.
 Los dobles de SDK de `cosmos-repositories.test.ts` cubren errores y reconciliacion.
 
@@ -289,7 +309,7 @@ exponiendo solo `/health`. Una configuracion parcial detiene el arranque.
 | `CATALOG_JWT_AUDIENCE` | `aud` exacto del entorno (staging: `markettec-api`, excepcion aprobada solo para staging) |
 | `CATALOG_JWT_JWKS_URI` o `CATALOG_JWT_JWKS_JSON` | JWKS publicado, o el snapshot revisado (ver rotacion) |
 | `CATALOG_USERS_PROFILE_URL` | Exactamente `<CATALOG_JWT_ISSUER>/v1/me/profile` (ruta del gateway); HTTP solo en loopback local |
-| `CATALOG_PUBLICATIONS_STORE` | `memory` (unico valor; provisional) |
+| `CATALOG_PUBLICATIONS_STORE` | `cosmos` para persistencia, `memory` para un proceso local efimero |
 | `CATALOG_PLACEHOLDER_IMAGE_URL` | URL HTTPS de imagen predeterminada |
 
 ### Perfil de token aceptado
@@ -378,10 +398,9 @@ JSON vacio, invalido o truncado y datos comprimidos corruptos dan 400; mas de 1 
 da 413 `PAYLOAD_TOO_LARGE`; codificacion o charset no soportados dan 415
 `UNSUPPORTED_MEDIA_TYPE`. Ningun error repite el cuerpo recibido.
 
-**Limitaciones:** el almacenamiento es en memoria y provisional; los datos se
-pierden al reiniciar y no se comparten entre replicas. Cosmos DB (MTEC-29) no
-existe. Ningun despliegue con este almacenamiento constituye integracion E2E
-persistente.
+Con `CATALOG_PUBLICATIONS_STORE=memory`, los datos se pierden al reiniciar y
+cada replica tiene sus propios datos. Para persistir, configurar el modo
+`cosmos` descrito en [MTEC-29](#persistencia-cosmos--mtec-29).
 
 ### Pruebas
 

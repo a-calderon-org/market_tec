@@ -2,7 +2,9 @@
 
 **Fecha:** 2026-11-09
 
-**Estado:** Proposed — pendiente de aprobación del responsable del proyecto
+**Estado:** Accepted para el alcance de MTEC-29
+
+**Aprobación:** responsable del proyecto, 2026-11-11
 
 **Destinatarios:** mantenedores de ms-catalog y responsables de infraestructura
 
@@ -62,13 +64,14 @@ locales existentes. B es preferible para crecimiento, pero implementarla sin rev
 unicidad, localización y atomicidad cambiaría silenciosamente el comportamiento.
 No se recomienda C sin carga real que justifique esa complejidad.
 
-## Diseño propuesto para aprobación
+## Decisión aprobada para MTEC-29
 
-Se propone **A exclusivamente como primer incremento local/de prueba**, API
-**Cosmos DB for NoSQL**, SDK oficial `@azure/cosmos` fijado en lockfile una vez
-comprobada compatibilidad. No es una recomendación de capacidad productiva.
-La aprobación de este alcance permite implementar y probar el adaptador; no
-autoriza aprovisionar Azure, desplegar ni aceptar límites productivos desconocidos.
+Se acepta la **alternativa A** para el adaptador de persistencia de MTEC-29
+y su validación en entornos de prueba. Usa **Cosmos DB for NoSQL**, un contenedor
+por tipo de recurso, una partición lógica por contenedor y los índices
+documentados. La evidencia de Azure y los límites de la carga medida están
+en la sección de validación de este ADR. La decisión de capacidad, red y
+despliegue productivos corresponde a MTEC-33.
 
 ### Contenedores y claves
 
@@ -170,11 +173,12 @@ de instancia; no prometer consistencia global o instantáneas de varias consulta
 La cuenta debe soportar el nivel seleccionado; no se eleva desde un cliente una
 cuenta con garantías inferiores. Verificar comportamiento entre dos clientes.
 
-Factory de infraestructura optativa e inyectable; conservar fake y arranque actual.
-Endpoint, base y contenedores por configuración; secretos solo por entorno de
-prueba/almacén autorizado, nunca valores en repo o logs. Verificar esquema y
-particiones al componer; no crear ni modificar cuentas/contenedores productivos
-automáticamente. Managed Identity, permisos y red productivos quedan con MTEC-33.
+La composición de infraestructura se activa con `CATALOG_PUBLICATIONS_STORE=cosmos`.
+El proceso valida el acceso y la definición de partición de los contenedores
+antes de aceptar tráfico. El [README del servicio](../../app/ms-catalog/README.md#persistencia-cosmos--mtec-29)
+describe la configuración por entorno, el soporte de Managed Identity y el uso
+de credenciales externas en emulador. El aprovisionamiento, la asignación de
+permisos y la red del entorno productivo quedan con MTEC-33.
 
 404 de lectura puntual de recurso devuelve ausencia; 404 de contenedor/configuración
 es fallo de infraestructura. 409 de inserción y 412 de reemplazo se traducen al
@@ -185,7 +189,7 @@ propagan fallo saneado; nunca lista vacía o éxito ficticio. Registrar operaci�
 duración, status, RU y actividad del proveedor, sin SQL parametrizado, texto,
 perfiles, claves, tokens ni diagnósticos crudos potencialmente sensibles.
 
-## Validación requerida tras aprobación
+## Criterios de validación
 
 1. Suite de contrato reutilizable contra fake y adaptador: roundtrip, copias,
    inexistencia, duplicados, fechas, ownership, filtros combinados, Unicode,
@@ -242,6 +246,53 @@ pendiente. [MTEC-32](https://allanaron06122005.atlassian.net/browse/MTEC-32)
 integra el principal JWT y el snapshot de vendedor para staging. La prueba Cosmos
 reutiliza ese verificador con JWT firmados localmente y un perfil de prueba.
 Queda pendiente probar el flujo con ms-users y Cosmos en el entorno de staging.
+
+## Validación en Azure de pruebas — 2026-11-11
+
+**Verificado:** ejecución `caj-mtec29-validation-tg868lh` del commit
+`0f23d1b5031770315ef4c74fbe4ca1a0c5feb03e` con Node 24.22.2, grupo
+`rg-mtec29-stg`, West US 2. Cosmos DB NoSQL tenía Free Tier activo,
+autenticación local deshabilitada y 400 RU/s compartidas por los tres
+contenedores. El job manual autenticó con Managed Identity y un rol de datos
+acotado a `catalog-mtec29`. La composición de ejecución creó y editó una
+publicación por HTTP con JWT de prueba, devolvió 403 a otro usuario y persistió
+un chat y un mensaje. Un cliente Cosmos independiente leyó la revisión y el
+mensaje persistidos. Dos reemplazos concurrentes dejaron un único ganador.
+
+**Metodología:** 1.200 publicaciones de 12 vendedores en dos categorías,
+300 chats de ocho compradores y 2.620 mensajes sintéticos, con 228 mensajes
+en el chat más activo. Veinte muestras secuenciales por caso, sin concurrencia
+entre consultas de medición. Página de 20 resultados. El coste incluye
+`COUNT` y listado, y la latencia se mide desde el adaptador. El filtro de
+texto de las cuatro primeras filas selecciona las 1.200 publicaciones de la
+ejecución. Identificador del conjunto de prueba `3b6ccb94`.
+
+| Consulta | Total | RU p50 | RU p95 | ms p50 | ms p95 |
+|---|---:|---:|---:|---:|---:|
+| Catálogo por fecha descendente | 1.200 | 70,66 | 70,66 | 21,87 | 494,52 |
+| Catálogo por fecha ascendente | 1.200 | 70,65 | 70,65 | 87,88 | 486,32 |
+| Catálogo por precio ascendente | 1.200 | 70,46 | 70,46 | 63,44 | 496,49 |
+| Catálogo por precio descendente, página 50 | 1.200 | 109,74 | 109,74 | 200,75 | 544,52 |
+| Categoría, rango de precio y texto | 203 | 16,57 | 16,57 | 55,97 | 59,58 |
+| Texto poco frecuente | 20 | 25,35 | 25,35 | 56,22 | 88,00 |
+| Publicaciones por vendedor | 100 | 8,15 | 8,16 | 51,97 | 56,35 |
+| Chats por comprador | 38 | 7,31 | 7,31 | 55,57 | 56,23 |
+| Chats por vendedor | 25 | 7,43 | 7,43 | 52,18 | 56,48 |
+| Historial habitual | 8 | 6,57 | 6,57 | 12,13 | 55,08 |
+| Historial del chat más activo, página 10 | 228 | 7,10 | 7,10 | 10,32 | 11,72 |
+
+**Índices verificados:** los diagnósticos de Cosmos de los listados por
+vendedor, participante e historial registraron el uso de los índices
+compuestos de orden respectivos. Cada consulta recuperó 20 documentos y
+devolvió 20. Esta comprobación de los listados se hizo por separado del
+conteo y no acredita el mismo coste de búsqueda en todas las páginas.
+
+**Límites:** los resultados corresponden a una cuenta de pruebas de una región
+y a la carga sintética indicada. No hay medición de carga concurrente real ni
+SLO productivo acordado. El coste del catálogo amplio y de la página 50 queda
+como restricción explícita para la revisión del ADR y la capacidad de MTEC-33.
+La autenticación de usuarios se probó con JWT firmados para la prueba y un
+perfil simulado. La identidad administrada de Cosmos sí se verificó en Azure.
 
 ## Referencias técnicas primarias
 

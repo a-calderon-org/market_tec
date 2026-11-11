@@ -1,5 +1,6 @@
 import { ConsistencyLevel, CosmosClient, IndexingMode, PartitionKeyKind, PartitionKeyDefinitionVersion } from '@azure/cosmos';
 import type { CompositePath, ContainerDefinition } from '@azure/cosmos';
+import { ManagedIdentityCredential } from '@azure/identity';
 import { CosmosChatRepository, CosmosMessageRepository } from '../adapters/out/cosmos/messaging-repositories.js';
 import { CosmosPublicationRepository } from '../adapters/out/cosmos/publication-repository.js';
 import { CosmosStore, deadline } from '../adapters/out/cosmos/store.js';
@@ -13,6 +14,38 @@ type CatalogContainers = typeof defaultCatalogContainers;
 export interface CosmosCatalogSettings {
   database: string;
   containers: CatalogContainers;
+}
+
+export interface CosmosConnectionSettings extends CosmosCatalogSettings {
+  readonly endpoint: string;
+  readonly authentication: { readonly type: 'key'; readonly key: string } |
+    { readonly type: 'managed-identity'; readonly clientId?: string };
+}
+
+export function cosmosOrigin(endpoint: string | undefined): URL {
+  const url = URL.parse(endpoint ?? '');
+  if (!url || url.protocol !== 'https:' || url.username || url.password ||
+      url.pathname !== '/' || url.search || url.hash) {
+    throw new Error('CATALOG_COSMOS_ENDPOINT must be the HTTPS origin of the Cosmos account');
+  }
+  return url;
+}
+
+export function createCosmosClient(endpoint: string, authentication: CosmosConnectionSettings['authentication']): CosmosClient {
+  const url = cosmosOrigin(endpoint);
+  const credentials = authentication.type === 'key' ? { key: authentication.key } : {
+    aadCredentials: authentication.clientId
+      ? new ManagedIdentityCredential({ clientId: authentication.clientId })
+      : new ManagedIdentityCredential(),
+  };
+  return new CosmosClient({ endpoint: url.origin, ...credentials, consistencyLevel: ConsistencyLevel.Session,
+    connectionPolicy: {
+      enableEndpointDiscovery: !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname),
+      useMultipleWriteLocations: false,
+      requestTimeout: 5_000,
+      retryOptions: { maxRetryAttemptCount: 3, maxWaitTimeInSeconds: 5 },
+    },
+  });
 }
 
 function sort(field: string, order: 'ascending' | 'descending'): CompositePath {
@@ -42,18 +75,6 @@ export function catalogContainerDefinitions(names: CatalogContainers = defaultCa
     definition(names.chats, ['buyerId', 'sellerId', 'createdAt'], [[sort('createdAt', 'descending'), stableId]]),
     definition(names.messages, ['chatId', 'sentAt'], [[sort('chatId', 'ascending'), sort('sentAt', 'ascending'), stableId]]),
   ];
-}
-
-export function createCosmosTestClient(endpoint: string, key: string): CosmosClient {
-  if (!URL.canParse(endpoint)) throw new Error('Expected a Cosmos HTTPS endpoint');
-  const url = new URL(endpoint);
-  if (url.protocol !== 'https:' || url.username || url.password || url.pathname !== '/' || url.search || url.hash ||
-      !key.trim()) throw new Error('Expected a Cosmos HTTPS endpoint and external test credential');
-  return new CosmosClient({
-    endpoint: url.origin, key, consistencyLevel: ConsistencyLevel.Session,
-    connectionPolicy: { enableEndpointDiscovery: false, useMultipleWriteLocations: false,
-      requestTimeout: 5_000, retryOptions: { maxRetryAttemptCount: 3, maxWaitTimeInSeconds: 5 } },
-  });
 }
 
 export async function composeCosmosCatalog(client: CosmosClient, settings: CosmosCatalogSettings, metrics?: CosmosMetrics) {
