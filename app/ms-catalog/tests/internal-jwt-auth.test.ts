@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { generateKeyPairSync, randomBytes, sign, type KeyObject } from 'node:crypto';
-import type { Server } from 'node:http';
+import { get, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { createApp } from '../src/app.js';
 import { composePublications } from '../src/config/publications.js';
@@ -123,6 +123,8 @@ test('tampered, expired, foreign-key and wrong issuer/audience/type tokens are r
     audienceArray: mint('usr-google', { claims: { aud: [AUDIENCE] } }),
     stringTimes: mint('usr-google', { claims: { iat: String(NOW - 10) } }),
     badSid: mint('usr-google', { claims: { sid: 'not-hex' } }),
+    nbfBeforeIssued: mint('usr-google', { claims: { nbf: NOW - 11 } }),
+    nbfInFuture: mint('usr-google', { claims: { nbf: NOW + 1 } }),
     embeddedJwk: mint('usr-google', { header: { jwk: jwk(foreign.publicKey, 'x') } }),
   };
   for (const [name, token] of Object.entries(rejected)) {
@@ -150,6 +152,11 @@ test('seller snapshot failures never write: revoked session 401, unavailable or 
   profileMode = 'revoked';
   assert.equal((await call('POST', '', mint('usr-google'), content)).status, 401);
   profileMode = 'down';
+  const callsBeforeInvalidRequest = profileCalls.length;
+  const invalid = await call('POST', '', mint('usr-google'), { ...content, precio: '10' });
+  assert.equal(invalid.status, 400);
+  assert.equal((await invalid.json()).error.code, 'INVALID_PUBLICATION');
+  assert.equal(profileCalls.length, callsBeforeInvalidRequest);
   const down = await call('POST', '', mint('usr-google'), content);
   assert.equal(down.status, 503);
   assert.equal((await down.json()).error.code, 'SELLER_PROFILE_UNAVAILABLE');
@@ -168,6 +175,16 @@ test('seller snapshot failures never write: revoked session 401, unavailable or 
   profileMode = 'ok';
 });
 
+test('multiple Authorization fields are rejected even if the first token is valid', async () => {
+  const status = await new Promise<number | undefined>((resolve, reject) => {
+    get(base, { headers: { Authorization: [`Bearer ${mint('usr-google')}`, `Bearer ${mint('usr-magic')}`] } }, response => {
+      response.resume();
+      resolve(response.statusCode);
+    }).on('error', reject);
+  });
+  assert.equal(status, 401);
+});
+
 test('RemoteJwks fetches the published JWKS once and refreshes for a rotated kid', async () => {
   let now = 0;
   const rotated = rsaKey();
@@ -178,7 +195,9 @@ test('RemoteJwks fetches the published JWKS once and refreshes for a rotated kid
     return Response.json(served);
   }, () => now);
   const verifier = new InternalJwtVerifier({ issuer: ISSUER, audience: AUDIENCE, keys, nowSeconds: () => NOW });
-  assert.equal((await verifier.verify(mint('usr-google')))?.userId, 'usr-google');
+  const [google, magic] = await Promise.all([verifier.verify(mint('usr-google')), verifier.verify(mint('usr-magic'))]);
+  assert.equal(google?.userId, 'usr-google');
+  assert.equal(magic?.userId, 'usr-magic');
   assert.equal((await verifier.verify(mint('usr-google')))?.userId, 'usr-google');
   assert.equal(fetches, 1);
   served = { keys: [...JWKS.keys, jwk(rotated.publicKey, 'next')] };

@@ -61,10 +61,20 @@ async function assertAuthenticatedHttp(repositories: CatalogRepositories, endpoi
     assert.equal(row.vendedor.userId, 'http-owner');
     assert.equal(row.vendedor.id, null);
     const detail = collection + '/' + encodeURIComponent(row.id);
+    const authorized = { Authorization: 'Bearer ' + ownerToken };
+    const query = new URLSearchParams({
+      q: content.titulo, categoria: content.categoria, precioMin: '12', precioMax: '12',
+      sortBy: 'precio', sortDirection: 'asc', page: '1', pageSize: '1',
+    });
+    const list = await fetch(collection + '?' + query, { headers: authorized, signal: AbortSignal.timeout(15_000) });
+    assert.equal(list.status, 200);
+    const page = await list.json() as { items: { id: string }[]; totalRecords: number; page: number; pageSize: number };
+    assert.deepEqual({ totalRecords: page.totalRecords, page: page.page, pageSize: page.pageSize },
+      { totalRecords: 1, page: 1, pageSize: 1 });
+    assert.deepEqual(page.items.map(item => item.id), [row.id]);
     const rejected = await write(detail, 'PUT', otherToken, 'bad');
     assert.equal(rejected.status, 403);
     await rejected.body?.cancel();
-    const authorized = { Authorization: 'Bearer ' + ownerToken };
     const unchanged = await fetch(detail, { headers: authorized, signal: AbortSignal.timeout(15_000) });
     assert.equal(unchanged.status, 200);
     assert.equal((await unchanged.json()).titulo, content.titulo);

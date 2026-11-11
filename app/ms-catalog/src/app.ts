@@ -3,6 +3,7 @@ import { createHealthRouter } from './adapters/in/http/health-router.js';
 import { correlationId } from './adapters/in/http/correlation-id.js';
 import { createErrorHandler, notFoundHandler } from './adapters/in/http/error-handler.js';
 import { requestLogger } from './adapters/in/http/request-logger.js';
+import { requireGateway } from './adapters/in/http/require-gateway.js';
 import { createContainer } from './config/container.js';
 import { loadSettings, type Settings } from './config/settings.js';
 import { createPublicationRouter, type PublicationHttpDependencies } from './adapters/in/http/publication-router.js';
@@ -14,6 +15,7 @@ export function createApp(settings: Settings = loadSettings(), publications?: Pu
   app.disable('x-powered-by');
   app.use(correlationId);
   app.use(requestLogger(settings.serviceName, settings.logLevel));
+  if (settings.gatewayKey) app.use(requireGateway(settings.gatewayKey));
   app.use(createHealthRouter(container.getHealthQuery));
   if (publications) app.use('/v1/publicaciones', createPublicationRouter(publications));
   app.use(notFoundHandler);

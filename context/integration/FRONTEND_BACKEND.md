@@ -1,15 +1,13 @@
 # Integración frontend-backend
 
-**Extension MTEC-32 de escritura:** POST/PUT locales preservan el body de alta
-Angular y agregan imagenes opcionales; vendedor/propietario se resuelven desde
-composicion confiable. No se cambio el cliente Angular ni su destino. Ver
-[contrato Catalog en revision](../../contracts/openapi/catalog.json) y
-[pruebas de servicio](../../app/ms-catalog/README.md).
-
-**MTEC-32, Verificado localmente:** ms-catalog valida el JWT interno de ms-users y,
-configurado, expone listado, detalle, alta y actualizacion en su arranque normal.
-No esta desplegado, no cambia APIM y no hay prueba E2E con Angular; ver
-[autenticacion real](../../app/ms-catalog/README.md#autenticacion-real-con-el-jwt-interno-de-ms-users).
+**MTEC-32, verificado en código:** ms-catalog expone la API versionada de
+publicaciones con JWT interno y persistencia Cosmos. El
+[contrato Catalog](../../contracts/openapi/catalog.json) conserva el cuerpo de
+alta, la página plana y las fechas de Angular. El vendedor conserva el campo
+`id`, con valor `null` para perfiles de ms-users sin identificador numérico. El
+proxy `/api/catalog-v2` existe en `main` como destino del JWT interno. Su
+validación con APIM y sesiones reales sigue pendiente. Consultar la
+[guía de ms-catalog](../../app/ms-catalog/README.md#mtec-32--api-http-de-publicaciones).
 
 ## Topología real
 

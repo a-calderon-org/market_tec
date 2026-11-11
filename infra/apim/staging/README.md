@@ -72,3 +72,35 @@ python3 infra/apim/generate_policies.py --mode package --release ms-users-passwo
 
 Before applying, compare the ten `ms-users-google-v1` operations and `api-scope.candidate.xml`
 with fresh exports: they must be unchanged. Only the five password operations are new.
+
+
+## Publicaciones de ms-catalog (MTEC-32)
+
+El API `markettec-catalog-stg-v1` usa el sufijo `catalog-stg` en APIM. Registra
+solo `GET/POST /v1/publicaciones` y `GET/PUT /v1/publicaciones/{publicationId}`.
+Los métodos y los DTO tienen como referencia el
+[OpenAPI de Catalog](../../../contracts/openapi/catalog.json). Express valida
+los cuerpos y revalida el JWT de cada llamada.
+
+Generar la política con el snapshot público revisado del emisor de staging:
+
+```bash
+python infra/apim/staging/build_catalog_policy.py   --jwks infra/apim/staging/jwks/stg-jwt-2026-11.json   --issuer https://markettec-api.azure-api.net/users   --audience markettec-api   --output catalog-stg-policy.xml
+```
+
+Crear un valor con nombre secreto `catalog-stg-backend-key` en APIM y
+configurar la misma clave base64url de 32 bytes como
+`CATALOG_APIM_BACKEND_KEY` en el App Service de staging. La política
+valida el JWT del usuario antes de sobrescribir la cabecera interna con esa
+clave. El backend exige la clave antes de procesar cualquier ruta. Configurar
+el backend HTTPS y aplicar la política del API antes de registrar las
+operaciones. Al rotar, actualizar ambos extremos de forma coordinada y comprobar
+401 sin JWT en APIM y 403 en el backend directo. La clave se administra en Azure.
+
+El API requiere una suscripción acotada a `markettec-catalog-stg-v1`. La
+política limita a 120 solicitudes por minuto por suscripción. Configurar
+`MTEC_CATALOG_V2_SUBSCRIPTION_KEY` en la Function del preview d04.
+El preview `d04` usa `MTEC_CATALOG_V2_UPSTREAM` con el prefijo HTTPS de APIM.
+El build de d04 activa `catalogInternalJwt` y fija `catalogApiBaseUrl` al
+prefijo same-origin `/api/catalog-v2/v1`. Los pasos de prueba están en la
+[guía de ms-catalog](../../../app/ms-catalog/README.md#validación-en-staging-con-credenciales-reales).
