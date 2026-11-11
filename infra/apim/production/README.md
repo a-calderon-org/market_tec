@@ -6,23 +6,19 @@ the same 27 routes as staging). The JWKS snapshot uses kid `prod-jwt-2026-11` (p
 exists only in Key Vault `kv-mtec-users-prod`). Issuer `https://markettec-api.azure-api.net/users-prod`, audience
 `markettec-api`. Allowed origin: `https://victorious-beach-0a55f0c1e.2.azurestaticapps.net` only.
 
-**Release profile: `ms-users-google-v1`.** Google login/registration, session, refresh, logout, own profile and the
-Magic Link routes. The five password operations stay `404 OPERATION_NOT_RELEASED`. In ms-users,
-`USERS_EMAIL_ENABLED` and `USERS_PASSWORD_ENABLED` stay `false` until mail reaches recipients other than the mail
-provider account owner (the current sender `onboarding@resend.dev` is a provider test sender).
-
-**Approvals.** Production evidence is separate from staging: environment `production`, revision
-`markettec-users-prod-v1:1`. `abuse_protection` needs the responsible's GitHub review accepting R1–R4 of
-[`../staging/review/abuse_protection.f56ba7e.md`](../staging/review/abuse_protection.f56ba7e.md) for production.
-Recorded: `evidence/abuse_protection.f56ba7e.production.json`, `review_id` `a-calderon-org/market_tec#57/reviews/5849713398` (2026-11-10). `ms_users_contract` is not needed
-for this profile and stays `null`.
+**Rebound to ms-users `c0bac32` (PR #38 merge; same 27 routes, same contract binding; tree identical to the image
+validated in staging).** Target release: `ms-users-password-v1`. **Both approvals are pending:** the `f56ba7e`
+`abuse_protection` record (`evidence/abuse_protection.f56ba7e.production.json`, review `#57/reviews/5849713398`) is
+kept as history and does not cover `c0bac32`, so `approvals` are both `null` and a package generated now denies every
+anonymous and password operation. Case file and candidates: [`review/ms_users_c0bac32.production.md`](review/ms_users_c0bac32.production.md).
+The deployed APIM (`ms-users-google-v1` for `f56ba7e`) is unchanged until the evidence is registered.
 
 **Shared runtime (decision 2026-11-10).** The subscription allows a single Container Apps environment, so
 `ca-ms-users-prod` runs in `cae-ms-users-stg2` next to `ca-ms-users-stg`. Identities, databases, Key Vaults, JWT/CSRF
 keys and settings are separate; the environment and its log destination (`log-ms-users-stg`) are shared.
 
 ```bash
-python3 infra/apim/generate_policies.py --mode package --release ms-users-google-v1 \
+python3 infra/apim/generate_policies.py --mode package --release ms-users-password-v1 \
   --manifest infra/apim/production/operations.production.json \
   --openapi contracts/openapi/users.json --openapi-extension contracts/openapi/users-password.json \
   --backend-routes infra/apim/production/backend-routes.production.json \

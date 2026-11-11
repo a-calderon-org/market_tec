@@ -12,6 +12,11 @@ package built from the previous inputs (backend `be4595c`, 22 operations). Polic
 generated from those inputs (Git history before this change) match all 22 operation
 exports and the API scope after XML canonicalization. ms-users runs image `be4595c`.
 
+**Staging change 2026-11-11 (market_tec PR #60):** only the `getOwnAuthMethods` operation policy was applied to
+`markettec-users-v1` (released by the widened `ms-users-password-v1` profile; `reconciled`, JWT-only). The package
+generated from these inputs matched the other 29 operation policies and the API scope after canonicalization. The
+staging backend runs `a549864` (tree identical to ms-users `c0bac32`); these inputs stay bound to `f56ba7e`.
+
 **Password activation (`ms-users-password-v1`): approved for staging only, not deployed.** Both approvals are
 recorded in `evidence/` and referenced by `operations.staging.json`; each `review_id` is the responsible's real GitHub
 review (state `COMMENTED`) on the PR head that carried the candidate, and that head also has an independent `APPROVED`
