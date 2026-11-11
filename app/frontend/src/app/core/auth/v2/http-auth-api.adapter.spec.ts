@@ -471,6 +471,23 @@ describe('HttpAuthApiAdapter + núcleo v2 contra ms-users (HttpTestingController
       httpTesting.expectNone(url('/v1/auth/refresh'));
     });
 
+    it('sin JWT vigente, el cambio refresca ANTES de leer el CSRF y envía el rotado', async () => {
+      const passwords = TestBed.inject(PasswordCredentialsService);
+      const changing = passwords.change('actual segura 123', PASSWORD);
+      await settle();
+      httpTesting.expectOne(url('/v1/auth/session'))
+        .flush({ session: snapshot(), user: javaUser(), csrfToken: SESSION_CSRF });
+      await settle();
+      httpTesting.expectOne(url('/v1/auth/refresh')).flush(authResponse(ROTATED_JWT, ROTATED_CSRF));
+      await settle();
+
+      const put = httpTesting.expectOne(url('/v1/me/password'));
+      expect(put.request.headers.get('Authorization')).toBe(`Bearer ${ROTATED_JWT}`);
+      expect(put.request.headers.get('X-CSRF-Token')).toBe(ROTATED_CSRF);
+      put.flush(null, { status: 204, statusText: 'No Content' });
+      await expect(changing).resolves.toBeUndefined();
+    });
+
     it('GET /v1/me/auth-methods lleva el JWT interno, sin CSRF, y valida la forma', async () => {
       await signIn();
       const methods = TestBed.inject(AuthMethodsService);
