@@ -185,11 +185,11 @@ class ReleasedPolicyTest(unittest.TestCase):
     def inbound(self, op_id):
         return list(ET.fromstring(self.result["policies"][op_id]).find("inbound"))
 
-    def test_profile_is_google_profile_plus_five(self):
+    def test_profile_is_google_profile_plus_five_and_auth_methods(self):
         google = RELEASE_PROFILES["ms-users-google-v1"]
         spec = RELEASE_PROFILES[PROFILE]
-        self.assertEqual(set(google["operations"]) | PASSWORD_OPS, set(spec["operations"]))
-        self.assertEqual(15, len(spec["operations"]))
+        self.assertEqual(set(google["operations"]) | PASSWORD_OPS | {"getOwnAuthMethods"}, set(spec["operations"]))
+        self.assertEqual(16, len(spec["operations"]))
         self.assertEqual((google["api"], google["cors_allowed_headers"], google["cors_allowed_methods"]),
                          (spec["api"], spec["cors_allowed_headers"], spec["cors_allowed_methods"]))
         enabled = {d["id"] for d in self.result["definitions"] if d["status"] == "enabled"}
@@ -230,7 +230,8 @@ class ReleasedPolicyTest(unittest.TestCase):
 
     def test_route_chain_reaches_each_java_endpoint(self):
         chain = {row["id"]: row for row in self.result["release"]["route_chain"]}
-        self.assertEqual(15, len(chain))
+        self.assertEqual(16, len(chain))
+        self.assertTrue(chain["getOwnAuthMethods"]["backend_url"].endswith("/v1/me/auth-methods"))
         for op_id, (method, versionless, java) in PASSWORD_CALLS.items():
             self.assertEqual(method, chain[op_id]["method"])
             self.assertTrue(chain[op_id]["backend_url"].endswith(java), op_id)

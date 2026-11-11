@@ -151,7 +151,10 @@ function sendWithInternalJwt(
 
       return next(req.clone({ setHeaders: { [headerName]: `Bearer ${token}` } })).pipe(
         catchError((error: unknown) => {
-          if (error instanceof HttpErrorResponse && error.status === 401) {
+          // `INVALID_CREDENTIALS` (cambio de contraseña con la actual errónea): ms-users ya aceptó el JWT y solo
+          // rechazó la contraseña escrita; no es una pérdida de sesión.
+          if (error instanceof HttpErrorResponse && error.status === 401
+            && error.error?.error?.code !== 'INVALID_CREDENTIALS') {
             session.handleBusinessUnauthorized(token);
           }
 

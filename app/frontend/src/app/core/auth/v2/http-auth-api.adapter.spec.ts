@@ -37,6 +37,7 @@ import { InMemoryLock, SignalHub } from './auth-v2.testing';
 import { AUTH_V2_BUSINESS_TRANSPORT, BusinessTransportBlockedError } from './business-transport';
 import { EmailLinkCsrf } from './email-link-csrf';
 import { PasswordCredentialsService } from './password-credentials.service';
+import { AuthMethodsService } from './auth-methods.service';
 import { CLIENT_BUDGET_HEADER, HttpAuthApiAdapter } from './http-auth-api.adapter';
 import { provideAuthCoreV2 } from './provide-auth-core-v2';
 import { SessionLock } from './session-lock';
@@ -238,6 +239,7 @@ describe('HttpAuthApiAdapter + núcleo v2 contra ms-users (HttpTestingController
       configure();
 
       const session = TestBed.inject(AuthSessionService);
+      const posted = vi.spyOn(TestBed.inject(SessionSignalChannel), 'post');
       const done = session.confirmEmailLink({ attemptId: ATTEMPT_ID, token: TOKEN });
       await settle();
       const req = httpTesting.expectOne(url('/v1/auth/email/confirm'));
@@ -249,6 +251,8 @@ describe('HttpAuthApiAdapter + núcleo v2 contra ms-users (HttpTestingController
 
       expect(session.currentIdentity()?.userId).toBe(USER_ID);
       expect(await session.getAccessToken()).toBe(INTERNAL_JWT);
+      // La pestaña que pidió el enlace deja de esperar; la señal no lleva ningún dato de sesión.
+      expect(posted).toHaveBeenCalledExactlyOnceWith({ type: 'signed-in' });
       expect(JSON.stringify(localStorage)).not.toContain(EMAIL_CSRF);
       expect(JSON.stringify(localStorage)).not.toContain(TOKEN);
     });
@@ -443,12 +447,65 @@ describe('HttpAuthApiAdapter + núcleo v2 contra ms-users (HttpTestingController
       await expect(status).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
     });
 
-    it('el cambio de contraseña (PUT) no sale desde esta SPA: el transporte restringido lo bloquea', async () => {
+    it('PUT /v1/me/password cambia con la contraseña actual, JWT interno y CSRF de sesión', async () => {
       await signIn();
-      const http = TestBed.inject(HttpClient);
-      await expect(firstValueFrom(http.put(url('/v1/me/password'), { currentPassword: 'a', newPassword: 'b' })))
-        .rejects.toBeInstanceOf(BusinessTransportBlockedError);
-      httpTesting.expectNone(url('/v1/me/password'));
+      const passwords = TestBed.inject(PasswordCredentialsService);
+      const changing = passwords.change('actual segura 123', PASSWORD);
+      await settle();
+      const put = httpTesting.expectOne(url('/v1/me/password'));
+      expect(put.request.method).toBe('PUT');
+      expect(put.request.headers.get('Authorization')).toBe(`Bearer ${INTERNAL_JWT}`);
+      expect(put.request.headers.get('X-CSRF-Token')).toBe(SESSION_CSRF);
+      expect(put.request.body).toEqual({ currentPassword: 'actual segura 123', newPassword: PASSWORD });
+      put.flush(null, { status: 204, statusText: 'No Content' });
+      await expect(changing).resolves.toBeUndefined();
+
+      const wrong = passwords.change('incorrecta', PASSWORD);
+      await settle();
+      httpTesting.expectOne(url('/v1/me/password'))
+        .flush(envelope('INVALID_CREDENTIALS'), { status: 401, statusText: 'Unauthorized' });
+      await expect(wrong).rejects.toMatchObject({ status: 401, code: 'INVALID_CREDENTIALS' });
+      // La contraseña actual errónea no es una pérdida de sesión: ni refresh ni restauración.
+      await settle();
+      httpTesting.expectNone(url('/v1/auth/session'));
+      httpTesting.expectNone(url('/v1/auth/refresh'));
+    });
+
+    it('sin JWT vigente, el cambio refresca ANTES de leer el CSRF y envía el rotado', async () => {
+      const passwords = TestBed.inject(PasswordCredentialsService);
+      const changing = passwords.change('actual segura 123', PASSWORD);
+      await settle();
+      httpTesting.expectOne(url('/v1/auth/session'))
+        .flush({ session: snapshot(), user: javaUser(), csrfToken: SESSION_CSRF });
+      await settle();
+      httpTesting.expectOne(url('/v1/auth/refresh')).flush(authResponse(ROTATED_JWT, ROTATED_CSRF));
+      await settle();
+
+      const put = httpTesting.expectOne(url('/v1/me/password'));
+      expect(put.request.headers.get('Authorization')).toBe(`Bearer ${ROTATED_JWT}`);
+      expect(put.request.headers.get('X-CSRF-Token')).toBe(ROTATED_CSRF);
+      put.flush(null, { status: 204, statusText: 'No Content' });
+      await expect(changing).resolves.toBeUndefined();
+    });
+
+    it('GET /v1/me/auth-methods lleva el JWT interno, sin CSRF, y valida la forma', async () => {
+      await signIn();
+      const methods = TestBed.inject(AuthMethodsService);
+      const listing = methods.list();
+      await settle();
+      const get = httpTesting.expectOne(url('/v1/me/auth-methods'));
+      expect(get.request.method).toBe('GET');
+      expect(get.request.headers.get('Authorization')).toBe(`Bearer ${INTERNAL_JWT}`);
+      expect(get.request.headers.has('X-CSRF-Token')).toBe(false);
+      get.flush({ methods: [{ provider: 'institutional_email', email: 'ana@estudiantec.cr', status: 'active' }] });
+      await expect(listing).resolves.toEqual([
+        { provider: 'institutional_email', email: 'ana@estudiantec.cr', status: 'active' },
+      ]);
+
+      const malformed = methods.list();
+      await settle();
+      httpTesting.expectOne(url('/v1/me/auth-methods')).flush({ methods: [{ provider: 'otro' }] });
+      await expect(malformed).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
     });
   });
 
@@ -1180,7 +1237,7 @@ describe('HttpAuthApiAdapter + núcleo v2 contra ms-users (HttpTestingController
   describe('aislamiento del transporte con el adaptador HTTP real', () => {
     beforeEach(() => configure());
 
-    it('modo restricted: solo GET/PUT /me/profile salen; el resto de la API se bloquea antes de enviar', async () => {
+    it('modo restricted: solo perfil, contraseña propia y lectura de métodos salen; el resto de la API se bloquea antes de enviar', async () => {
       expect(TestBed.inject(AUTH_V2_BUSINESS_TRANSPORT)).toBe('restricted');
       await signIn();
       const http = TestBed.inject(HttpClient);
@@ -1193,7 +1250,9 @@ describe('HttpAuthApiAdapter + núcleo v2 contra ms-users (HttpTestingController
         ['GET', '/v1/publicaciones'],
         ['POST', '/v1/publicaciones'],
         ['GET', '/v1/chats'],
-        ['GET', '/v1/me/auth-methods'],
+        // Solo se lee la lista de métodos; vincular sigue bloqueado.
+        ['POST', '/v1/me/auth-methods'],
+        ['DELETE', '/v1/me/password'],
         ['GET', '/v1/auth/session'],
         ['GET', '/publicaciones'],
         ['GET', '/v1/desconocida'],

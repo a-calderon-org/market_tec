@@ -50,4 +50,10 @@ la URL del icono se fuerza la nueva descarga. Si se vuelve a cambiar el logo, in
   `abuse_protection` y `ms_users_contract` aprobadas para `f56ba7e`, **solo staging**
   ([`infra/apim/staging/README.md`](../infra/apim/staging/README.md)); las rutas aún no están publicadas en Azure. El contrato aditivo está en `contracts/openapi/users-password.json` (no modifica `users.json`).
 * El proxy same-origin `/api/users` ya admite las rutas (patrón genérico, métodos GET/POST/PUT); no requirió cambios.
-* El cambio de contraseña (`PUT /v1/me/password`) existe en ms-users pero esta SPA aún no lo consume (no está en el transporte restringido).
+* **Registro con nombre y apellidos** (ms-users PR #38): el registro Google precarga `given_name`/`family_name`; si faltan,
+  `/registro/datos` pide solo nombre y apellidos. El registro institucional los pide en `/contrasena` junto con la contraseña
+  («Completa tu registro»). Nunca se pide nombre de usuario: lo genera ms-users (`nombreUsuario = userId`) y es inmutable
+  (el perfil lo muestra en solo lectura y ms-users rechaza cualquier valor distinto).
+* **Perfil**: muestra el método de acceso real (`GET /v1/me/auth-methods`) y los controles de contraseña según
+  `GET /v1/me/password`: cambio con la contraseña actual (`PUT`) si `configured`, enlace a `/contrasena` si `setupAvailable`, nada
+  en cuentas solo Google. Una contraseña actual errónea (`401 INVALID_CREDENTIALS`) no se trata como pérdida de sesión.

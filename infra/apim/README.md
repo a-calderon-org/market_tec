@@ -47,8 +47,10 @@ adds exactly those five routes and overlaps none of the base paths.
 document exists. With the extension, evidence binds to both files: `openapi_contract_version` =
 `<users.json version>+users-password-<extension version>` and `openapi_sha256` = SHA-256 of
 `"<users.json sha256>\n<users-password.json sha256>\n"` (`contract_binding()`); evidence bound to `users.json` alone is
-rejected. The profile `ms-users-password-v1` = `ms-users-google-v1` + the five operations (same API, CORS headers
-and methods). The SPA does not call `PUT /me/password` yet; the route is still checked end to end by `route_check.py`.
+rejected. The profile `ms-users-password-v1` = `ms-users-google-v1` + the five operations + the read-only
+`getOwnAuthMethods` (`GET /me/auth-methods`, `users.json`, reconciled; same API, CORS headers and methods). The profile
+page calls `PUT /me/password` (change with the current password) and `GET /me/auth-methods` (real access method);
+`route_check.py` checks every released route end to end.
 
 Gateway authentication (MTEC-12/D04): `--gateway-auth-resource api://<app id>` ends every forwarded operation with
 `authentication-managed-identity` for that resource (Container Apps authentication in front of ms-users). Because that

@@ -1,12 +1,27 @@
 import { Component, computed, EventEmitter, inject, OnInit, Output, signal } from '@angular/core';
-import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { AbstractControl, NonNullableFormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
+import { Router } from '@angular/router';
 import { AuthApiError, AuthRequiredError } from '../../core/auth/v2/auth-contract';
 import { BusinessTransportBlockedError } from '../../core/auth/v2/business-transport';
+import { AuthMethod, AuthMethodsService } from '../../core/auth/v2/auth-methods.service';
+import { PasswordCredentialsService } from '../../core/auth/v2/password-credentials.service';
 import { FEATURE_FLAGS } from '../../core/feature-flags';
+import { PASSWORD_MAX, PASSWORD_MIN } from '../auth/password-setup';
+import { describePasswordChangeFailure } from '../auth/services/password-auth-errors';
 import { GoogleAuthService } from '../auth/services/google-auth.service';
 import { UpdateUser, User } from './models/user.model';
 import { UserService } from './services/user.service';
+
+function newPasswordsMatch(group: AbstractControl): ValidationErrors | null {
+  const next = group.get('nueva')?.value;
+  const repeat = group.get('confirmacion')?.value;
+
+  return next && repeat && next !== repeat ? { mismatch: true } : null;
+}
+
+/** Controles de contraseña según las credenciales reales de la cuenta (`GET /v1/me/password`). */
+export type PasswordOptions = 'hidden' | 'change' | 'setup';
 
 @Component({
   selector: 'app-profile',
@@ -25,8 +40,26 @@ export class Profile implements OnInit {
   private readonly userService =
     inject(UserService);
 
+  private readonly router =
+    inject(Router);
+
+  private readonly flags =
+    inject(FEATURE_FLAGS);
+
   private readonly authCoreV2 =
-    inject(FEATURE_FLAGS).authCoreV2;
+    this.flags.authCoreV2;
+
+  /** Solo con ms-users por HTTP: las cuentas del flujo legado no tienen métodos ni contraseña consultables. */
+  private readonly methodsService =
+    this.authCoreV2 && this.flags.authCoreV2Adapter === 'http'
+      ? inject(AuthMethodsService)
+      : null;
+
+  /** Solo con contraseñas activas (`passwordAuth`): sin el flag no existe ningún control de contraseña. */
+  private readonly passwords =
+    this.methodsService && this.flags.passwordAuth === true
+      ? inject(PasswordCredentialsService)
+      : null;
 
   /**
    * authCoreV2=false conserva el identificador fijo heredado. Con el flag
@@ -89,22 +122,60 @@ export class Profile implements OnInit {
               Validators.maxLength(80)
             ]
           }
-        ),
-
-      nombreUsuario:
-        this.formBuilder.control(
-          '',
-          {
-            validators: [
-              Validators.required,
-              Validators.minLength(3),
-              Validators.maxLength(40),
-              Validators.pattern(
-                /^[a-zA-Z0-9._-]+$/
-              )
-            ]
-          }
         )
+    });
+
+  /** Métodos vinculados (estado real de las identidades); vacío si no se pudieron consultar. */
+  readonly methods =
+    signal<readonly AuthMethod[]>([]);
+
+  /** Cuentas solo Google (o sin contraseña ni concesión) no ven ningún control de contraseña. */
+  readonly passwordOptions =
+    signal<PasswordOptions>('hidden');
+
+  readonly changingPassword =
+    signal(false);
+
+  readonly passwordMessage =
+    signal('');
+
+  readonly passwordChanged =
+    signal(false);
+
+  readonly passwordMin = PASSWORD_MIN;
+
+  readonly passwordMax = PASSWORD_MAX;
+
+  readonly passwordForm =
+    this.formBuilder.group(
+      {
+        actual: this.formBuilder.control('', [Validators.required, Validators.maxLength(256)]),
+        nueva: this.formBuilder.control('', [
+          Validators.required,
+          Validators.minLength(PASSWORD_MIN),
+          Validators.maxLength(PASSWORD_MAX)
+        ]),
+        confirmacion: this.formBuilder.control('', [Validators.required])
+      },
+      { validators: newPasswordsMatch }
+    );
+
+  /** Texto del método de acceso a partir de las identidades activas vinculadas. */
+  readonly accessMethod =
+    computed(() => {
+      const active = this.methods().filter((method) => method.status === 'active');
+      const google = active.some((method) => method.provider === 'google');
+      const institutional = active.some((method) => method.provider === 'institutional_email');
+      const withPassword = this.passwordOptions() === 'change';
+      const institutionalLabel = withPassword
+        ? 'Correo institucional y contraseña'
+        : 'Correo institucional (enlace por correo)';
+
+      if (google && institutional) return `Google · ${institutionalLabel}`;
+      if (google) return 'Google';
+      if (institutional) return institutionalLabel;
+
+      return '';
     });
 
   readonly fullName =
@@ -150,6 +221,68 @@ export class Profile implements OnInit {
 
   ngOnInit(): void {
     this.loadUser();
+    void this.loadAccess();
+  }
+
+  /** Métodos y contraseña se consultan aparte: un fallo aquí no impide ver ni editar el perfil. */
+  async loadAccess(): Promise<void> {
+    if (this.methodsService) {
+      try {
+        this.methods.set(await this.methodsService.list());
+      } catch {
+        this.methods.set([]);
+      }
+    }
+
+    if (this.passwords) {
+      try {
+        const status = await this.passwords.status();
+        this.passwordOptions.set(status.configured ? 'change' : status.setupAvailable ? 'setup' : 'hidden');
+      } catch {
+        this.passwordOptions.set('hidden');
+      }
+    }
+  }
+
+  async changePassword(): Promise<void> {
+    this.passwordMessage.set('');
+    this.passwordChanged.set(false);
+
+    if (!this.passwords || this.passwordForm.invalid || this.changingPassword()) {
+      this.passwordForm.markAllAsTouched();
+      return;
+    }
+
+    const value = this.passwordForm.getRawValue();
+    this.changingPassword.set(true);
+    try {
+      await this.passwords.change(value.actual, value.nueva);
+      this.passwordForm.reset();
+      this.passwordChanged.set(true);
+      this.passwordMessage.set('Contraseña actualizada. Se cerraron tus otras sesiones.');
+    } catch (error) {
+      this.passwordMessage.set(describePasswordChangeFailure(error));
+    } finally {
+      this.changingPassword.set(false);
+    }
+  }
+
+  isPasswordControlInvalid(
+    controlName: keyof typeof this.passwordForm.controls
+  ): boolean {
+    const control = this.passwordForm.controls[controlName];
+
+    return control.invalid && (control.dirty || control.touched);
+  }
+
+  /** Primera contraseña: la pantalla dedicada valida la concesión de un solo uso del enlace confirmado. */
+  async openPasswordSetup(): Promise<void> {
+    this.close();
+    await this.router.navigate(['/contrasena']);
+  }
+
+  passwordMismatch(): boolean {
+    return this.passwordForm.hasError('mismatch') && this.passwordForm.controls.confirmacion.touched;
   }
 
   close(): void {
@@ -182,10 +315,7 @@ export class Profile implements OnInit {
               user.nombre,
 
             apellidos:
-              user.apellidos,
-
-            nombreUsuario:
-              user.nombreUsuario
+              user.apellidos
           });
 
           this.profileForm
@@ -225,10 +355,21 @@ export class Profile implements OnInit {
       ''
     );
 
+    const current =
+      this.user();
+
+    if (current === null && !this.saving()) {
+      // Sin perfil cargado no se conoce el nombre de usuario (inmutable): no se envía nada.
+      this.saveError.set(true);
+      this.saveMessage.set('No fue posible cargar tu perfil. Recarga e inténtalo nuevamente.');
+      return;
+    }
+
     if (
       this.profileForm.invalid ||
       this.saving() ||
-      this.currentUserId === null
+      this.currentUserId === null ||
+      current === null
     ) {
       this.profileForm
         .markAllAsTouched();
@@ -248,8 +389,9 @@ export class Profile implements OnInit {
         apellidos:
           value.apellidos.trim(),
 
+        // El nombre de usuario es inmutable: se reenvía exactamente el valor actual.
         nombreUsuario:
-          value.nombreUsuario.trim()
+          current.nombreUsuario
       };
 
     this.saving.set(
@@ -270,10 +412,7 @@ export class Profile implements OnInit {
               response.nombre,
 
             apellidos:
-              response.apellidos,
-
-            nombreUsuario:
-              response.nombreUsuario
+              response.apellidos
           });
 
           this.profileForm

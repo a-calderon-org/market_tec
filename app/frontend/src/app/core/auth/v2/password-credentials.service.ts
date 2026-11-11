@@ -4,6 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import { versionedApiUrl } from '../../api/api-url';
 import { AuthApiError, INVALID_RESPONSE_CODE, PasswordStatus } from './auth-contract';
+import { AuthSessionService } from './auth-session.service';
 import { AuthSessionStore } from './auth-session.store';
 import { toAuthApiError } from './http-auth-api.adapter';
 
@@ -16,6 +17,7 @@ import { toAuthApiError } from './http-auth-api.adapter';
 export class PasswordCredentialsService {
   private readonly http = inject(HttpClient);
   private readonly store = inject(AuthSessionStore);
+  private readonly session = inject(AuthSessionService);
 
   /** `GET`: ¿ya tiene contraseña y puede configurarse la primera ahora? */
   async status(): Promise<PasswordStatus> {
@@ -35,7 +37,27 @@ export class PasswordCredentialsService {
 
   /** `POST`: primera contraseña. Solo con la concesión de un solo uso que deja el enlace confirmado (403 si no). */
   async setInitial(newPassword: string): Promise<void> {
+    await this.freshSession();
     await this.call(() => this.http.post<unknown>(this.url(), { newPassword }, { headers: this.headers(true) }));
+  }
+
+  /**
+   * `PUT`: cambio con la contraseña actual (B02: nunca solo con el buzón). ms-users revoca las demás sesiones y
+   * conserva la actual. 401 `INVALID_CREDENTIALS` si la actual no coincide; 409 `PASSWORD_NOT_SET` sin contraseña.
+   */
+  async change(currentPassword: string, newPassword: string): Promise<void> {
+    await this.freshSession();
+    await this.call(() =>
+      this.http.put<unknown>(this.url(), { currentPassword, newPassword }, { headers: this.headers(true) }),
+    );
+  }
+
+  /**
+   * Las escrituras llevan el CSRF de sesión, y cada refresh lo rota. Si el JWT venció, el interceptor refrescaría
+   * DESPUÉS de leer el CSRF y la petición saldría con el anterior (403 `CSRF_INVALID`): se renueva antes de leerlo.
+   */
+  private async freshSession(): Promise<void> {
+    await this.session.getAccessToken();
   }
 
   private async call<T>(request: () => Parameters<typeof firstValueFrom<T>>[0]): Promise<T> {

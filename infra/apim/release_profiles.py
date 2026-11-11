@@ -44,7 +44,7 @@ RELEASE_PROFILES = {
 }
 
 # Institutional password (ms-users 8707f03, contracts/openapi/users-password.json). The ten operations above plus
-# the five password operations; same API, headers and methods. Needs `--openapi-extension`; the password rows stay
+# the five password operations and the read-only own auth-methods list; same API, headers and methods. Needs `--openapi-extension`; the password rows stay
 # terminal denials until `ms_users_contract` (and, for login/recovery, `abuse_protection`) evidence exists.
 RELEASE_PROFILES["ms-users-password-v1"] = {
     "description": "ms-users-google-v1 plus institutional email + password sign-in, recovery link request, own "
@@ -55,6 +55,9 @@ RELEASE_PROFILES["ms-users-password-v1"] = {
         "getOwnPasswordStatus",         # GET  /v1/me/password
         "setOwnInitialPassword",        # POST /v1/me/password
         "changeOwnPassword",            # PUT  /v1/me/password
+        # Read-only list of the account's linked identities (users.json, reconciled): the profile shows the real
+        # access method and offers password controls only to accounts with local credentials.
+        "getOwnAuthMethods",            # GET  /v1/me/auth-methods
     ),
     "api": dict(RELEASE_PROFILES["ms-users-google-v1"]["api"]),
     "cors_allowed_headers": RELEASE_PROFILES["ms-users-google-v1"]["cors_allowed_headers"],

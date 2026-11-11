@@ -66,3 +66,32 @@ export function describePasswordSetupFailure(error: unknown): string {
 
   return 'No fue posible guardar la contraseña.';
 }
+
+/** Mensaje al cambiar la contraseña desde el perfil (exige la contraseña actual). */
+export function describePasswordChangeFailure(error: unknown): string {
+  if (error instanceof AuthRequiredError) return 'Tu sesión cambió o expiró. Vuelve a ingresar para cambiar la contraseña.';
+  if (error instanceof AuthApiError) {
+    switch (error.code) {
+      case 'INVALID_CREDENTIALS':
+        return 'La contraseña actual no es correcta.';
+      case 'WEAK_PASSWORD':
+        return 'La nueva contraseña es demasiado débil: usa entre 10 y 128 caracteres, distinta de la actual, sin tu correo ni valores comunes.';
+      case 'PASSWORD_NOT_SET':
+        return 'Esta cuenta no tiene contraseña.';
+      case 'RATE_LIMITED':
+        return 'Demasiados intentos. Espera unos minutos antes de volver a intentarlo.';
+      case 'CSRF_INVALID':
+        return 'Tu sesión cambió. Recarga la página e inténtalo de nuevo.';
+    }
+    if (error.status === 0) {
+      return 'No se pudo conectar con el servidor de acceso. Revisa tu conexión e inténtalo nuevamente.';
+    }
+    if (error.status === 401) return 'Tu sesión expiró. Vuelve a ingresar para cambiar la contraseña.';
+    if (error.status === 429) return 'Demasiados intentos. Espera unos minutos antes de volver a intentarlo.';
+    if (error.status === 404 || error.status === 503) {
+      return 'El cambio de contraseña no está disponible en este momento.';
+    }
+  }
+
+  return 'No fue posible cambiar la contraseña.';
+}

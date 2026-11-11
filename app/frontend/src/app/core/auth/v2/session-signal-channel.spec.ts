@@ -10,6 +10,8 @@ describe('parseSessionSignal', () => {
   it('acepta únicamente los tipos conocidos con la forma exacta {type}', () => {
     expect(parseSessionSignal({ type: 'logout' })).toEqual({ type: 'logout' });
     expect(parseSessionSignal({ type: 'session-rotated' })).toEqual({ type: 'session-rotated' });
+    expect(parseSessionSignal({ type: 'signed-in' })).toEqual({ type: 'signed-in' });
+    expect(parseSessionSignal({ type: 'signed-in', userId: 'u' })).toBeNull();
   });
 
   it('descarta mensajes con datos extra, tipos desconocidos o formas inválidas', () => {
