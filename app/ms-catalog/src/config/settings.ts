@@ -7,6 +7,7 @@ export interface Settings {
   // Present only when the business routes are explicitly configured (see loadPublicationSettings).
   readonly publications?: PublicationSettings;
   readonly cosmos?: CosmosConnectionSettings;
+  readonly gatewayKey?: string;
 }
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'silent';
@@ -131,11 +132,16 @@ function loadPublicationSettings(environment: NodeJS.ProcessEnv): PublicationSet
 export function loadSettings(environment: NodeJS.ProcessEnv = process.env): Settings {
   const publications = loadPublicationSettings(environment);
   const cosmos = loadCosmosSettings(environment, publications?.store);
+  const gatewayKey = environment.CATALOG_APIM_BACKEND_KEY?.trim();
+  if (gatewayKey && (!publications || !/^[A-Za-z0-9_-]{43}$/.test(gatewayKey))) {
+    throw new Error('CATALOG_APIM_BACKEND_KEY requires publications and a 32-byte base64url key');
+  }
   return {
     port: parsePort(environment.PORT),
     serviceName: environment.SERVICE_NAME?.trim() || 'ms-catalog',
     logLevel: parseLogLevel(environment.LOG_LEVEL),
     ...(publications ? { publications } : {}),
     ...(cosmos ? { cosmos } : {}),
+    ...(gatewayKey ? { gatewayKey } : {}),
   };
 }

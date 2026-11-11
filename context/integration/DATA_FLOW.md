@@ -1,17 +1,12 @@
 # Flujo de datos
 
-**Extension local MTEC-32:** para POST/PUT el router autentica, parsea JSON acotado,
-rechaza campos de identidad y resuelve snapshot confiable del mismo userId antes
-de invocar los casos de uso. El repositorio y puerto de imagenes son inyectados.
-Las pruebas simulan dos usuarios y verifican 201/403 y respuestas JSON Schema;
-no acreditan un flujo real con JWT/APIM/ms-users.
-
-**MTEC-32, Verificado localmente:** Express verifica el JWT interno (RS256, JWKS de
-ms-users, iss/aud/tiempos) antes de invocar `PublicationService` y el repositorio en
-memoria; el propietario es el `sub`. Solo el alta consulta `GET /v1/me/profile` de
-ms-users con el mismo token para el snapshot del vendedor. Habilitado en el arranque
-normal solo con configuracion explicita; no desplegado ni probado E2E; ver
-[autenticacion real](../../app/ms-catalog/README.md#autenticacion-real-con-el-jwt-interno-de-ms-users).
+**MTEC-32, verificado en código:** Express valida el JWT interno antes de procesar
+la petición. El alta valida el cuerpo, consulta el perfil propio a través del
+gateway autorizado y persiste la publicación con el `sub` como propietario.
+La actualización comprueba propiedad y revisión en el flujo de Cosmos. Las
+lecturas devuelven el detalle o una página plana. La
+[colección de staging](../../app/ms-catalog/README.md#validación-en-staging-con-credenciales-reales)
+permite validar el recorrido con sesiones reales.
 
 ## Autenticación
 

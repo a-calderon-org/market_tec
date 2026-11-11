@@ -1,23 +1,11 @@
 # Backend: contratos API
 
-## Adaptador de lectura ms-catalog en pruebas
+## API de publicaciones de ms-catalog
 
-**Verificado en codigo:** MTEC-32 agrega un router optativo de lectura a
-`app/ms-catalog`, sin modificar `app/backend` ni el arranque normal. Alcance,
-respuestas, limites de autenticacion y pruebas manuales en el
-[README del servicio](../../app/ms-catalog/README.md#mtec-32--incremento-de-lectura-http-en-pruebas).
-El OpenAPI de catalogo sigue Proposed; no hay conformidad productiva.
-
-**Extension local MTEC-32:** la composicion optativa incorpora POST/PUT de
-publicaciones, aprobados como interfaces el 2026-11-09.
-
-**Autenticacion con JWT interno, Verificado localmente (2026-11-10):** con las
-variables `CATALOG_*`, `npm start` expone listado, detalle, alta y actualizacion
-autenticados con el JWT interno de ms-users (Google o Magic Link), segun Catalog
-OpenAPI 0.3.0-draft. Propietario = `sub`; `vendedor.id` puede ser `null`; el alta
-devuelve 503 `SELLER_PROFILE_UNAVAILABLE` si no obtiene el perfil propio en ms-users.
-Almacenamiento solo en memoria. **No desplegado; sin prueba E2E.** Valores de
-staging, decisiones pendientes y rotacion en el [README](../../app/ms-catalog/README.md#autenticacion-real-con-el-jwt-interno-de-ms-users).
+**Verificado en código:** `npm start` monta listado, detalle, alta y actualización
+con configuración explícita. El [contrato Catalog](../../contracts/openapi/catalog.json)
+define DTO, respuestas y filtros. La [guía de ms-catalog](../../app/ms-catalog/README.md#mtec-32--api-http-de-publicaciones)
+documenta el arranque con Cosmos y las pruebas pendientes en staging.
 
 ## Contrato implementado localmente
 

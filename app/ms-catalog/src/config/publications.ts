@@ -26,7 +26,8 @@ export function composePublications(settings: PublicationSettings, options: Publ
   return {
     publications,
     async authenticate(request) {
-      const token = bearerToken(request.headers.authorization);
+      const authorization = request.headersDistinct.authorization;
+      const token = bearerToken(authorization?.length === 1 ? authorization[0] : undefined);
       return token === undefined ? undefined : verifier.verify(token);
     },
     writes: { publications, resolveActor: principal => sellers.resolve(principal) },

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import type { AddressInfo } from 'node:net';
 import { after, before, test } from 'node:test';
+import { randomBytes } from 'node:crypto';
+import { once } from 'node:events';
 import type { Server } from 'node:http';
 import { createApp } from '../src/app.js';
 
@@ -53,4 +55,26 @@ test('default server does not expose publications without explicit authenticated
   const response = await fetch(`${baseUrl}/v1/publicaciones`);
   assert.equal(response.status, 404);
   assert.equal((await response.json()).error.code, 'ROUTE_NOT_FOUND');
+});
+
+test('the configured gateway credential is required before reaching staging routes', async () => {
+  const gatewayKey = randomBytes(32).toString('base64url');
+  const app = createApp({ port: 3000, serviceName: 'ms-catalog', logLevel: 'silent', gatewayKey });
+  const gated = app.listen(0, '127.0.0.1');
+  try {
+    await once(gated, 'listening');
+    const base = `http://127.0.0.1:${(gated.address() as AddressInfo).port}`;
+    const header = 'X-MTEC-Catalog-Gateway-Key';
+    const direct = await fetch(`${base}/v1/publicaciones`, { headers: { 'X-Correlation-ID': 'blocked-direct' } });
+    assert.equal(direct.status, 403);
+    assert.equal((await direct.json()).error.correlationId, 'blocked-direct');
+    const wrong = await fetch(`${base}/health`, { headers: { [header]: randomBytes(32).toString('base64url') } });
+    assert.equal(wrong.status, 403);
+    await wrong.body?.cancel();
+    const trusted = await fetch(`${base}/health`, { headers: { [header]: gatewayKey } });
+    assert.equal(trusted.status, 200);
+    await trusted.body?.cancel();
+  } finally {
+    await new Promise<void>((resolve, reject) => gated.close(error => error ? reject(error) : resolve()));
+  }
 });

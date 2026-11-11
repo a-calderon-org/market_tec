@@ -445,7 +445,9 @@ class AuthContractsTest(unittest.TestCase):
     def test_non_auth_contracts_remain_byte_identical_to_reviewed_base(self):
         baseline = load(FIXTURES / "compatibility-baseline.json")
         for relative, expected in baseline["files"].items():
-            self.assertEqual(expected, hashlib.sha256((ROOT / relative).read_bytes()).hexdigest(), relative)
+            # The reviewed hashes use the repository's LF form, including on Windows checkouts.
+            content = (ROOT / relative).read_bytes().replace(b"\r\n", b"\n")
+            self.assertEqual(expected, hashlib.sha256(content).hexdigest(), relative)
         self.assertEqual(baseline["health"], fingerprint(self.api["paths"]["/health"]))
         for name, expected in baseline["usersSchemas"].items():
             self.assertEqual(expected, fingerprint(self.api["components"]["schemas"][name]), name)

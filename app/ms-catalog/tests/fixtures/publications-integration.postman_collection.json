@@ -1,0 +1,387 @@
+{
+  "info": {
+    "name": "MarketTec MTEC-32 | Publicaciones con JWT interno",
+    "description": "Ejecutar en orden contra un entorno aislado de staging. Crea dos publicaciones persistentes. Configurar JWT reales de dos cuentas distintas en variables locales. Para SWA, usar el sufijo /api/catalog-v2 y X-MTEC-Authorization.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:3000"
+    },
+    {
+      "key": "authorizationHeader",
+      "value": "Authorization"
+    },
+    {
+      "key": "runId",
+      "value": ""
+    },
+    {
+      "key": "publicationId",
+      "value": ""
+    },
+    {
+      "key": "googleUserId",
+      "value": ""
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (pm.info.requestName === 'Rechazar listado sin credencial') {",
+          "  pm.collectionVariables.set('runId', pm.variables.replaceIn('{{$guid}}'));",
+          "  pm.collectionVariables.unset('publicationId');",
+          "  pm.collectionVariables.unset('googleUserId');",
+          "}",
+          "const key = pm.variables.get('catalogSubscriptionKey');",
+          "if (key) pm.request.headers.upsert({ key: 'Ocp-Apim-Subscription-Key', value: key });",
+          "pm.request.headers.upsert({ key: 'X-Correlation-ID', value: pm.collectionVariables.get('runId') });"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Rechazar listado sin credencial",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/v1/publicaciones"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 401', () => pm.response.to.have.status(401));",
+              "pm.test('JSON de catálogo', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Alta con sesión Google",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "{{authorizationHeader}}",
+            "value": "Bearer {{googleToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/v1/publicaciones",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"categoria\": \"Libros\",\n  \"subcategoria\": \"\",\n  \"titulo\": \"MTEC32-{{runId}}\",\n  \"descripcion\": \"Validación de catálogo en staging\",\n  \"precio\": 1250,\n  \"condicion\": null,\n  \"ubicacion\": \"\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+              "pm.test('JSON de catálogo', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json'));",
+              "const publication = pm.response.json();",
+              "pm.test('Identidad canónica y vendedor compatible', () => {",
+              "  pm.expect(publication.id).to.be.a('string').and.not.be.empty;",
+              "  pm.expect(publication.vendedor.userId).to.be.a('string').and.not.be.empty;",
+              "  pm.expect(publication.vendedor.id).to.equal(null);",
+              "  pm.expect(publication.titulo).to.equal('MTEC32-' + pm.variables.get('runId'));",
+              "  pm.expect(publication.createdAt).to.be.a('number');",
+              "  pm.expect(Math.floor(Date.parse(publication.fechaPublicacion) / 1000)).to.equal(publication.createdAt);",
+              "});",
+              "if (pm.response.code === 201) {",
+              "  pm.collectionVariables.set('publicationId', publication.id);",
+              "  pm.collectionVariables.set('googleUserId', publication.vendedor.userId);",
+              "}",
+              "if (pm.variables.get('authorizationHeader') === 'Authorization') {",
+              "  pm.test('Location del detalle', () => pm.expect(pm.response.headers.get('Location')).to.equal('/v1/publicaciones/' + publication.id));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Alta con sesión Magic Link",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "{{authorizationHeader}}",
+            "value": "Bearer {{magicToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/v1/publicaciones",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"categoria\": \"Libros\",\n  \"subcategoria\": \"\",\n  \"titulo\": \"MTEC32-Magic-{{runId}}\",\n  \"descripcion\": \"Validación de catálogo en staging\",\n  \"precio\": 1250,\n  \"condicion\": null,\n  \"ubicacion\": \"\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+              "pm.test('JSON de catálogo', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json'));",
+              "const publication = pm.response.json();",
+              "pm.test('Magic Link tiene un vendedor distinto', () => {",
+              "  pm.expect(publication.vendedor.userId).to.be.a('string').and.not.be.empty;",
+              "  pm.expect(publication.vendedor.userId).to.not.equal(pm.collectionVariables.get('googleUserId'));",
+              "  pm.expect(publication.vendedor.id).to.equal(null);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Listado filtrado con paginación plana",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "{{authorizationHeader}}",
+            "value": "Bearer {{magicToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/v1/publicaciones?page=1&pageSize=1&q=MTEC32-{{runId}}&sortBy=precio&sortDirection=asc&precioMin=1250&precioMax=1250"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "pm.test('JSON de catálogo', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json'));",
+              "const page = pm.response.json();",
+              "pm.test('Página plana y filtros aplicados', () => {",
+              "  pm.expect(Object.keys(page).sort()).to.eql(['items', 'page', 'pageSize', 'totalRecords']);",
+              "  pm.expect(page.page).to.equal(1);",
+              "  pm.expect(page.pageSize).to.equal(1);",
+              "  pm.expect(page.totalRecords).to.equal(1);",
+              "  pm.expect(page.items[0].id).to.equal(pm.collectionVariables.get('publicationId'));",
+              "  pm.expect(page.items[0].precio).to.equal(1250);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Detalle autenticado con Magic Link",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "{{authorizationHeader}}",
+            "value": "Bearer {{magicToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/v1/publicaciones/{{publicationId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "pm.test('JSON de catálogo', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json'));",
+              "const publication = pm.response.json();",
+              "pm.test('Detalle conserva la identidad del vendedor original', () => {",
+              "  pm.expect(publication.id).to.equal(pm.collectionVariables.get('publicationId'));",
+              "  pm.expect(publication.vendedor.userId).to.equal(pm.collectionVariables.get('googleUserId'));",
+              "  pm.expect(publication.imagenes).to.eql([]);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Rechazar actualización por otro usuario",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "{{authorizationHeader}}",
+            "value": "Bearer {{magicToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/v1/publicaciones/{{publicationId}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"categoria\": \"Libros\",\n  \"subcategoria\": \"\",\n  \"titulo\": \"Edición ajena\",\n  \"descripcion\": \"Validación de catálogo en staging\",\n  \"precio\": 1250,\n  \"condicion\": null,\n  \"ubicacion\": \"\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 403', () => pm.response.to.have.status(403));",
+              "pm.test('JSON de catálogo', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json'));",
+              "pm.test('Denegación correlacionada', () => {",
+              "  const error = pm.response.json().error;",
+              "  pm.expect(error.code).to.equal('PUBLICATION_FORBIDDEN');",
+              "  pm.expect(error.correlationId).to.be.a('string').and.not.be.empty;",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Actualización completa por el propietario",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "{{authorizationHeader}}",
+            "value": "Bearer {{googleToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/v1/publicaciones/{{publicationId}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"categoria\": \"Libros\",\n  \"subcategoria\": \"\",\n  \"titulo\": \"MTEC32-{{runId}} editada\",\n  \"descripcion\": \"Validación de catálogo en staging\",\n  \"precio\": 1250,\n  \"condicion\": null,\n  \"ubicacion\": \"\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "pm.test('JSON de catálogo', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json'));",
+              "const publication = pm.response.json();",
+              "pm.test('Contenido actualizado y propietario preservado', () => {",
+              "  pm.expect(publication.titulo).to.equal('MTEC32-' + pm.variables.get('runId') + ' editada');",
+              "  pm.expect(publication.vendedor.userId).to.equal(pm.collectionVariables.get('googleUserId'));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Rechazar paginación inválida",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "{{authorizationHeader}}",
+            "value": "Bearer {{googleToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/v1/publicaciones?page=0"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400', () => pm.response.to.have.status(400));",
+              "pm.test('JSON de catálogo', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json'));",
+              "pm.test('Error de validación', () => pm.expect(pm.response.json().error.code).to.equal('INVALID_PUBLICATION'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Publicación inexistente",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "{{authorizationHeader}}",
+            "value": "Bearer {{googleToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/v1/publicaciones/missing-{{runId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 404', () => pm.response.to.have.status(404));",
+              "pm.test('JSON de catálogo', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json'));",
+              "pm.test('Error de recurso inexistente', () => pm.expect(pm.response.json().error.code).to.equal('PUBLICATION_NOT_FOUND'));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

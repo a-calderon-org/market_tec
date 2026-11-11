@@ -1,7 +1,7 @@
 import { Router, json, type Request } from 'express';
 import { ActorResolutionError } from '../../../application/ports/in/publications.js';
 import type { AuthenticatedPrincipal, Publications, PublicationActor } from '../../../application/ports/in/publications.js';
-import { PublicationError, invalid } from '../../../domain/publication.js';
+import { PublicationError, invalid, validateContent } from '../../../domain/publication.js';
 import type { PublicationFilter, PublicationContent } from '../../../domain/publication.js';
 
 export interface PublicationWrites {
@@ -22,7 +22,9 @@ function parseContent(body: unknown): PublicationContent {
   const allowed = ['categoria', 'subcategoria', 'titulo', 'descripcion', 'precio', 'condicion', 'ubicacion', 'imagenes'];
   for (const key of Object.keys(body)) if (!allowed.includes(key)) invalid('Unknown publication field');
   const data = body as PublicationContent;
-  return { ...data, imagenes: data.imagenes === undefined ? [] : data.imagenes };
+  const content = { ...data, imagenes: data.imagenes === undefined ? [] : data.imagenes };
+  validateContent(content);
+  return content;
 }
 
 const allowedKeys = new Set(['page', 'pageSize', 'q', 'categoria', 'sortBy', 'sortDirection', 'precioMin', 'precioMax']);

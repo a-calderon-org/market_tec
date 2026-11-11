@@ -1,10 +1,6 @@
 # ms-catalog
 
-Servicio de catalogo de MarketTec. Usa Node.js 24, TypeScript y Express 5.
-Incluye los nucleos de publicaciones y mensajeria y un adaptador optativo Cosmos
-DB for NoSQL. Sin configuracion, el servidor expone solo /health. La seccion
-"Autenticacion real" describe como habilitar publicaciones autenticadas con el JWT
-interno de ms-users y almacenamiento en memoria.
+Servicio de catálogo de MarketTec en Node.js 24, TypeScript y Express 5. El arranque normal monta la API de publicaciones con JWT interno y Cosmos cuando se configura el servicio. Sin variables de catálogo expone `/health`.
 
 ## Requisitos y ejecucion
 
@@ -63,9 +59,7 @@ y conservan el vendedor numerico junto a `userId`. El listado omite `imagenes`;
 el detalle incluye el arreglo. Revision y propietario interno no se exponen.
 El campo adicional no convierte ADR-003 en Accepted.
 
-**Pendiente:** MTEC-32 debe conectar y validar DTO/rutas con el contrato en
-revision (`contracts/openapi/catalog.json`); alta y actualizacion aun no tienen
-contrato HTTP versionado. La seccion "Autenticacion real" describe el flujo HTTP y sus limites. Imagenes/Blob corresponde a MTEC-14.
+La interfaz HTTP y su configuración están en [MTEC-32](#mtec-32--api-http-de-publicaciones). Las imágenes se integran en MTEC-14.
 
 ## Persistencia Cosmos — MTEC-29
 
@@ -132,11 +126,10 @@ preserva la publicacion y enviar y recuperar un mensaje desde dos instancias.
 El servidor de pruebas simula el perfil de ms-users con ID numerico nulo.
 Los dobles de SDK de `cosmos-repositories.test.ts` cubren errores y reconciliacion.
 
-**Pendiente para la version funcional en Azure:** revisar particiones, rendimiento
-de indices y RU con datos representativos. vNext no valida esas propiedades
-operativas. El JWT y la resolucion de vendedor se prueban con fixtures. Falta
-verificarlos con los servicios de staging. La entrega del evento queda en MTEC-31 y la configuracion
-de despliegue en MTEC-33.
+**Verificado en Azure de pruebas en MTEC-29 (2026-11-11):** Managed Identity,
+persistencia, concurrencia, RU e índices. El [ADR-005](../../context/decisions/ADR-005-persistencia-cosmos-catalog.md)
+registra la evidencia y el alcance aprobado. MTEC-33 cubre el despliegue de
+ms-catalog y MTEC-31 la entrega de eventos.
 
 ### Validacion de los criterios de MTEC-28
 
@@ -217,87 +210,19 @@ con repositorio compartido, paginacion, validacion, colisiones, fallo de persist
 y copias defensivas. La prueba de arquitectura cubre tambien el nuevo modulo.
 No se ejecutaron CI remoto, Azure ni pruebas HTTP de chat inexistentes.
 
-## MTEC-32 — incremento de lectura HTTP en pruebas
+## MTEC-32 — API HTTP de publicaciones
 
-**Verificado localmente:** `createApp(settings, dependencies)` admite composicion
-explicita con casos de uso y callback de autenticacion confiable. En esa composicion
-expone `GET /v1/publicaciones` y `GET /v1/publicaciones/:publicationId`.
-Sin dependencias, incluido `npm start`, las rutas de negocio no se montan.
-El callback debe verificar credenciales antes de devolver `userId`; el router no
-valida JWT ni acepta identidad desde headers. Solo las pruebas incluyen fake auth.
+El [OpenAPI de catálogo](../../contracts/openapi/catalog.json) define listado,
+detalle, alta y actualización. El listado conserva la página plana
+`{items,totalRecords,page,pageSize}`, `sortDirection` y los filtros de texto,
+categoría y precio. Las escrituras reciben el cuerpo de publicación de Angular.
+El alta responde `201` con `Location`. Los errores del servicio llevan
+`X-Correlation-ID` y el mismo identificador en el cuerpo. Las interfaces de
+escritura fueron aprobadas el 2026-11-09. El contrato general sigue en revisión.
 
-Listado: respuesta plana `{items,totalRecords,page,pageSize}` y filtros de MTEC-28.
-Se rechazan parametros desconocidos/repetidos, arrays/objetos, numeros vacios,
-notacion exponencial y limites invalidos. Precios HTTP usan decimal sin signo;
-pagina/tamano usan digitos enteros. Errores de dominio usan envelope correlacionado
-con 400/404; sin principal valido retorna 401 y errores inesperados retornan 500
-sin detalles internos. `X-Correlation-ID` se propaga o genera como en health.
+### Autenticacion real con el JWT interno de ms-users
 
-### Pruebas reproducibles antes de integrar
-
-Desde `app/ms-catalog`:
-
-```powershell
-npm run check
-# Solo HTTP de publicaciones (tras compilar):
-node --test dist/tests/publication-http.test.js
-# Prueba manual, datos sinteticos y fake auth, solo escucha en loopback:
-node dist/tests/fixtures/publication-http-preview.js
-```
-
-Con la fixture en ejecucion, en otra terminal:
-
-```powershell
-$testHeaders = @{ Authorization = 'Bearer local-test-only'; 'X-Correlation-ID' = 'manual-catalog' }
-Invoke-RestMethod 'http://127.0.0.1:3100/v1/publicaciones?sortBy=precio&sortDirection=asc&page=2&pageSize=1' -Headers $testHeaders | ConvertTo-Json -Depth 6
-Invoke-RestMethod 'http://127.0.0.1:3100/v1/publicaciones/pub-1' -Headers $testHeaders | ConvertTo-Json -Depth 6
-```
-
-La primera respuesta debe contener total 3, pagina 2, tamano 1 y precio 20.
-Importar `tests/fixtures/publication-read.postman_collection.json` en Postman y
-ejecutar la coleccion contra esa misma fixture: comprueba 200, 400, 401, 404,
-correlacion, paginacion y fechas. Detener con Ctrl+C; los datos no persisten.
-No ejecutar esa fixture en produccion ni usar credenciales reales.
-
-### Extension de escritura — interfaces aprobadas 2026-11-09
-
-La composicion optativa acepta `writes` con los casos de uso `create`/`update`
-y `resolveActor(userId)`, que obtiene un snapshot confiable sin consultar la DB de
-ms-users. El resultado debe corresponder al principal ya autenticado. El body
-nunca proporciona propietario, vendedor, ID o fecha; campos desconocidos se rechazan.
-
-- `POST /v1/publicaciones`: 201, detalle creado y `Location` relativa.
-- `PUT /v1/publicaciones/{publicationId}`: 200, detalle actualizado; solo propietario.
-- Cuerpo JSON completo: categoria, subcategoria, titulo, descripcion, precio,
-  condicion (string o null) y ubicacion. `imagenes` es opcional; omitirlo implica
-  `[]`, tambien en PUT. No hay actualizaciones parciales ni eliminacion.
-- Errores 400/401/403/404/409; limite 1 MiB con 413; errores inesperados 500.
-  Se autentica antes de parsear JSON. Un fallo de snapshot/imagenes no habilita
-  fallback ni escritura parcial. Las URLs se limitan a HTTP(S) sin credenciales.
-
-La fixture manual anterior ahora incluye POST/PUT y un segundo principal de
-prueba con `Bearer local-test-other`. La coleccion agrega alta, actualizacion,
-403 y rechazo de propietario en body; ejecutar en orden, pues guarda `createdId`.
-Ajv 8 y ajv-formats son dependencias exclusivas de desarrollo para validar los
-schemas Draft 2020-12 de respuestas reales en `publication-write-http.test.ts`.
-
-**Verificado 2026-11-09:** `npm run check` pasa 69 pruebas; la suite contractual
-general `python -m unittest discover -s contracts/tests -p test_contracts.py`
-pasa 8 pruebas. La coleccion Postman se ejecuto con Newman 6 contra una fixture
-limpia: 9 requests y 24 assertions, sin fallos. Esa ejecucion valida el adaptador
-local con fake auth; no es evidencia de interoperabilidad JWT o Azure.
-
-```powershell
-# Ejecutar toda la validacion, incluidos JSON Schema y permisos HTTP:
-npm run check
-# Solo escritura HTTP, tras compilar:
-node --test dist/tests/publication-write-http.test.js
-```
-
-## Autenticacion real con el JWT interno de ms-users
-
-**Estado:** implementado y verificado con pruebas locales. **No desplegado.** No
-existe prueba E2E en staging ni en ningun entorno Azure.
+**Verificado en código y pruebas locales:** HTTP, JWT y Cosmos se componen al arrancar el servicio. **No determinado:** resultado E2E con sesiones reales por APIM y SWA.
 
 `npm start` monta `GET/POST /v1/publicaciones` y `GET/PUT /v1/publicaciones/{id}`
 solo si se configuran las variables siguientes; sin ninguna, el servidor sigue
@@ -409,3 +334,38 @@ forma de `InternalJwtService` y cubre ambos metodos, propiedad, rechazos 401/403
 fallos del perfil y la cache del JWKS. Ademas se verifico localmente un token firmado
 con Nimbus 10.10 (la libreria de ms-users) contra el servidor compilado, con el
 perfil de ms-users simulado en loopback.
+
+### Configuración de staging
+
+El App Service Linux `app-markettec-catalog-yd-stg` en `markettec-dev` usa
+Node 24 y arranca con `npm start`. El despliegue ZIP contiene `dist/src`,
+el manifiesto y las dependencias de ejecución instaladas desde el lockfile.
+Cosmos usa identidad administrada con rol de datos limitado a
+`catalog-mtec32-stg`, una base de staging con 400 RU/s compartidas y los
+índices de `catalogContainerDefinitions()`. Configurar la imagen por defecto,
+el perfil propio y el JWKS según las secciones anteriores. En Azure, configurar
+también `CATALOG_APIM_BACKEND_KEY` antes de desplegar el código.
+
+La política y las rutas se describen en la
+[configuración APIM de staging](../../infra/apim/staging/README.md#publicaciones-de-ms-catalog-mtec-32).
+
+### Validación en staging con credenciales reales
+
+Importar [la colección Postman](tests/fixtures/publications-integration.postman_collection.json)
+y ejecutarla en orden. La ejecución crea dos publicaciones persistentes en una
+base de catálogo autorizada para pruebas de staging.
+
+1. Configurar `baseUrl` con el prefijo HTTPS de catálogo en APIM y mantener
+   `authorizationHeader=Authorization`. Configurar `catalogSubscriptionKey`
+   como variable sensible si APIM requiere clave. Para SWA, usar el prefijo
+   `/api/catalog-v2` de su origen y `authorizationHeader=X-MTEC-Authorization`.
+2. Iniciar sesión en ms-users de staging con Google y Magic Link en dos cuentas
+   distintas. Cargar los access tokens vigentes como variables locales y sensibles
+   `googleToken` y `magicToken`. Ejecutar antes de que caduquen.
+3. Confirmar alta desde ambas sesiones, listado, detalle, edición del propietario,
+   403 al tercero y errores 400/401/404. Registrar la versión del servicio y la
+   correlación de la respuesta.
+
+Para pruebas locales aisladas, usar `npm run check` o la
+[colección con datos sintéticos](tests/fixtures/publication-read.postman_collection.json)
+contra `node dist/tests/fixtures/publication-http-preview.js` tras compilar.

@@ -61,7 +61,10 @@ export class RemoteJwks implements KeySource {
   async key(kid: string) {
     const since = (time: number | undefined) => time === undefined ? Infinity : this.now() - time;
     const wanted = since(this.fetchedAt) > this.ttlMs || !this.keys.has(kid);
-    if (wanted && since(this.attemptedAt) > this.minRefreshMs) await this.refresh();
+    if (wanted) {
+      if (this.pending) await this.pending;
+      else if (since(this.attemptedAt) >= this.minRefreshMs) await this.refresh();
+    }
     if (since(this.fetchedAt) > this.maxStaleMs) throw new Error('JWKS unavailable');
     return this.keys.get(kid);
   }
@@ -124,7 +127,7 @@ export class InternalJwtVerifier {
     // 0 < exp-iat <= 240 s and exp itself is already expired (identity contract §6).
     if (!isTime(iat) || !isTime(exp) || exp <= iat || exp - iat > MAX_LIFETIME_SECONDS || now >= exp ||
       iat > now + skew) return undefined;
-    if (nbf !== undefined && (!isTime(nbf) || nbf > now + skew)) return undefined;
+    if (nbf !== undefined && (!isTime(nbf) || nbf < iat || nbf >= exp || nbf > now + skew)) return undefined;
     return { userId: sub, sessionId: sid, tokenId: jti, expiresAt: exp, credential: token };
   }
 }
