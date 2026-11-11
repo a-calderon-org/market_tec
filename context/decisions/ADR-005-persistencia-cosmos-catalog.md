@@ -2,7 +2,9 @@
 
 **Fecha:** 2026-11-09
 
-**Estado:** Proposed — pendiente de aprobación del responsable del proyecto
+**Estado:** Accepted para el alcance de MTEC-29
+
+**Aprobación:** responsable del proyecto, 2026-11-11
 
 **Destinatarios:** mantenedores de ms-catalog y responsables de infraestructura
 
@@ -62,13 +64,14 @@ locales existentes. B es preferible para crecimiento, pero implementarla sin rev
 unicidad, localización y atomicidad cambiaría silenciosamente el comportamiento.
 No se recomienda C sin carga real que justifique esa complejidad.
 
-## Diseño propuesto para aprobación
+## Decisión aprobada para MTEC-29
 
-Se propone **A exclusivamente como primer incremento local/de prueba**, API
-**Cosmos DB for NoSQL**, SDK oficial `@azure/cosmos` fijado en lockfile una vez
-comprobada compatibilidad. No es una recomendación de capacidad productiva.
-La aprobación de este alcance permite implementar y probar el adaptador; no
-autoriza aprovisionar Azure, desplegar ni aceptar límites productivos desconocidos.
+Se acepta la **alternativa A** para el adaptador de persistencia de MTEC-29
+y su validación en entornos de prueba. Usa **Cosmos DB for NoSQL**, un contenedor
+por tipo de recurso, una partición lógica por contenedor y los índices
+documentados. La evidencia de Azure y los límites de la carga medida están
+en la sección de validación de este ADR. La decisión de capacidad, red y
+despliegue productivos corresponde a MTEC-33.
 
 ### Contenedores y claves
 
@@ -186,7 +189,7 @@ propagan fallo saneado; nunca lista vacía o éxito ficticio. Registrar operaci�
 duración, status, RU y actividad del proveedor, sin SQL parametrizado, texto,
 perfiles, claves, tokens ni diagnósticos crudos potencialmente sensibles.
 
-## Validación requerida tras aprobación
+## Criterios de validación
 
 1. Suite de contrato reutilizable contra fake y adaptador: roundtrip, copias,
    inexistencia, duplicados, fechas, ownership, filtros combinados, Unicode,
