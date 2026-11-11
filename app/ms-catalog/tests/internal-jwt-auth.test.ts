@@ -213,13 +213,13 @@ test('static JWKS rejects private material and the bearer parser accepts a singl
   }
 });
 
-test('publication settings: absent keeps health-only; partial or non-memory configuration fails startup', () => {
+test('publication settings: absent keeps health-only and partial configurations fail startup', () => {
   assert.equal(loadSettings({}).publications, undefined);
   assert.throws(() => loadSettings({ CATALOG_JWT_ISSUER: ISSUER }), /CATALOG_JWT_AUDIENCE/);
   const complete = { CATALOG_JWT_ISSUER: ISSUER, CATALOG_JWT_AUDIENCE: AUDIENCE, CATALOG_JWT_JWKS_URI: 'https://u.example.test/jwks.json',
     CATALOG_USERS_PROFILE_URL: PROFILE_URL, CATALOG_PUBLICATIONS_STORE: 'memory', CATALOG_PLACEHOLDER_IMAGE_URL: 'https://c.example.test/p.svg' };
   assert.equal(loadSettings(complete).publications?.store, 'memory');
-  assert.throws(() => loadSettings({ ...complete, CATALOG_PUBLICATIONS_STORE: 'cosmos' }), /persistent/);
+  assert.throws(() => loadSettings({ ...complete, CATALOG_PUBLICATIONS_STORE: 'cosmos' }), /CATALOG_COSMOS_ENDPOINT/);
   assert.throws(() => loadSettings({ ...complete, CATALOG_JWT_JWKS_JSON: '{}' }), /exactly one/);
   assert.throws(() => loadSettings({ ...complete, CATALOG_USERS_PROFILE_URL: 'http://users.example.test/me' }), /https/);
   // Bounded delegation: only <issuer>/v1/me/profile on the gateway (loopback HTTP for local tests).
@@ -228,4 +228,32 @@ test('publication settings: absent keeps health-only; partial or non-memory conf
     assert.throws(() => loadSettings({ ...complete, CATALOG_USERS_PROFILE_URL: url }), /must be exactly/, url);
   }
   assert.ok(loadSettings({ ...complete, CATALOG_USERS_PROFILE_URL: 'http://127.0.0.1:3911/v1/me/profile' }).publications);
+});
+
+test('Cosmos settings select explicit persistent storage with managed identity or an external key', () => {
+  const settings = { CATALOG_JWT_ISSUER: ISSUER, CATALOG_JWT_AUDIENCE: AUDIENCE,
+    CATALOG_JWT_JWKS_URI: 'https://u.example.test/jwks.json', CATALOG_USERS_PROFILE_URL: PROFILE_URL,
+    CATALOG_PLACEHOLDER_IMAGE_URL: 'https://c.example.test/p.svg', CATALOG_PUBLICATIONS_STORE: 'cosmos',
+    CATALOG_COSMOS_ENDPOINT: 'https://account.example.test', CATALOG_COSMOS_DATABASE: 'catalog' };
+  const managed = loadSettings(settings);
+  assert.equal(managed.publications?.store, 'cosmos');
+  assert.deepEqual(managed.cosmos, {
+    endpoint: settings.CATALOG_COSMOS_ENDPOINT, database: 'catalog',
+    containers: { publications: 'publicaciones', chats: 'chats', messages: 'mensajes' },
+    authentication: { type: 'managed-identity' },
+  });
+  const clientId = '10000000-0000-0000-0000-000000000001';
+  assert.deepEqual(loadSettings({ ...settings, CATALOG_COSMOS_MANAGED_IDENTITY_CLIENT_ID: clientId }).cosmos?.authentication,
+    { type: 'managed-identity', clientId });
+  assert.deepEqual(loadSettings({ ...settings, CATALOG_COSMOS_KEY: 'test-key',
+    CATALOG_COSMOS_MESSAGES_CONTAINER: 'messages-v2' }).cosmos?.containers,
+  { publications: 'publicaciones', chats: 'chats', messages: 'messages-v2' });
+  assert.throws(() => loadSettings({ ...settings, CATALOG_COSMOS_MANAGED_IDENTITY_CLIENT_ID: clientId,
+    CATALOG_COSMOS_KEY: 'test-key' }), /either a Cosmos key or a managed identity/);
+  assert.throws(() => loadSettings({ ...settings, CATALOG_COSMOS_MESSAGES_CONTAINER: 'chats' }), /distinct/);
+  assert.throws(() => loadSettings({ ...settings, CATALOG_COSMOS_DATABASE: '' }), /CATALOG_COSMOS_DATABASE/);
+  assert.throws(() => loadSettings({ ...settings, CATALOG_PUBLICATIONS_STORE: 'memory' }), /require CATALOG_PUBLICATIONS_STORE/);
+  for (const endpoint of ['http://localhost:8081', 'https://account.example.test/path', 'https://account.example.test/?q=1']) {
+    assert.throws(() => loadSettings({ ...settings, CATALOG_COSMOS_ENDPOINT: endpoint }), /HTTPS origin/);
+  }
 });

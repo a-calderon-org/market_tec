@@ -3,25 +3,24 @@ import { generateKeyPairSync, randomBytes, randomUUID, sign } from 'node:crypto'
 import { once } from 'node:events';
 import { test } from 'node:test';
 import type { AddressInfo } from 'node:net';
-import { createApp } from '../src/app.js';
-import { composePublications } from '../src/config/publications.js';
+import { createCatalogRuntime } from '../src/config/catalog-runtime.js';
 import { loadSettings } from '../src/config/settings.js';
-import { catalogContainerDefinitions, composeCosmosCatalog, createCosmosTestClient,
+import { catalogContainerDefinitions, composeCosmosCatalog, createCosmosClient,
   defaultCatalogContainers } from '../src/config/cosmos-catalog.js';
 import { CosmosPersistenceError } from '../src/adapters/out/cosmos/store.js';
 import { assertCatalogRepositoryContract } from './fixtures/catalog-repository-contract.js';
 import type { CatalogRepositories } from './fixtures/catalog-repository-contract.js';
 
-async function assertAuthenticatedHttp(repositories: CatalogRepositories) {
+async function assertAuthenticatedHttp(repositories: CatalogRepositories, endpoint: string, key: string, database: string) {
   const issuer = 'https://users.example.test/users';
   const audience = 'markettec-api';
   const profileUrl = issuer + '/v1/me/profile';
   const now = 1_800_000_000;
   const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
-  const key = { ...publicKey.export({ format: 'jwk' }), kid: 'cosmos-test', alg: 'RS256', use: 'sig' };
+  const signingKey = { ...publicKey.export({ format: 'jwk' }), kid: 'cosmos-test', alg: 'RS256', use: 'sig' };
   const encode = (value: object) => Buffer.from(JSON.stringify(value)).toString('base64url');
   const token = (sub: string) => {
-    const header = encode({ typ: 'at+jwt', alg: 'RS256', kid: key.kid });
+    const header = encode({ typ: 'at+jwt', alg: 'RS256', kid: signingKey.kid });
     const claims = encode({ sub, iss: issuer, aud: audience, iat: now, exp: now + 240,
       sid: randomBytes(16).toString('hex'), jti: randomBytes(16).toString('hex') });
     const input = header + '.' + claims;
@@ -29,21 +28,23 @@ async function assertAuthenticatedHttp(repositories: CatalogRepositories) {
   };
   const ownerToken = token('http-owner');
   const otherToken = token('http-other');
-  const settings = loadSettings({ CATALOG_JWT_ISSUER: issuer, CATALOG_JWT_AUDIENCE: audience,
-    CATALOG_JWT_JWKS_JSON: JSON.stringify({ keys: [key] }), CATALOG_USERS_PROFILE_URL: profileUrl,
-    CATALOG_PUBLICATIONS_STORE: 'memory', CATALOG_PLACEHOLDER_IMAGE_URL: 'https://example.test/default.png',
-    LOG_LEVEL: 'silent' });
-  assert.ok(settings.publications);
-  const app = createApp(settings, composePublications(settings.publications, {
-    repository: repositories.publications,
+  const environment = { CATALOG_JWT_ISSUER: issuer, CATALOG_JWT_AUDIENCE: audience,
+    CATALOG_JWT_JWKS_JSON: JSON.stringify({ keys: [signingKey] }), CATALOG_USERS_PROFILE_URL: profileUrl,
+    CATALOG_PUBLICATIONS_STORE: 'cosmos', CATALOG_PLACEHOLDER_IMAGE_URL: 'https://example.test/default.png',
+    CATALOG_COSMOS_ENDPOINT: endpoint, CATALOG_COSMOS_KEY: key, CATALOG_COSMOS_DATABASE: database,
+    LOG_LEVEL: 'silent' };
+  const settings = loadSettings(environment);
+  const unavailable = loadSettings({ ...environment, CATALOG_COSMOS_MESSAGES_CONTAINER: 'not-provisioned' });
+  await assert.rejects(createCatalogRuntime(unavailable), { name: 'CosmosPersistenceError', operation: 'validate' });
+  const runtime = await createCatalogRuntime(settings, {
     nowSeconds: () => now,
     async fetchFn(url, init) {
       assert.equal(String(url), profileUrl);
       assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer ' + ownerToken);
       return Response.json({ id: 'http-owner', nombre: 'Ana', apellidos: 'Mora', verificado: true });
     },
-  }));
-  const server = app.listen(0, '127.0.0.1');
+  });
+  const server = runtime.app.listen(0, '127.0.0.1');
   try {
     await once(server, 'listening');
     const base = 'http://127.0.0.1:' + (server.address() as AddressInfo).port;
@@ -63,25 +64,45 @@ async function assertAuthenticatedHttp(repositories: CatalogRepositories) {
     const rejected = await write(detail, 'PUT', otherToken, 'bad');
     assert.equal(rejected.status, 403);
     await rejected.body?.cancel();
-    assert.equal((await repositories.publications.findById(row.id))?.revision, 1);
+    const authorized = { Authorization: 'Bearer ' + ownerToken };
+    const unchanged = await fetch(detail, { headers: authorized, signal: AbortSignal.timeout(15_000) });
+    assert.equal(unchanged.status, 200);
+    assert.equal((await unchanged.json()).titulo, content.titulo);
     const updated = await write(detail, 'PUT', ownerToken, 'Updated');
     assert.equal(updated.status, 200);
     await updated.body?.cancel();
-    const stored = await repositories.publications.findById(row.id);
-    assert.equal(stored?.revision, 2);
-    assert.equal(stored?.titulo, 'Updated');
-    assert.equal(stored?.ownerId, 'http-owner');
-    assert.equal(stored?.seller.id, null);
+    assert.ok(runtime.messaging);
+    const buyer = { userId: 'http-other' };
+    const chat = await runtime.messaging.start(buyer, row.id);
+    const sent = await runtime.messaging.send(buyer, chat.id, 'Hola', randomUUID());
+    const restarted = await createCatalogRuntime(settings, { nowSeconds: () => now });
+    try {
+      assert.ok(restarted.messaging);
+      assert.equal((await restarted.messaging.listMessages(buyer, chat.id)).totalRecords, 1);
+      assert.equal((await repositories.messages.listByChat(chat.id, { page: 1, pageSize: 10 })).items[0]?.id, sent.id);
+      const stored = await repositories.publications.findById(row.id);
+      assert.equal(stored?.revision, 2);
+      assert.equal(stored?.titulo, 'Updated');
+      assert.equal(stored?.ownerId, 'http-owner');
+      assert.equal(stored?.seller.id, null);
+    } finally {
+      restarted.dispose();
+    }
   } finally {
-    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    try {
+      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    } finally {
+      runtime.dispose();
+    }
   }
 }
 
 test('Cosmos NoSQL repository contract with isolated database and independent clients', { timeout: 180_000 }, async () => {
   const { COSMOS_TEST_ENDPOINT: endpoint, COSMOS_TEST_KEY: key } = process.env;
   assert.ok(endpoint && key, 'Set COSMOS_TEST_ENDPOINT and COSMOS_TEST_KEY for an isolated NoSQL test account or emulator');
-  const client = createCosmosTestClient(endpoint, key);
-  const second = createCosmosTestClient(endpoint, key);
+  const authentication = { type: 'key', key } as const;
+  const client = createCosmosClient(endpoint, authentication);
+  const second = createCosmosClient(endpoint, authentication);
   const database = 'mtec29-test-' + randomUUID();
   const settings = { database, containers: defaultCatalogContainers };
   let created = false;
@@ -96,8 +117,8 @@ test('Cosmos NoSQL repository contract with isolated database and independent cl
     const primary = await composeCosmosCatalog(client, settings, metric => { ru += metric.requestCharge ?? 0; });
     const secondary = await composeCosmosCatalog(second, settings);
     const { originalId, chatId } = await assertCatalogRepositoryContract(primary, secondary);
-    await assertAuthenticatedHttp(primary);
-    const fresh = createCosmosTestClient(endpoint, key);
+    await assertAuthenticatedHttp(primary, endpoint, key, database);
+    const fresh = createCosmosClient(endpoint, authentication);
     try {
       const restarted = await composeCosmosCatalog(fresh, settings);
       assert.equal((await restarted.publications.findById(originalId))?.revision, 2);

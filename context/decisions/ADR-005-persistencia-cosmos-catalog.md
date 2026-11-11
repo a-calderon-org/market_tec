@@ -170,11 +170,12 @@ de instancia; no prometer consistencia global o instantáneas de varias consulta
 La cuenta debe soportar el nivel seleccionado; no se eleva desde un cliente una
 cuenta con garantías inferiores. Verificar comportamiento entre dos clientes.
 
-Factory de infraestructura optativa e inyectable; conservar fake y arranque actual.
-Endpoint, base y contenedores por configuración; secretos solo por entorno de
-prueba/almacén autorizado, nunca valores en repo o logs. Verificar esquema y
-particiones al componer; no crear ni modificar cuentas/contenedores productivos
-automáticamente. Managed Identity, permisos y red productivos quedan con MTEC-33.
+La composición de infraestructura se activa con `CATALOG_PUBLICATIONS_STORE=cosmos`.
+El proceso valida el acceso y la definición de partición de los contenedores
+antes de aceptar tráfico. El [README del servicio](../../app/ms-catalog/README.md#persistencia-cosmos--mtec-29)
+describe la configuración por entorno, el soporte de Managed Identity y el uso
+de credenciales externas en emulador. El aprovisionamiento, la asignación de
+permisos y la red del entorno productivo quedan con MTEC-33.
 
 404 de lectura puntual de recurso devuelve ausencia; 404 de contenedor/configuración
 es fallo de infraestructura. 409 de inserción y 412 de reemplazo se traducen al

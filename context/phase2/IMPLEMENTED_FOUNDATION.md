@@ -49,11 +49,13 @@ validacion y pendientes en [README de ms-catalog](../../app/ms-catalog/README.md
 No hay endpoints de chat, EventPublisher/Queue ni persistencia productiva; no se
 declara completado MTEC-30 ni se aprueban contratos o decisiones de almacenamiento.
 
-### Adaptador Cosmos de ms-catalog — 2026-11-10
+### Persistencia Cosmos de ms-catalog — 2026-11-11
 
 **Verificado localmente:** MTEC-29 incorpora repositorios Cosmos NoSQL detras de
-los tres puertos existentes. La prueba optativa contra emulador ejercita consultas,
-persistencia, transacciones y ownership HTTP con JWT firmados para la prueba. La
+los tres puertos existentes y los conecta al arranque con
+`CATALOG_PUBLICATIONS_STORE=cosmos`. La prueba contra emulador ejercita consultas,
+persistencia entre instancias, transacciones y ownership HTTP con JWT firmados
+para la prueba. La
 [ejecucion reproducible](../../app/ms-catalog/README.md#persistencia-cosmos--mtec-29)
 y el [ADR-005 Proposed](../decisions/ADR-005-persistencia-cosmos-catalog.md)
 describen el alcance y la revision de capacidad pendiente.

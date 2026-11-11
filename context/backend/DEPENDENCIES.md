@@ -4,7 +4,10 @@
 
 **Verificado:** `app/ms-catalog` usa Ajv 8.20.0 y ajv-formats 3.0.1 como
 dependencias de desarrollo fijadas en package-lock para validar respuestas HTTP
-contra JSON Schema Draft 2020-12. No se agregan dependencias productivas.
+contra JSON Schema Draft 2020-12. La persistencia del catálogo usa los SDK
+productivos `@azure/cosmos` y `@azure/identity`, fijados en el lockfile. La
+[configuración de Cosmos](../../app/ms-catalog/README.md#persistencia-cosmos--mtec-29)
+describe credenciales y permisos.
 Las secciones siguientes describen exclusivamente el auxiliar `app/backend`.
 
 ## Producción
