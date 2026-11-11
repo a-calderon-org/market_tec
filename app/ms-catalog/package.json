@@ -13,9 +13,11 @@
     "build": "tsc",
     "start": "node dist/src/server.js",
     "test": "npm run build && node --test dist/tests/*.test.js",
+    "test:cosmos": "npm run build && node --test dist/tests/cosmos.integration.js",
     "check": "npm run typecheck && npm test"
   },
   "dependencies": {
+    "@azure/cosmos": "4.10.2",
     "express": "5.3.0"
   },
   "devDependencies": {

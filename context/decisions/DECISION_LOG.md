@@ -97,6 +97,7 @@ la decisión no acredita implementación ni autoriza despliegue.
 | [ADR-002](ADR-002-rol-express-backend.md) | 2026-10-18 | **Proposed** | Rol del servidor Express existente (app/backend) | — |
 | [ADR-003](ADR-003-convencion-timestamps.md) | 2026-10-18 | **Proposed** | Convención de timestamps en contratos inter-servicio (Epoch seconds) | — |
 | [ADR-004](ADR-004-seguridad-autenticacion.md) | 2026-10-31; aceptación 2026-11-01 | **Accepted (base y alcance delimitado §3.4.1)** | Seguridad de autenticación y fronteras de confianza | — |
+| [ADR-005](ADR-005-persistencia-cosmos-catalog.md) | 2026-11-09 | **Proposed** | Persistencia Cosmos de ms-catalog: incremento local, invariantes y límites de capacidad | — |
 
 > **ADR-001 fue aprobado formalmente por el responsable del proyecto el 2026-10-29.**
 > ADR-002 y ADR-003 continúan en estado **Proposed** (pendientes de validación y aprobación). No deben darse por aprobados automáticamente aspectos sobre JWT interno, persistencia definitiva, SSE o políticas APIM.

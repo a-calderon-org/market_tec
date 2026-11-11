@@ -11,8 +11,9 @@
 Para `app/ms-catalog`, `npm ci` instala dependencias fijadas y `npm run check`
 comprueba tipos, compila y ejecuta pruebas, incluidas respuestas HTTP verificadas
 con Ajv/ajv-formats. Prueba manual y coleccion Postman en
-[README de catalogo](../app/ms-catalog/README.md). Esto no cambia el flujo Git ni
-los workflows de CI/despliegue existentes.
+[README de catalogo](../app/ms-catalog/README.md). `npm run test:cosmos` ejecuta
+la suite optativa contra un entorno aislado. Las variables y los requisitos
+del emulador estan en el [README de persistencia](../app/ms-catalog/README.md#persistencia-cosmos--mtec-29).
 
 | Área | Comando (desde su directorio) | Estado 2026-10-13 |
 |---|---|---|
