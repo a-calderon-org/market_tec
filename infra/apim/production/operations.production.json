@@ -2,10 +2,7 @@
   "version": 3,
   "backend": "ms-users",
   "approvals": {
-    "abuse_protection": {
-      "evidence_file": "abuse_protection.f56ba7e.production.json",
-      "evidence_sha256": "2f38e93112d40d29297b492edb7168c8f2f8fb471601abb75a93aa17cdd4911e"
-    },
+    "abuse_protection": null,
     "ms_users_contract": null
   },
   "target": {

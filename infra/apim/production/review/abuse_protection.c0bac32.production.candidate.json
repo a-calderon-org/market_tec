@@ -1,0 +1,12 @@
+{
+  "status": "candidate_not_releasable",
+  "approval_type": "abuse_protection",
+  "backend_sha": "c0bac32b9b48874dfb96d4efe2465a10caaa1591",
+  "openapi_contract_version": "0.3.0-draft+users-password-0.1.0-draft",
+  "openapi_sha256": "4b57f6460a42b6c47ecae725da83a79442e8b889c5078fdfa9db755420eb8950",
+  "environment": "production",
+  "apim_revision": "markettec-users-prod-v1:1",
+  "release_profile": "ms-users-password-v1",
+  "acceptance_scope": "production_google_magic_link_password_routes",
+  "review_id": null
+}

@@ -1,6 +1,6 @@
 {
- "source": "a-calderon-org/ms-users-market-tec main f56ba7e controllers (PR #37 merge; controllers unchanged since 75303f4: same 27 routes as 8707f03, the 22 of be4595c plus 5 password routes)",
- "sha": "f56ba7ec43d345cbd152705c53d2a7a8108a5add",
+ "source": "a-calderon-org/ms-users-market-tec main c0bac32 controllers (PR #38 merge: ACS Email, Google names, immutable username; controllers unchanged since f56ba7e: same 27 routes)",
+ "sha": "c0bac32b9b48874dfb96d4efe2465a10caaa1591",
  "routes": [
   [
    "GET",
