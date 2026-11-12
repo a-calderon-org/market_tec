@@ -1,4 +1,5 @@
 import { cosmosOrigin, defaultCatalogContainers, type CosmosConnectionSettings } from './cosmos-catalog.js';
+import { isUuid } from '../domain/messaging.js';
 
 export interface Settings {
   readonly port: number;
@@ -7,10 +8,16 @@ export interface Settings {
   // Present only when the business routes are explicitly configured (see loadPublicationSettings).
   readonly publications?: PublicationSettings;
   readonly cosmos?: CosmosConnectionSettings;
+  readonly messageQueue?: MessageQueueSettings;
   readonly gatewayKey?: string;
 }
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'silent';
+
+export interface MessageQueueSettings {
+  readonly url: string;
+  readonly clientId?: string;
+}
 
 export interface PublicationSettings {
   readonly jwtIssuer: string;
@@ -75,6 +82,24 @@ const COSMOS_VARIABLES = ['CATALOG_COSMOS_ENDPOINT', 'CATALOG_COSMOS_DATABASE', 
   'CATALOG_COSMOS_MANAGED_IDENTITY_CLIENT_ID', 'CATALOG_COSMOS_PUBLICATIONS_CONTAINER',
   'CATALOG_COSMOS_CHATS_CONTAINER', 'CATALOG_COSMOS_MESSAGES_CONTAINER'];
 
+function loadMessageQueue(environment: NodeJS.ProcessEnv, cosmos: CosmosConnectionSettings | undefined):
+  MessageQueueSettings | undefined {
+  const value = environment.CATALOG_MESSAGE_QUEUE_URL?.trim();
+  const clientId = environment.CATALOG_MESSAGE_QUEUE_MANAGED_IDENTITY_CLIENT_ID?.trim();
+  if (!value && !clientId) return undefined;
+  if (!cosmos) throw new Error('CATALOG_MESSAGE_QUEUE_URL requires persistent Cosmos storage');
+  const url = URL.parse(value ?? '');
+  if (!url || url.protocol !== 'https:' || url.username || url.password || url.port || url.search || url.hash ||
+      !/^[a-z0-9]{3,24}\.queue\.core\.windows\.net$/.test(url.hostname) ||
+      !/^\/[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(url.pathname) || url.pathname.includes('--')) {
+    throw new Error('CATALOG_MESSAGE_QUEUE_URL must be an HTTPS Azure Queue URL without credentials');
+  }
+  if (clientId && !isUuid(clientId)) {
+    throw new Error('CATALOG_MESSAGE_QUEUE_MANAGED_IDENTITY_CLIENT_ID must be a UUID');
+  }
+  return { url: url.toString(), ...(clientId ? { clientId } : {}) };
+}
+
 function loadCosmosSettings(environment: NodeJS.ProcessEnv, store?: PublicationSettings['store']): CosmosConnectionSettings | undefined {
   if (store !== 'cosmos') {
     if (COSMOS_VARIABLES.some(name => environment[name]?.trim())) {
@@ -97,7 +122,7 @@ function loadCosmosSettings(environment: NodeJS.ProcessEnv, store?: PublicationS
   const key = environment.CATALOG_COSMOS_KEY?.trim();
   const clientId = environment.CATALOG_COSMOS_MANAGED_IDENTITY_CLIENT_ID?.trim();
   if (key && clientId) throw new Error('Configure either a Cosmos key or a managed identity client ID');
-  if (clientId && !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(clientId)) {
+  if (clientId && !isUuid(clientId)) {
     throw new Error('CATALOG_COSMOS_MANAGED_IDENTITY_CLIENT_ID must be a UUID');
   }
   return { endpoint: endpoint.origin, database, containers, authentication: key
@@ -132,6 +157,7 @@ function loadPublicationSettings(environment: NodeJS.ProcessEnv): PublicationSet
 export function loadSettings(environment: NodeJS.ProcessEnv = process.env): Settings {
   const publications = loadPublicationSettings(environment);
   const cosmos = loadCosmosSettings(environment, publications?.store);
+  const messageQueue = loadMessageQueue(environment, cosmos);
   const gatewayKey = environment.CATALOG_APIM_BACKEND_KEY?.trim();
   if (gatewayKey && (!publications || !/^[A-Za-z0-9_-]{43}$/.test(gatewayKey))) {
     throw new Error('CATALOG_APIM_BACKEND_KEY requires publications and a 32-byte base64url key');
@@ -142,6 +168,7 @@ export function loadSettings(environment: NodeJS.ProcessEnv = process.env): Sett
     logLevel: parseLogLevel(environment.LOG_LEVEL),
     ...(publications ? { publications } : {}),
     ...(cosmos ? { cosmos } : {}),
+    ...(messageQueue ? { messageQueue } : {}),
     ...(gatewayKey ? { gatewayKey } : {}),
   };
 }

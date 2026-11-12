@@ -2,6 +2,8 @@ import { ConsistencyLevel, CosmosClient, IndexingMode, PartitionKeyKind, Partiti
 import type { CompositePath, ContainerDefinition } from '@azure/cosmos';
 import { ManagedIdentityCredential } from '@azure/identity';
 import { CosmosChatRepository, CosmosMessageRepository } from '../adapters/out/cosmos/messaging-repositories.js';
+import { CosmosMessageOutbox, outboxIndex } from '../adapters/out/cosmos/message-outbox.js';
+import { validateMessageSentV1 } from '../adapters/out/azure-queue-event-publisher.js';
 import { CosmosPublicationRepository } from '../adapters/out/cosmos/publication-repository.js';
 import { CosmosStore, deadline } from '../adapters/out/cosmos/store.js';
 import type { CosmosMetrics } from '../adapters/out/cosmos/store.js';
@@ -73,11 +75,13 @@ export function catalogContainerDefinitions(names: CatalogContainers = defaultCa
   return [
     definition(names.publications, ['ownerId', 'categoria', 'precio', 'createdAtMs', 'searchText'], publicationOrders),
     definition(names.chats, ['buyerId', 'sellerId', 'createdAt'], [[sort('createdAt', 'descending'), stableId]]),
-    definition(names.messages, ['chatId', 'sentAt'], [[sort('chatId', 'ascending'), sort('sentAt', 'ascending'), stableId]]),
+    definition(names.messages, ['chatId', 'sentAt', 'outboxAvailableAt'],
+      [[sort('chatId', 'ascending'), sort('sentAt', 'ascending'), stableId]]),
   ];
 }
 
-export async function composeCosmosCatalog(client: CosmosClient, settings: CosmosCatalogSettings, metrics?: CosmosMetrics) {
+export async function composeCosmosCatalog(client: CosmosClient, settings: CosmosCatalogSettings, metrics?: CosmosMetrics,
+  dispatchEvents = false) {
   const names = Object.values(settings.containers);
   const validName = (name: string) => /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/.test(name);
   if (!validName(settings.database) || names.some(name => !validName(name)) || new Set(names).size !== 3) {
@@ -88,10 +92,12 @@ export async function composeCosmosCatalog(client: CosmosClient, settings: Cosmo
   const chats = new CosmosStore(database.container(settings.containers.chats), partition.chats, metrics);
   const messages = new CosmosStore(database.container(settings.containers.messages), partition.messages, metrics);
   const signal = deadline();
-  await Promise.all([publications.validate(signal), chats.validate(signal), messages.validate(signal)]);
+  await Promise.all([publications.validate(signal), chats.validate(signal),
+    messages.validate(signal, dispatchEvents ? outboxIndex : undefined)]);
   return {
     publications: new CosmosPublicationRepository(publications),
     chats: new CosmosChatRepository(chats),
-    messages: new CosmosMessageRepository(messages),
+    messages: new CosmosMessageRepository(messages, dispatchEvents ? validateMessageSentV1 : undefined),
+    outbox: new CosmosMessageOutbox(messages),
   };
 }

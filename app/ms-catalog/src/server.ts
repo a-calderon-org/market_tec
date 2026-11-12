@@ -22,10 +22,15 @@ async function start() {
   try {
     await once(server, 'listening');
   } catch (error) {
-    runtime.dispose();
+    await runtime.dispose();
     throw error;
   }
-  server.once('close', runtime.dispose);
+  server.once('close', () => {
+    void runtime.dispose().catch(() => {
+      console.error(JSON.stringify({ level: 'error', event: 'service_shutdown_failed', service: settings.serviceName }));
+      process.exitCode = 1;
+    });
+  });
   const stop = () => {
     process.off('SIGTERM', stop);
     process.off('SIGINT', stop);
@@ -40,6 +45,7 @@ async function start() {
     port: settings.port,
     publications: settings.publications ? { store: settings.publications.store,
       persistent: settings.publications.store === 'cosmos' } : 'disabled',
+    messageDelivery: settings.messageQueue ? 'enabled' : 'disabled',
     timestamp: Math.floor(Date.now() / 1000),
   }));
 }

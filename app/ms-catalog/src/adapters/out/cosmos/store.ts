@@ -70,12 +70,22 @@ export class CosmosStore {
     }
   }
 
-  async validate(signal: AbortSignal): Promise<void> {
+  async validate(signal: AbortSignal, requiredIndex?: string): Promise<void> {
     const response = await this.request('validate', () => this.container.read({ abortSignal: signal }));
     const definition = response.resource?.partitionKey;
     if (definition?.kind !== 'Hash' || definition.paths?.length !== 1 || definition.paths[0] !== '/pk' ||
         (response.resource?.defaultTtl !== undefined && response.resource.defaultTtl !== -1)) {
       throw new CosmosPersistenceError('validate');
+    }
+    if (requiredIndex) {
+      const policy = response.resource?.indexingPolicy;
+      const included = policy?.includedPaths?.map(({ path }) => path) ?? [];
+      const excluded = policy?.excludedPaths?.map(({ path }) => path) ?? [];
+      if (policy?.indexingMode !== 'consistent' || policy.automatic === false ||
+          !(included.includes(requiredIndex) || (included.includes('/*') &&
+            !excluded.some(path => path === requiredIndex || path === requiredIndex.replace('/?', '/*'))))) {
+        throw new CosmosPersistenceError('validate');
+      }
     }
   }
 
@@ -98,12 +108,13 @@ export class CosmosStore {
     if (response.statusCode !== 201) throw new CosmosPersistenceError('create', response.statusCode);
   }
 
-  async replace(document: StoredDocument, etag: string, signal: AbortSignal): Promise<void> {
+  async replace(document: StoredDocument, etag: string, signal: AbortSignal): Promise<string> {
     const response = await this.request('replace', () => this.container.item(document.id, this.partitionKey).replace(document, {
       accessCondition: { type: 'IfMatch', condition: etag },
       abortSignal: signal,
     }));
     if (response.statusCode !== 200) throw new CosmosPersistenceError('replace', response.statusCode);
+    return response.etag || response.resource?._etag || '';
   }
 
   async batchCreate(documents: StoredDocument[], signal: AbortSignal): Promise<void> {
@@ -134,6 +145,10 @@ export class CosmosStore {
       items.push(...response.resources);
     }
     return items;
+  }
+
+  async select(spec: SqlQuerySpec, signal: AbortSignal): Promise<unknown[]> {
+    return this.query('list', spec, signal);
   }
 
   async page(where: string, parameters: SqlParameter[], order: string, page: number, pageSize: number,

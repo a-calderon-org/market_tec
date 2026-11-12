@@ -79,7 +79,7 @@ export class CosmosChatRepository implements ChatRepository {
 }
 
 export class CosmosMessageRepository implements MessageRepository {
-  constructor(private readonly store: CosmosStore) {}
+  constructor(private readonly store: CosmosStore, private readonly validateEvent?: (event: MessageSent) => void) {}
 
   async append(message: Message, event: MessageSent): Promise<void> {
     if (event.messageId !== message.id || event.chatId !== message.chatId ||
@@ -91,9 +91,10 @@ export class CosmosMessageRepository implements MessageRepository {
     const messageRow = messageDocument(message, pk);
     const eventRow = eventDocument(event, pk);
     readMessage(messageRow, pk);
+    this.validateEvent?.(event);
     const signal = deadline();
     try {
-      await this.store.batchCreate([messageRow, eventRow], signal);
+      await this.store.batchCreate([messageRow, { ...eventRow, outboxAvailableAt: event.sentAt }], signal);
     } catch (error) {
       if (hasStatus(error, 409)) conflict();
       if (commitUnknown(error) && !signal.aborted) {

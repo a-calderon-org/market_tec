@@ -25,7 +25,7 @@ npm start
 
 El router HTTP de salud es un adaptador de entrada que invoca `GetHealthQuery`; `GetHealthService` implementa ese puerto y devuelve el modelo sin dependencias `ServiceHealth`. `config/container.ts` realiza la composicion manual. No se crean puertos de salida sin comportamiento real.
 
-Las rutas de negocio usan `/v1` en la composicion optativa. Cosmos se conecta por puertos de salida. Blob Storage y Azure Queue pertenecen a MTEC-14 y MTEC-31. El middleware propaga o genera `X-Correlation-ID`, emite logs JSON, serializa timestamps en Epoch seconds y devuelve errores mediante un envelope estable.
+Las rutas de negocio usan `/v1` en la composición optativa. Cosmos y Azure Queue se conectan por puertos de salida. Blob Storage corresponde a MTEC-14. El middleware propaga o genera `X-Correlation-ID`, emite logs JSON, serializa timestamps en Epoch seconds y devuelve errores mediante un envelope estable.
 
 ## Publicaciones — MTEC-28
 
@@ -67,8 +67,8 @@ Con `CATALOG_PUBLICATIONS_STORE=cosmos`, `npm start` compone publicaciones
 y mensajeria con repositorios Cosmos. Usa un cliente por proceso, valida el acceso
 y la particion de los tres contenedores antes de abrir el puerto HTTP y cierra el
 cliente al parar el servicio. Un fallo de configuracion o de acceso detiene el
-arranque. La composicion de mensajeria queda disponible para el adaptador HTTP
-de MTEC-30.
+arranque. La configuración de Queue habilita las rutas de mensajería y el
+despacho descritos en MTEC-31.
 
 Configurar las variables JWT, perfil y placeholder de la seccion de autenticacion,
 mas `CATALOG_COSMOS_ENDPOINT` (origen HTTPS) y `CATALOG_COSMOS_DATABASE`. Los
@@ -110,8 +110,9 @@ npm run test:cosmos
 ```
 
 `test:cosmos` requiere un emulador NoSQL o cuenta dedicada de pruebas con permiso
-para crear y borrar una base temporal. Genera un nombre unico `mtec29-test-*`,
-crea los tres contenedores y borra solo la base creada en esa ejecucion.
+para crear y borrar bases temporales. Genera nombres únicos `mtec29-test-*` y
+`mtec31-test-*`, crea los tres contenedores por base y elimina las bases de esa
+ejecución.
 La prueba falla si faltan las variables. Usar credenciales externas al repositorio.
 Para reproducir el emulador verificado, ejecutar la
 [imagen oficial vNext](https://learn.microsoft.com/en-us/azure/cosmos-db/emulator-linux)
@@ -147,13 +148,13 @@ validacion completa JSON Schema ni conformidad HTTP de MTEC-32. CI observa tambi
 borrador. Los casos nulos/malformados producen `INVALID_PUBLICATION`, y las
 actualizaciones rechazadas conservan el contenido anterior.
 
-## Mensajeria — incremento local de MTEC-30
+## Mensajería — MTEC-30
 
 **Verificado 2026-11-09:** `MessagingService` implementa iniciar conversacion,
 listar chats del principal, listar mensajes y enviar texto. Las entidades `Chat`,
 `Message` y `MessageSent` y sus puertos son independientes de Express, Azure y
-ms-users. Los repositorios en memoria son exclusivos del modulo de mensajeria.
-No se monta ningun endpoint de chat ni se modifica el servidor o el contrato HTTP.
+ms-users. Los repositorios en memoria se usan en pruebas. La composición
+persistente de MTEC-31 habilita las rutas de mensajería descritas abajo.
 
 El principal autenticado se inyecta desde una frontera confiable. La conversacion
 se inicia entre el solicitante y el propietario real de una publicacion existente;
@@ -174,27 +175,22 @@ con escrituras concurrentes ni eficiencia equivalente en Cosmos.
 Reglas locales: texto no vacio de hasta 5000 unidades UTF-16, sin recortar contenido;
 IDs de recursos hasta 128, `userId` hasta 64, correlacion no vacia hasta 128.
 Reloj inyectado en Epoch seconds enteros (0..9999999999). Los errores internos son
-`INVALID_MESSAGE`, `CHAT_NOT_FOUND`, `CHAT_FORBIDDEN` y `CHAT_CONFLICT`; aun no tienen
-mapping HTTP contractual. Estos limites y modelos internos no aprueban una API.
+`INVALID_MESSAGE`, `CHAT_NOT_FOUND`, `CHAT_FORBIDDEN` y `CHAT_CONFLICT`. El adaptador
+HTTP responde respectivamente con 400, 404, 403 y 409.
 
 `MessageRepository.append(message, event)` exige preparar ambos o ninguno.
 El fake comprueba IDs duplicados y correspondencia mensaje/evento antes de insertar,
 y copia entradas/salidas. `preparedEvents()` permite inspeccion en tests; no envia,
 confirma ni reintenta eventos. `MessageSent` incluye IDs, destinatario derivado,
-correlacion y fecha, omitiendo texto/perfiles. Es un evento interno, no el envelope
-`message.sent.v1`: admite IDs/correlacion opacos locales, mientras el borrador externo
-exige UUID para `eventId`/`correlationId`. La traduccion/validacion corresponde a
-MTEC-31 y no debe reenviar valores incompatibles silenciosamente.
+correlacion y fecha, omitiendo texto/perfiles. El puerto interno admite IDs
+opacos locales. La composición de MTEC-31 valida los UUID de evento y correlación
+antes de confirmar nuevas escrituras en Cosmos.
 
 **Limites y pendientes para cerrar MTEC-30:** acordar y ampliar Catalog OpenAPI con
 inicio/listado de chats y listado/envio de mensajes; definir snapshots confiables
-de presentacion, ultimo mensaje y no leidos compatibles con Angular; implementar
-adaptador HTTP/DTO y pruebas de integracion; conectar EventPublisher con semantica
-de fallo acordada para MTEC-31. El dominio no inventa perfiles, nombres ni contadores
-no leidos. La atomicidad del fake no decide almacenamiento productivo, outbox,
-transacciones Cosmos o entrega durable. La persistencia de pruebas se documenta
-en [MTEC-29](#persistencia-cosmos--mtec-29). JWT, Queue y conformidad del consumidor
-ms-notifications siguen pendientes para el flujo integrado.
+de presentación, último mensaje y no leídos compatibles con Angular. El listado
+HTTP interno devuelve los campos de dominio. La persistencia está descrita en
+[MTEC-29](#persistencia-cosmos--mtec-29).
 
 Validacion reproducible con Node 24 desde `app/ms-catalog`:
 
@@ -208,7 +204,63 @@ node --test dist/tests/messaging.test.js
 20 de mensajeria: aislamiento, ambos sentidos, concurrencia entre casos de uso
 con repositorio compartido, paginacion, validacion, colisiones, fallo de persistencia
 y copias defensivas. La prueba de arquitectura cubre tambien el nuevo modulo.
-No se ejecutaron CI remoto, Azure ni pruebas HTTP de chat inexistentes.
+
+## MTEC-31 — Entrega de `message.sent` v1
+
+`npm start` habilita mensajería cuando se configuran Cosmos y
+`CATALOG_MESSAGE_QUEUE_URL`. Provisionar la misma cola de entrada que consume
+`ms-notifications`. Usar el formato
+`https://<cuenta>.queue.core.windows.net/<cola>` y asignar a la identidad de
+`ms-catalog` el rol de datos **Storage Queue Data Message Sender** en esa cola.
+El SDK usa Managed Identity del sistema por defecto. Para una identidad asignada
+por el usuario, definir `CATALOG_MESSAGE_QUEUE_MANAGED_IDENTITY_CLIENT_ID`.
+En el contenedor Cosmos de mensajes, agregar `/outboxAvailableAt/?` a los
+`includedPaths` y esperar a que termine la transformación del índice antes de
+habilitar el flujo. El arranque valida que la ruta esté cubierta por la política.
+En App Service, el despacho requiere que el proceso permanezca activo.
+
+| Ruta del servicio | Entrada y respuesta |
+|---|---|
+| `POST /v1/chats` | `{ "publicationId": "…" }` → 200 con el chat existente o creado |
+| `GET /v1/chats` | `page`, `pageSize` → página de chats del principal |
+| `GET /v1/chats/{id}/mensajes` | `page`, `pageSize` → página de mensajes para participantes |
+| `POST /v1/chats/{id}/mensajes` | `{ "texto": "…" }` → 201 con `{ "data": { "id": "…", "createdAt": 1790000100 } }` |
+
+Todas las rutas requieren el JWT interno existente. Se conserva un
+`X-Correlation-ID` UUID válido. Si falta o es incompatible con el esquema de
+eventos, el servicio genera un UUID y lo devuelve en el encabezado. El código 201
+confirma la persistencia conjunta del mensaje y su evento. La entrega a Queue
+ocurre en segundo plano.
+
+El dispatcher consulta un lote de hasta 20 eventos cada dos segundos después de
+terminar el lote anterior. Procesa hasta cuatro en paralelo. Cada intento reclama
+una reserva de 60 segundos mediante ETag. Tras un error de publicación, el evento
+queda en Cosmos con el siguiente intento programado, desde 5 segundos hasta un
+máximo de 5 minutos entre intentos. Si el proceso termina durante un envío o falla
+la confirmación en Cosmos, la reserva vence y el mismo `eventId` se vuelve a
+publicar. La entrega es **al menos una vez**, sin garantía de orden global. La
+deduplicación del consumidor se basa en `eventId`. Los eventos confirmados se
+conservan con `outboxPublishedAt` y quedan fuera de la selección de pendientes.
+
+El publicador emite JSON UTF-8 sin Base64, sin texto del mensaje ni datos de
+perfil. Usa `messageTimeToLive: -1` para evitar el vencimiento durante una parada
+del consumidor. El [contrato compartido](../../contracts/events/MESSAGE_SENT_V1.md)
+define el envelope y sigue en borrador. Los eventos de MTEC-29 sin metadatos de
+entrega también entran al despacho. Si un registro previo contiene UUID inválidos,
+queda pendiente con reintentos y un log de error. Corregirlo requiere verificar
+el mensaje y la correlación de origen. El servicio conserva sus identificadores
+durante los reintentos.
+
+Para investigar fallos, buscar `message_outbox_failed` por `stage`, `eventId` o
+`outboxId`. Revisar el índice y los permisos de Cosmos si falla `poll` o `claim`,
+y el destino, la identidad y el acceso a Queue si falla `publish`. Un fallo en
+`complete` puede dar lugar a una nueva entrega del mismo evento. Los reintentos
+se reanudan al recuperar la dependencia.
+
+Ejecutar `npm run check` para validar los dos esquemas compartidos, el origen del
+destinatario, la correlación HTTP y la recuperación ante fallos parciales.
+`npm run test:cosmos` cubre además la recuperación desde otro cliente Cosmos
+y la concurrencia de los dispatchers en una base temporal de pruebas.
 
 ## MTEC-32 — API HTTP de publicaciones
 
@@ -334,20 +386,6 @@ forma de `InternalJwtService` y cubre ambos metodos, propiedad, rechazos 401/403
 fallos del perfil y la cache del JWKS. Ademas se verifico localmente un token firmado
 con Nimbus 10.10 (la libreria de ms-users) contra el servidor compilado, con el
 perfil de ms-users simulado en loopback.
-
-### Configuración de staging
-
-El App Service Linux `app-markettec-catalog-yd-stg` en `markettec-dev` usa
-Node 24 y arranca con `npm start`. El despliegue ZIP contiene `dist/src`,
-el manifiesto y las dependencias de ejecución instaladas desde el lockfile.
-Cosmos usa identidad administrada con rol de datos limitado a
-`catalog-mtec32-stg`, una base de staging con 400 RU/s compartidas y los
-índices de `catalogContainerDefinitions()`. Configurar la imagen por defecto,
-el perfil propio y el JWKS según las secciones anteriores. En Azure, configurar
-también `CATALOG_APIM_BACKEND_KEY` antes de desplegar el código.
-
-La política y las rutas se describen en la
-[configuración APIM de staging](../../infra/apim/staging/README.md#publicaciones-de-ms-catalog-mtec-32).
 
 ### Validación en staging con credenciales reales
 

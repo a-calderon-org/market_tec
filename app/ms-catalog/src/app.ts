@@ -7,8 +7,10 @@ import { requireGateway } from './adapters/in/http/require-gateway.js';
 import { createContainer } from './config/container.js';
 import { loadSettings, type Settings } from './config/settings.js';
 import { createPublicationRouter, type PublicationHttpDependencies } from './adapters/in/http/publication-router.js';
+import { createMessagingRouter, type MessagingHttpDependencies } from './adapters/in/http/messaging-router.js';
 
-export function createApp(settings: Settings = loadSettings(), publications?: PublicationHttpDependencies): Express {
+export function createApp(settings: Settings = loadSettings(), publications?: PublicationHttpDependencies,
+  messaging?: MessagingHttpDependencies): Express {
   const app = express();
   const container = createContainer(settings);
 
@@ -18,6 +20,7 @@ export function createApp(settings: Settings = loadSettings(), publications?: Pu
   if (settings.gatewayKey) app.use(requireGateway(settings.gatewayKey));
   app.use(createHealthRouter(container.getHealthQuery));
   if (publications) app.use('/v1/publicaciones', createPublicationRouter(publications));
+  if (messaging) app.use('/v1/chats', createMessagingRouter(messaging));
   app.use(notFoundHandler);
   app.use(createErrorHandler(settings.serviceName, settings.logLevel));
 

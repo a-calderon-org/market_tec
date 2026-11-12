@@ -34,6 +34,12 @@ export interface MessageSent {
   readonly sentAt: number;
 }
 
+const uuidPattern = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+
+export function isUuid(value: unknown): value is string {
+  return typeof value === 'string' && value.length === 36 && uuidPattern.test(value);
+}
+
 export interface PageRequest { readonly page?: number; readonly pageSize?: number }
 export interface PageQuery { readonly page: number; readonly pageSize: number }
 export interface Page<T> extends PageQuery { readonly items: T[]; readonly totalRecords: number }
