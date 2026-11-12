@@ -293,6 +293,10 @@
   border-radius: 8px;
 }
 
+.publication-actions a + a {
+  margin-inline-start: 8px;
+}
+
 .panel-footer {
   display: flex;
   align-items: center;

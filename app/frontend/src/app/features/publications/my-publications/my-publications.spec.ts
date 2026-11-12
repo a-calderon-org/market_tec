@@ -9,6 +9,7 @@ import {
 
 import {
   of,
+  Subject,
   throwError
 } from 'rxjs';
 
@@ -27,6 +28,61 @@ import {
 import {
   PublicationService
 } from '../services/publication.service';
+import { AuthSessionService } from '../../../core/auth/v2/auth-session.service';
+import { DEFAULT_FEATURE_FLAGS, FEATURE_FLAGS } from '../../../core/feature-flags';
+import { Publication } from '../models/publication.model';
+
+describe('MyPublications con el catálogo interno', () => {
+  it('muestra solo publicaciones del usuario de la sesión y reconoce el estado activo del catálogo', () => {
+    const catalog = new Subject<Publication[]>();
+    const identity = { userId: 'usr-propietario', epoch: 1 };
+    const service = {
+      getPublicationCatalog: vi.fn(() => catalog),
+      getUserPublications: vi.fn(),
+    };
+    const session = {
+      currentIdentity: vi.fn(() => identity),
+      isCurrentIdentity: vi.fn(() => true),
+    };
+    TestBed.configureTestingModule({
+      imports: [MyPublications],
+      providers: [
+        provideRouter([]),
+        { provide: FEATURE_FLAGS, useValue: {
+          ...DEFAULT_FEATURE_FLAGS, authCoreV2: true, authCoreV2Adapter: 'http', catalogInternalJwt: true,
+        } },
+        { provide: PublicationService, useValue: service },
+        { provide: AuthSessionService, useValue: session },
+      ],
+    });
+    const fixture = TestBed.createComponent(MyPublications);
+    const view = fixture.componentInstance;
+    fixture.detectChanges();
+
+    const publication: Publication = {
+      id: 'monitor', titulo: 'Monitor Dell', descripcion: '', categoria: 'electronicos',
+      subcategoria: 'monitores', precio: 50000, condicion: null, ubicacion: '', imagen: '',
+      fechaPublicacion: '2026-11-11T00:00:00Z', estado: 'activo',
+      vendedor: { id: null, userId: identity.userId, nombre: 'Vendedor', carrera: '', verificado: true },
+    };
+    const items = [
+      publication,
+      { ...publication, id: 'otro', vendedor: { ...publication.vendedor, userId: 'usr-otro' } },
+      { ...publication, id: 'legado', vendedor: { ...publication.vendedor, userId: undefined } },
+    ];
+    catalog.next(items);
+    expect(service.getUserPublications).not.toHaveBeenCalled();
+    expect(view.publications().map(item => item.id)).toEqual(['monitor']);
+    expect(view.totalRecords()).toBe(1);
+    expect(view.activeCount()).toBe(1);
+
+    view.loadPublications();
+    session.isCurrentIdentity.mockReturnValue(false);
+    catalog.next(items);
+    expect(view.publications()).toEqual([]);
+    expect(view.totalRecords()).toBe(0);
+  });
+});
 
 
 describe('MyPublications', () => {

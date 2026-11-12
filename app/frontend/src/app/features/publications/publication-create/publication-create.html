@@ -1,6 +1,16 @@
 <main class="publication-create">
   <div class="publication-create__container">
 
+    @if (editing) {
+      <h1>Editar publicación</h1>
+    }
+
+    @if (loadingEdit()) {
+      <p role="status">Cargando publicación…</p>
+    } @else if (editLoadError()) {
+      <p class="form-message form-message--error" role="alert">{{ editLoadError() }}</p>
+      <a class="form-actions__back" routerLink="/mis-publicaciones">Volver a Mis publicaciones</a>
+    } @else {
     <div class="publication-create__layout">
 
       <form
@@ -16,6 +26,10 @@
           </h2>
 
           <div class="category-options">
+
+            @if (editing && !['electronicos', 'alquiler', 'tutoria'].includes(formValue().categoria)) {
+              <span class="category-option category-option--active">{{ formatLabel(formValue().categoria) }}</span>
+            }
 
             <button
               type="button"
@@ -69,13 +83,13 @@
               id="publication-title"
               type="text"
               formControlName="titulo"
-              maxlength="100"
+              [attr.maxlength]="limits.title"
               placeholder="Ej. Monitor Dell UltraSharp 27” 4K USB-C"
             >
 
             @if (isControlInvalid('titulo')) {
               <small class="field-error">
-                Ingresa un título entre 5 y 100 caracteres.
+                {{ editing ? 'Ingresa un título de hasta 200 caracteres.' : 'Ingresa un título entre 5 y 100 caracteres.' }}
               </small>
             }
           </div>
@@ -83,14 +97,14 @@
           <div class="form-field">
             <label for="publication-subcategory">
               Subcategoría
-              <span class="required">*</span>
+              @if (!editing) { <span class="required">*</span> }
             </label>
 
             <input
               id="publication-subcategory"
               type="text"
               formControlName="subcategoria"
-              maxlength="50"
+              [attr.maxlength]="limits.subcategory"
               placeholder="Ej. monitores, laptops, programación..."
             >
 
@@ -115,16 +129,16 @@
                 <input
                   id="publication-price"
                   type="number"
-                  min="1"
-                  step="1"
+                  [attr.min]="limits.price"
+                  [attr.step]="editing ? 'any' : '1'"
                   formControlName="precio"
-                  (input)="onPriceInput($event)"
+                  (input)="!editing && onPriceInput($event)"
                 >
               </div>
 
               @if (isControlInvalid('precio')) {
                 <small class="field-error">
-                  El precio debe ser mayor que cero.
+                  {{ editing ? 'Ingresa un precio de cero o más.' : 'El precio debe ser mayor que cero.' }}
                 </small>
               }
             </div>
@@ -132,14 +146,14 @@
             <div class="form-field">
               <label for="publication-location">
                 Punto de entrega en TEC SC
-                <span class="required">*</span>
+                @if (!editing) { <span class="required">*</span> }
               </label>
 
               <input
                 id="publication-location"
                 type="text"
                 formControlName="ubicacion"
-                maxlength="100"
+                [attr.maxlength]="limits.location"
                 placeholder="Ej. Biblioteca TEC"
               >
 
@@ -156,10 +170,24 @@
           <div class="form-field">
             <span class="form-field__label">
               Condición del artículo
-              <span class="required">*</span>
+              @if (!editing) { <span class="required">*</span> }
             </span>
 
             <div class="condition-options">
+
+              @if (editing) {
+                <button
+                  type="button"
+                  class="condition-option"
+                  [class.condition-option--active]="formValue().condicion === null"
+                  (click)="selectCondition(null)"
+                >
+                  Sin condición
+                </button>
+                @if (formValue().condicion !== null && !['nuevo', 'como-nuevo', 'buen-estado', 'para-repuesto'].includes(formValue().condicion ?? '')) {
+                  <span class="condition-option condition-option--active">{{ formatLabel(formValue().condicion) }}</span>
+                }
+              }
 
               <button
                 type="button"
@@ -209,6 +237,7 @@
           </div>
 
           <!-- Fotografías -->
+          @if (!editing) {
           <div class="form-field">
             <div class="image-section__header">
               <span class="form-field__label">
@@ -296,18 +325,19 @@
               se utilizan únicamente como vista previa durante esta sesión.
             </small>
           </div>
+          }
 
           <!-- Descripción -->
           <div class="form-field">
             <label for="publication-description">
               Descripción breve
-              <span class="required">*</span>
+              @if (!editing) { <span class="required">*</span> }
             </label>
 
             <textarea
               id="publication-description"
               rows="5"
-              maxlength="600"
+              [attr.maxlength]="limits.description"
               formControlName="descripcion"
               placeholder="Describe el estado, características principales y cualquier detalle importante..."
             ></textarea>
@@ -315,7 +345,7 @@
             <div class="description-meta">
               @if (isControlInvalid('descripcion')) {
                 <small class="field-error">
-                  La descripción debe tener al menos 10 caracteres.
+                  {{ editing ? 'La descripción puede tener hasta 5000 caracteres.' : 'La descripción debe tener al menos 10 caracteres.' }}
                 </small>
               } @else {
                 <small>
@@ -324,7 +354,7 @@
               }
 
               <small>
-                {{ form.controls.descripcion.value.length }} / 600
+                {{ form.controls.descripcion.value.length }} / {{ limits.description }}
               </small>
             </div>
           </div>
@@ -348,9 +378,10 @@
               class="form-actions__back"
               routerLink="/mis-publicaciones"
             >
-              ← Atrás
+              {{ editing ? 'Cancelar' : '← Atrás' }}
             </a>
 
+            @if (!editing) {
             <button
               type="button"
               class="form-actions__draft"
@@ -359,6 +390,7 @@
             >
               Guardar borrador
             </button>
+            }
 
             <button
               type="submit"
@@ -366,9 +398,9 @@
               [disabled]="form.invalid || submitting()"
             >
               @if (submitting()) {
-                Publicando...
+                {{ editing ? 'Guardando…' : 'Publicando...' }}
               } @else {
-                Crear publicación →
+                {{ editing ? 'Guardar cambios' : 'Crear publicación →' }}
               }
             </button>
 
@@ -400,7 +432,7 @@
             <img
               class="preview-card__image"
               [src]="
-                coverImage()?.previewUrl ??
+                editCover() ?? coverImage()?.previewUrl ??
                 '/images/publication-placeholder.svg'
               "
               [alt]="
@@ -469,6 +501,7 @@
           </div>
         </article>
 
+        @if (!editing) {
         <div class="preview-note">
           <strong>
             Vista previa
@@ -480,9 +513,11 @@
             no se almacenan de forma permanente.
           </p>
         </div>
+        }
 
       </aside>
 
     </div>
+    }
   </div>
 </main>

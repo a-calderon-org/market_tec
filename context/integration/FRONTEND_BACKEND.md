@@ -9,6 +9,15 @@ proxy `/api/catalog-v2` existe en `main` como destino del JWT interno. Su
 validación con APIM y sesiones reales sigue pendiente. Consultar la
 [guía de ms-catalog](../../app/ms-catalog/README.md#mtec-32--api-http-de-publicaciones).
 
+Con `catalogInternalJwt`, «Mis publicaciones» recorre las páginas del catálogo y
+selecciona las filas cuyo `vendedor.userId` coincide con la sesión activa. El
+total de la vista cuenta únicamente las coincidencias.
+
+«Editar» abre `/publicaciones/:id/editar`. La vista carga el detalle y comprueba
+que `vendedor.userId` coincide con la sesión activa. Guardar envía el contenido
+completo al `PUT /v1/publicaciones/{id}` existente y conserva las referencias
+de imágenes recibidas. ms-catalog comprueba la propiedad antes de actualizar.
+
 ## Topología real
 
 La SPA no apunta automáticamente a `app/backend`. Todas las peticiones feature usan `environment.apiBaseUrl`; CI lo obtiene de `MARKET_TEC_API_URL`. El backend local solo tiene `/api/health` y no participa en esas llamadas.
@@ -20,7 +29,8 @@ La SPA no apunta automáticamente a `app/backend`. Todas las peticiones feature 
 | `GET /publicaciones?page&pageSize` | enteros; Home solicita inicialmente 100 y continúa con el tamaño efectivo indicado por `pageSize` hasta completar | `PaginatedResponse<Publication>` | Home |
 | `GET /publicaciones/{id}` | id string | `PublicationDetail` | Detalle |
 | `POST /publicaciones` | `CreatePublication` | cuerpo ignorado (`void`) | Alta |
-| `GET /usuarios/{id}/publicaciones` | id string | `PaginatedResponse<UserPublication>` | Mis publicaciones |
+| `GET /usuarios/{id}/publicaciones` | id string | `PaginatedResponse<UserPublication>` | Mis publicaciones en el flujo legado |
+| `GET /v1/publicaciones` (catálogo interno) | JWT interno, página y tamaño | `PaginatedResponse<Publication>` | Explorar y Mis publicaciones |
 | `GET /usuarios/{id}` | id string | `User` | Perfil |
 | `PUT /usuarios/{id}` | `UpdateUser` | `UpdateUserResponse` | Perfil |
 | `GET /v1/me/profile` (solo `authCoreV2` + adaptador `http`) | — (JWT interno) | `UserProfileV1` → `User` | Perfil |
@@ -54,4 +64,4 @@ La solicitud de Magic Link pasa el dominio del correo a minúsculas y conserva l
 
 Publicaciones con `authCoreV2`: `ApiClientService` usa `environment.catalogApiBaseUrl` (proxy same-origin `/api/catalog/v1`, `app/frontend/api/catalog-proxy`) en lugar de `apiBaseUrl` (ms-users). Solo salen `GET /publicaciones`, `GET /publicaciones/{id}` y `POST /publicaciones`, con el ID Token de Google retenido en memoria en `X-MTEC-Google-Authorization`; nunca el JWT interno. El proxy añade la clave APIM desde `MTEC_CATALOG_SUBSCRIPTION_KEY`, reenvía a `MTEC_CATALOG_UPSTREAM` (`markettec-api-v1`) y descarta cookies, CSRF y `X-MTEC-Authorization`. Tras recargar la página no hay token de Google: publicaciones exige volver a iniciar sesión con Google. Una sesión institucional por Magic Link (sin Google) no tiene ese token: publicaciones para esos usuarios requiere adaptar el microservicio dueño del catálogo. «Mis publicaciones» y chats siguen bloqueados (el mock de APIM no conoce la identidad interna).
 
-Camino alternativo `catalogInternalJwt` (implementado, **apagado, no desplegado, sin prueba E2E**): con `featureFlags.catalogInternalJwt: true` y `catalogApiBaseUrl` en `https://<swa>/api/catalog-v2/v1`, `GET /publicaciones`, `GET /publicaciones/{id}`, `POST /publicaciones` y `PUT /publicaciones/{id}` llevan el JWT interno de Auth Core V2 en `X-MTEC-Authorization`, también para sesiones Magic Link. Nunca llevan el ID Token de Google ni claves APIM, y un 401 no se reejecuta. La Function `app/frontend/api/catalog-v2-proxy` lo reenvía como `Authorization` solo a `MTEC_CATALOG_V2_UPSTREAM` (ms-catalog; clave opcional `MTEC_CATALOG_V2_SUBSCRIPTION_KEY`) y descarta cookies, CSRF y la cabecera Google. Sin `MTEC_CATALOG_V2_UPSTREAM` responde 503 `PROXY_UNCONFIGURED`. El camino anterior no cambia. `vendedor.id` puede ser `null` en este camino. Configuración y pasos pendientes: [README de ms-catalog](../../app/ms-catalog/README.md#autenticacion-real-con-el-jwt-interno-de-ms-users).
+El catálogo interno está habilitado en staging `d04`. Con `catalogInternalJwt` y `catalogApiBaseUrl` en `https://<swa>/api/catalog-v2/v1`, el listado, detalle, alta y edición envían el JWT interno de Auth Core V2 en `X-MTEC-Authorization`. La Function `app/frontend/api/catalog-v2-proxy` lo reenvía como `Authorization` a `MTEC_CATALOG_V2_UPSTREAM` y descarta cookies, CSRF y la cabecera Google. Sin el destino configurado responde 503 `PROXY_UNCONFIGURED`. En esta API, `vendedor.id` puede ser `null`. La prueba E2E de propiedad con dos cuentas sigue pendiente. [Guía de ms-catalog](../../app/ms-catalog/README.md#validación-en-staging-con-credenciales-reales)

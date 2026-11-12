@@ -7,3 +7,7 @@ export interface CreatePublication {
   condicion: string | null;
   ubicacion: string;
 }
+
+export interface UpdatePublication extends CreatePublication {
+  imagenes?: string[];
+}

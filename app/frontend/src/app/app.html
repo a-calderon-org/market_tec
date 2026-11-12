@@ -134,7 +134,7 @@
   <app-profile (closed)="closeProfile()" />
 }
 
-@if (publicationFeedback.creationVisible()) {
+@if (publicationFeedback.saved(); as saved) {
   <div
     class="app-notification app-notification--success"
     role="status"
@@ -145,8 +145,13 @@
     </span>
 
     <div>
-      <strong>Publicación creada</strong>
-      <p>Tu publicación fue registrada correctamente.</p>
+      @if (saved === 'created') {
+        <strong>Publicación creada</strong>
+        <p>Tu publicación fue registrada correctamente.</p>
+      } @else {
+        <strong>Publicación actualizada</strong>
+        <p>Los cambios se guardaron correctamente.</p>
+      }
     </div>
 
     <button

@@ -320,7 +320,7 @@
                       {{ formatDate(publication.fechaPublicacion) }}
                     </td>
 
-                    <td>
+                    <td class="publication-actions">
                       <a
                         class="view-action"
                         [routerLink]="[
@@ -333,6 +333,15 @@
                       >
                         Ver
                       </a>
+                      @if (useInternalCatalog) {
+                        <a
+                          class="view-action"
+                          [routerLink]="['/publicaciones', publication.id, 'editar']"
+                          [attr.aria-label]="'Editar ' + publication.titulo"
+                        >
+                          Editar
+                        </a>
+                      }
                     </td>
 
                   </tr>
