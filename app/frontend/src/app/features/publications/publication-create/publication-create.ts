@@ -1,9 +1,12 @@
-import { Component, computed, inject, signal} from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
+import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
-import { toSignal } from '@angular/core/rxjs-interop';
-import { map } from 'rxjs';
-import { CreatePublication } from '../models/publication-create.model';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { catchError, EMPTY, map, switchMap } from 'rxjs';
+import { AuthSessionService, SessionIdentity } from '../../../core/auth/v2/auth-session.service';
+import { FEATURE_FLAGS } from '../../../core/feature-flags';
+import { CreatePublication, UpdatePublication } from '../models/publication-create.model';
 import { PublicationService } from '../services/publication.service';
 import { PublicationFeedbackService } from '../services/publication-feedback.service';
 
@@ -22,6 +25,13 @@ interface LocalImage {
   id: string;
   name: string;
   previewUrl: string;
+}
+
+interface EditTarget {
+  id: string;
+  identity: SessionIdentity;
+  imagenes: string[];
+  cover?: string;
 }
 
 @Component({
@@ -47,12 +57,28 @@ export class PublicationCreate {
   private readonly router =
     inject(Router);
 
+  private readonly route = inject(ActivatedRoute);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly flags = inject(FEATURE_FLAGS);
+  readonly editing = this.route.snapshot.data['edit'] === true;
+  private readonly session = this.editing && this.flags.authCoreV2 &&
+    this.flags.authCoreV2Adapter === 'http' && this.flags.catalogInternalJwt
+      ? inject(AuthSessionService) : null;
+  private readonly target = signal<EditTarget | null>(null);
+  readonly editCover = computed(() => this.target()?.cover);
+  readonly loadingEdit = signal(this.editing);
+  readonly editLoadError = signal('');
+  readonly limits = this.editing
+    ? { title: 200, subcategory: 100, location: 200, description: 5000, price: 0 }
+    : { title: 100, subcategory: 50, location: 100, description: 600, price: 1 };
+
   readonly form = this.formBuilder.group({
-    categoria: this.formBuilder.control<PublicationCategory>(
+    categoria: this.formBuilder.control<string>(
       'electronicos',
       {
         validators: [
-          Validators.required
+          Validators.required,
+          ...(this.editing ? [Validators.pattern(/\S/), Validators.maxLength(100)] : [])
         ]
       }
     ),
@@ -61,8 +87,8 @@ export class PublicationCreate {
       '',
       {
         validators: [
-          Validators.required,
-          Validators.maxLength(50)
+          ...(this.editing ? [] : [Validators.required]),
+          Validators.maxLength(this.limits.subcategory)
         ]
       }
     ),
@@ -72,8 +98,8 @@ export class PublicationCreate {
       {
         validators: [
           Validators.required,
-          Validators.minLength(5),
-          Validators.maxLength(100)
+          this.editing ? Validators.pattern(/\S/) : Validators.minLength(5),
+          Validators.maxLength(this.limits.title)
         ]
       }
     ),
@@ -83,7 +109,7 @@ export class PublicationCreate {
       {
         validators: [
           Validators.required,
-          Validators.min(1)
+          Validators.min(this.limits.price)
         ]
       }
     ),
@@ -92,19 +118,17 @@ export class PublicationCreate {
       '',
       {
         validators: [
-          Validators.required,
-          Validators.maxLength(100)
+          ...(this.editing ? [] : [Validators.required]),
+          Validators.maxLength(this.limits.location)
         ]
       }
     ),
 
     condicion:
-      this.formBuilder.control<PublicationCondition>(
+      this.formBuilder.control<string | null>(
         'como-nuevo',
         {
-          validators: [
-            Validators.required
-          ]
+          validators: this.editing ? [] : [Validators.required]
         }
       ),
 
@@ -112,9 +136,8 @@ export class PublicationCreate {
       '',
       {
         validators: [
-          Validators.required,
-          Validators.minLength(10),
-          Validators.maxLength(600)
+          ...(this.editing ? [] : [Validators.required, Validators.minLength(10)]),
+          Validators.maxLength(this.limits.description)
         ]
       }
     )
@@ -182,9 +205,62 @@ export class PublicationCreate {
       );
     });
 
+  constructor() {
+    if (!this.editing) return;
+
+    const session = this.session;
+    this.route.paramMap.pipe(
+      switchMap(params => {
+        this.target.set(null);
+        this.submitting.set(false);
+        this.success.set(false);
+        this.error.set(false);
+        this.editLoadError.set('');
+        this.loadingEdit.set(true);
+
+        const id = params.get('id');
+        const identity = session?.currentIdentity();
+        if (!id || !identity) {
+          this.failEditLoad('La edición requiere una sesión activa en el catálogo.');
+          return EMPTY;
+        }
+        if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) {
+          this.failEditLoad('El identificador de la publicación no es válido.');
+          return EMPTY;
+        }
+
+        return this.publicationService.getPublicationById(id).pipe(
+          map(detail => ({ id, detail, identity })),
+          catchError(() => {
+            this.failEditLoad('No fue posible cargar la publicación para editarla.');
+            return EMPTY;
+          }),
+        );
+      }),
+      takeUntilDestroyed(this.destroyRef),
+    ).subscribe(({ id, detail, identity }) => {
+      if (!session?.isCurrentIdentity(identity) || detail.vendedor?.userId !== identity.userId || detail.id !== id) {
+        this.failEditLoad('Solo el propietario puede editar esta publicación.');
+        return;
+      }
+      const { categoria, subcategoria, titulo, descripcion, precio, condicion, ubicacion } = detail;
+      this.form.reset({ categoria, subcategoria, titulo, descripcion, precio, condicion, ubicacion });
+      this.target.set({
+        id, identity, imagenes: detail.imagenes ?? [], cover: detail.imagenes?.[0] ?? detail.imagen,
+      });
+      this.loadingEdit.set(false);
+    });
+  }
+
+  private failEditLoad(message: string): void {
+    this.editLoadError.set(message);
+    this.loadingEdit.set(false);
+  }
+
   selectCategory(
     category: PublicationCategory
   ): void {
+    if (this.editing && this.form.controls.categoria.value === category) return;
     this.form.controls.categoria.setValue(
       category
     );
@@ -196,7 +272,7 @@ export class PublicationCreate {
   }
 
   selectCondition(
-    condition: PublicationCondition
+    condition: PublicationCondition | null
   ): void {
     this.form.controls.condicion.setValue(
       condition
@@ -367,6 +443,11 @@ export class PublicationCreate {
     const value =
       this.form.getRawValue();
 
+    if (this.editing) {
+      this.saveChanges(value);
+      return;
+    }
+
     const publication:
       CreatePublication = {
         categoria:
@@ -426,6 +507,37 @@ export class PublicationCreate {
       });
   }
 
+  private saveChanges(value: CreatePublication): void {
+    const target = this.target();
+    if (!target || !this.session?.isCurrentIdentity(target.identity)) {
+      this.error.set(true);
+      this.errorMessage.set('La sesión cambió. Vuelve a Mis publicaciones para continuar.');
+      return;
+    }
+
+    const changes: UpdatePublication = { ...value, imagenes: target.imagenes };
+    this.submitting.set(true);
+    this.publicationService.updatePublication(target.id, changes).pipe(
+      takeUntilDestroyed(this.destroyRef),
+    ).subscribe({
+      next: () => {
+        if (this.target() !== target) return;
+        this.submitting.set(false);
+        if (!this.session?.isCurrentIdentity(target.identity)) return;
+        this.publicationFeedback.notifyUpdated();
+        void this.router.navigate(['/mis-publicaciones']);
+      },
+      error: (error: unknown) => {
+        if (this.target() !== target) return;
+        this.submitting.set(false);
+        this.error.set(true);
+        this.errorMessage.set(error instanceof HttpErrorResponse && error.status === 403
+          ? 'Solo el propietario puede editar esta publicación.'
+          : 'No fue posible guardar los cambios. Inténtalo nuevamente.');
+      },
+    });
+  }
+
   private createImagePreview(
     file: File
   ): void {
@@ -478,8 +590,9 @@ export class PublicationCreate {
   }
 
   formatLabel(
-    value: string
+    value: string | null
   ): string {
+    if (value === null) return 'Sin condición';
     const labels: Record<string, string> = {
       electronicos: 'Electrónicos',
       alquiler: 'Alquiler',

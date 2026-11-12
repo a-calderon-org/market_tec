@@ -55,6 +55,12 @@ export const routes: Routes = [
     component: PublicationCreate
   },
   {
+    path: 'publicaciones/:id/editar',
+    canActivate: [authGuard],
+    component: PublicationCreate,
+    data: { edit: true }
+  },
+  {
     path: 'publicaciones/:id',
     canActivate: [authGuard],
     component: PublicationDetail

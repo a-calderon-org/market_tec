@@ -20,7 +20,7 @@ market_tec/
 │   │       ├── features/home/          # catálogo, paginación y filtros
 │   │       ├── features/messenger/     # conversaciones y envío
 │   │       ├── features/profile/       # consulta/edición de perfil
-│   │       ├── features/publications/  # detalle, alta y publicaciones propias
+│   │       ├── features/publications/  # detalle, alta, edición y publicaciones propias
 │   │       └── shared/                 # tarjeta y respuesta paginada
 │   └── GOOGLE_LOGIN.md                # guía existente; contiene desfases
 ├── context/                           # contexto técnico mantenido

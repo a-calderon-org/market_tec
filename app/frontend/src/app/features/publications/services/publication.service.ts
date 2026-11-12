@@ -14,7 +14,7 @@ import { ApiClientService } from '../../../core/api/api-client.service';
 import { PaginatedResponse } from '../../../shared/paginated-response.model';
 import { Publication } from '../models/publication.model';
 import { UserPublication } from '../models/my-publications.model';
-import { CreatePublication } from '../models/publication-create.model';
+import { CreatePublication, UpdatePublication } from '../models/publication-create.model';
 
 @Injectable({
   providedIn: 'root'
@@ -123,7 +123,7 @@ export class PublicationService {
   /** Solo con el ms-catalog propio (JWT interno): reemplaza el contenido de una publicación propia. */
   updatePublication(
     id: string,
-    publication: CreatePublication
+    publication: UpdatePublication
   ): Observable<PublicationDetail> {
     return this.apiClient.put<PublicationDetail>(
       `/publicaciones/${encodeURIComponent(id)}`,

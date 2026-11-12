@@ -1,5 +1,8 @@
-import {Component, computed, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, DestroyRef, inject, OnInit, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
+import { map, Subscription } from 'rxjs';
+import { AuthSessionService } from '../../../core/auth/v2/auth-session.service';
 import { FEATURE_FLAGS } from '../../../core/feature-flags';
 import { UserPublication } from '../models/my-publications.model';
 import { PublicationService } from '../services/publication.service';
@@ -27,16 +30,16 @@ export class MyPublications implements OnInit {
   private readonly publicationService =
     inject(PublicationService);
 
-  private readonly authCoreV2 = inject(FEATURE_FLAGS).authCoreV2;
+  private readonly flags = inject(FEATURE_FLAGS);
+  readonly useInternalCatalog = this.flags.authCoreV2 &&
+    this.flags.authCoreV2Adapter === 'http' && this.flags.catalogInternalJwt;
+  private readonly session = this.useInternalCatalog ? inject(AuthSessionService) : null;
+  private readonly destroyRef = inject(DestroyRef);
+  private request?: Subscription;
 
   /** Solo flujo legado (authCoreV2=false). Con authCoreV2 nunca se usa. */
   private readonly currentUserId = 'USR-001';
 
-  /**
-   * authCoreV2: ms-publications aún no valida el JWT interno ni ofrece una ruta de
-   * «mis publicaciones» derivada del token. La pantalla queda explícitamente no
-   * disponible y no emite peticiones (ni con 'USR-001' ni con el userId interno).
-   */
   readonly unavailable = signal(false);
 
   private readonly allPublications =
@@ -190,26 +193,45 @@ export class MyPublications implements OnInit {
   }
 
   loadPublications(): void {
+    this.request?.unsubscribe();
     this.loading.set(true);
     this.error.set(false);
+    this.unavailable.set(false);
 
-    if (this.authCoreV2) {
-      // PENDIENTE (Catalog, contrato no aprobado): no existe un contrato que acepte
-      // el principal interno. Con authCoreV2 no se consulta con 'USR-001' ni se
-      // inventa otro id; la pantalla queda sin datos hasta aprobar ese contrato.
+    const session = this.session;
+    const identity = session?.currentIdentity();
+    if (this.flags.authCoreV2 && !identity) {
       this.allPublications.set([]);
-      this.unavailable.set(true);
+      this.totalRecords.set(0);
+      this.unavailable.set(!this.useInternalCatalog);
       this.error.set(true);
       this.loading.set(false);
       return;
     }
 
-    this.publicationService
-      .getUserPublications(
-        this.currentUserId
-      )
+    const result = identity
+      ? this.publicationService.getPublicationCatalog().pipe(
+          map(catalog => {
+            const items = catalog
+              .filter(publication => publication.vendedor?.userId === identity.userId)
+              .map(publication => ({
+                ...publication,
+                estado: publication.estado === 'activo' ? 'activa' : publication.estado,
+              }));
+            return { items, totalRecords: items.length, page: 1, pageSize: Math.max(10, items.length) };
+          }),
+        )
+      : this.publicationService.getUserPublications(this.currentUserId);
+
+    this.request = result.pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (response) => {
+          if (identity && !session?.isCurrentIdentity(identity)) {
+            this.allPublications.set([]);
+            this.totalRecords.set(0);
+            this.loading.set(false);
+            return;
+          }
           this.allPublications.set(
             response.items
           );
@@ -231,6 +253,7 @@ export class MyPublications implements OnInit {
 
         error: () => {
           this.allPublications.set([]);
+          this.totalRecords.set(0);
           this.error.set(true);
           this.loading.set(false);
         }
