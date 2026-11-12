@@ -8,6 +8,8 @@ import { loadSettings } from '../src/config/settings.js';
 import { catalogContainerDefinitions, composeCosmosCatalog, createCosmosClient,
   defaultCatalogContainers } from '../src/config/cosmos-catalog.js';
 import { CosmosPersistenceError } from '../src/adapters/out/cosmos/store.js';
+import { DispatchMessageEvents } from '../src/application/use-cases/dispatch-message-events.js';
+import type { MessageSent } from '../src/domain/messaging.js';
 import { assertCatalogRepositoryContract } from './fixtures/catalog-repository-contract.js';
 import type { CatalogRepositories } from './fixtures/catalog-repository-contract.js';
 
@@ -146,6 +148,57 @@ test('Cosmos NoSQL repository contract with isolated database and independent cl
     } finally {
       client.dispose();
       second.dispose();
+    }
+  }
+});
+
+test('Cosmos outbox recovers a persisted event across clients and fences concurrent dispatchers', { timeout: 90_000 }, async () => {
+  const { COSMOS_TEST_ENDPOINT: endpoint, COSMOS_TEST_KEY: key } = process.env;
+  assert.ok(endpoint && key, 'Set COSMOS_TEST_ENDPOINT and COSMOS_TEST_KEY for an isolated NoSQL test account or emulator');
+  const authentication = { type: 'key', key } as const;
+  const writer = createCosmosClient(endpoint, authentication);
+  const reader = createCosmosClient(endpoint, authentication);
+  const database = 'mtec31-test-' + randomUUID();
+  const settings = { database, containers: defaultCatalogContainers };
+  const signal = AbortSignal.timeout(45_000);
+  let created = false;
+  try {
+    const result = await writer.databases.create({ id: database }, { abortSignal: signal });
+    created = result.statusCode === 201;
+    assert.ok(created);
+    for (const definition of catalogContainerDefinitions()) {
+      await result.database.containers.create(definition, { abortSignal: signal });
+    }
+    const { messages, outbox } = await composeCosmosCatalog(writer, settings, undefined, true);
+    const sentAt = 1_800_000_000;
+    const message = { id: randomUUID(), chatId: randomUUID(), senderUserId: 'buyer',
+      recipientUserId: 'seller', texto: 'privado', sentAt };
+    const event: MessageSent = { eventId: randomUUID(), correlationId: randomUUID(), publicationId: 'publication',
+      messageId: message.id, chatId: message.chatId, senderUserId: 'buyer', recipientUserId: 'seller', sentAt };
+    await messages.append(message, event);
+
+    let now = sentAt;
+    const delivered: MessageSent[] = [];
+    const notices: unknown[] = [];
+    const failedPublisher = { async publish() { throw new Error('Temporary Queue outage'); } };
+    const worker = new DispatchMessageEvents(outbox, failedPublisher, () => now, notice => notices.push(notice.stage));
+    await worker.run(signal);
+    assert.deepEqual(notices, ['publish']);
+    assert.deepEqual(await outbox.due(now + 4, 20, signal), []);
+    const restarted = await composeCosmosCatalog(reader, settings, undefined, true);
+    now += 5;
+    const publisher = { async publish(value: MessageSent) { delivered.push(value); } };
+    await Promise.all([outbox, restarted.outbox].map(candidate =>
+      new DispatchMessageEvents(candidate, publisher, () => now, notice => notices.push(notice.stage)).run(signal)));
+    assert.deepEqual(notices, ['publish']);
+    assert.deepEqual(delivered, [event]);
+    assert.deepEqual(await restarted.outbox.due(now + 300, 20, signal), []);
+  } finally {
+    try {
+      if (created) await writer.database(database).delete({ abortSignal: AbortSignal.timeout(15_000) });
+    } finally {
+      writer.dispose();
+      reader.dispose();
     }
   }
 });
