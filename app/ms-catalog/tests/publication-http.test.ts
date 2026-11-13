@@ -36,7 +36,7 @@ after(async () => { await new Promise<void>((resolve, reject) => {
 }); });
 
 test('HTTP listing combines filters, sorting and pagination with flat Angular payload', async () => {
-  const response = await fetch(`${base}?q=lapTOP&categoria=Electr%C3%B3nica&precioMin=10&precioMax=30&sortBy=precio&sortDirection=asc&page=2&pageSize=1`, { headers });
+  const response = await fetch(`${base}?q=lapTOP&categoria=Electr%C3%B3nica&precioMin=1e1&precioMax=3e%2B1&sortBy=precio&sortDirection=asc&page=2&pageSize=1`, { headers });
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('x-correlation-id'), headers['X-Correlation-ID']);
   const body = await response.json();
@@ -66,7 +66,7 @@ test('HTTP detail returns original compatibility fields and missing resource giv
 });
 
 for (const query of ['page=0', 'page=1.5', 'pageSize=101', 'page=1&page=2', 'page=', 'page=1e2', 'precioMin=NaN',
-  'precioMin=-1', 'precioMin=30&precioMax=10', 'sortBy=bad', 'sortDirection=bad', 'sortDir=asc', 'q[x]=a', 'userId=usr-test']) {
+  'precioMin=-1', 'precioMax=1e999', 'precioMin=30&precioMax=10', 'sortBy=bad', 'sortDirection=bad', 'sortDir=asc', 'q[x]=a', 'userId=usr-test']) {
   test(`HTTP rejects invalid query: ${query}`, async () => {
     const response = await fetch(`${base}?${query}`, { headers });
     assert.equal(response.status, 400);

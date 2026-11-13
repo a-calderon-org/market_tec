@@ -48,11 +48,8 @@ transferencia de propiedad. El contenido editable se copia mediante lista explic
 de campos. Por ahora las publicaciones creadas se presentan como `activo`; no hay
 transiciones de estado, eliminacion ni reglas de moderacion implementadas.
 
-Los filtros usan `sortDirection`, categoria exacta, busqueda por substring en
-titulo/descripcion sin distinguir mayusculas, precios inclusivos y paginacion
-plana. Predeterminados: pagina 1, tamano 12 (maximo 100), fecha descendente;
-empates por ID ascendente. El total se calcula antes de paginar. Son semanticas
-locales para probar el nucleo, pendientes de conformidad HTTP con MTEC-32.
+El caso de uso valida los [filtros de catálogo](#mtec-13--búsqueda-filtros-y-paginación)
+antes de enviarlos al repositorio configurado.
 
 Los DTO conservan `fechaPublicacion` ISO string, agregan `createdAt` Epoch seconds
 y conservan el vendedor numerico junto a `userId`. El listado omite `imagenes`;
@@ -65,10 +62,13 @@ La interfaz HTTP y su configuración están en [MTEC-32](#mtec-32--api-http-de-p
 
 Con `CATALOG_PUBLICATIONS_STORE=cosmos`, `npm start` compone publicaciones
 y mensajeria con repositorios Cosmos. Usa un cliente por proceso, valida el acceso
-y la particion de los tres contenedores antes de abrir el puerto HTTP y cierra el
-cliente al parar el servicio. Un fallo de configuracion o de acceso detiene el
-arranque. La configuración de Queue habilita las rutas de mensajería y el
-despacho descritos en MTEC-31.
+y la partición de los tres contenedores antes de abrir el puerto HTTP. También
+comprueba que la política de publicaciones incluya los campos consultados y los
+índices compuestos para los cuatro órdenes de precio y fecha. Si la política es
+incompatible, el arranque falla con `CosmosPersistenceError` en `validate`.
+Aplicar la política indicada abajo y esperar a que Cosmos termine de construir
+los índices antes de habilitar tráfico. Al parar, el proceso cierra el cliente.
+La configuración de Queue habilita las rutas y el despacho descritos en MTEC-31.
 
 Configurar las variables JWT, perfil y placeholder de la seccion de autenticacion,
 mas `CATALOG_COSMOS_ENDPOINT` (origen HTTPS) y `CATALOG_COSMOS_DATABASE`. Los
@@ -262,6 +262,33 @@ destinatario, la correlación HTTP y la recuperación ante fallos parciales.
 `npm run test:cosmos` cubre además la recuperación desde otro cliente Cosmos
 y la concurrencia de los dispatchers en una base temporal de pruebas.
 
+## MTEC-13 — Búsqueda, filtros y paginación
+
+`GET /v1/publicaciones` requiere un JWT interno válido. Los parámetros del
+[OpenAPI de catálogo](../../contracts/openapi/catalog.json) son opcionales y se
+pueden combinar.
+
+| Parámetro | Comportamiento |
+|---|---|
+| `categoria` | Coincidencia exacta, hasta 100 caracteres. Vacío omite el filtro. |
+| `q` | Subcadena en el título y la descripción, hasta 200 caracteres. Quita espacios en los extremos e ignora mayúsculas. Conserva los acentos. |
+| `precioMin`, `precioMax` | Límites inclusivos y no negativos. Aceptan decimales y notación científica. |
+| `sortBy`, `sortDirection` | `fecha` o `precio`, `asc` o `desc`. Predeterminado `fecha` descendente. Los empates se resuelven por ID ascendente. |
+| `page`, `pageSize` | Enteros positivos. Predeterminados `1` y `12`. Tamaño máximo `100`. |
+
+Con `CATALOG_PUBLICATIONS_STORE=cosmos`, Cosmos aplica los filtros antes de
+paginar. La respuesta plana `{items,totalRecords,page,pageSize}` contiene solo
+la página pedida y el total exacto de la consulta de conteo con esos filtros.
+Si la página está fuera de rango, `items` queda vacío y se conserva el total.
+Las escrituras concurrentes pueden cambiar los datos entre la lectura del
+conteo y la de la página. Una consulta inválida recibe `400 INVALID_PUBLICATION`.
+
+Ejemplo de ruta relativa:
+
+```text
+/v1/publicaciones?categoria=Libros&q=%C3%A1lbum&sortBy=precio&sortDirection=asc&page=2&pageSize=12
+```
+
 ## MTEC-32 — API HTTP de publicaciones
 
 El [OpenAPI de catálogo](../../contracts/openapi/catalog.json) define listado,
@@ -386,6 +413,45 @@ forma de `InternalJwtService` y cubre ambos metodos, propiedad, rechazos 401/403
 fallos del perfil y la cache del JWKS. Ademas se verifico localmente un token firmado
 con Nimbus 10.10 (la libreria de ms-users) contra el servidor compilado, con el
 perfil de ms-users simulado en loopback.
+
+### Publicación del catálogo en producción (propuesta para MTEC-33)
+
+En Azure, los App Service de catálogo usan `CATALOG_COSMOS_DATABASE=markettec`.
+La base comparte 400 RU/s entre sus contenedores. Staging configura
+`publicaciones-stg`, `chats-stg` y `mensajes-stg`. Producción configura los
+equivalentes con sufijo `-prod`, inicializados vacíos. Cada identidad administrada
+tiene acceso limitado a los tres contenedores de su entorno. La cuenta comparte
+el límite gratuito de almacenamiento de 25 GB entre los dos entornos.
+
+La API independiente `markettec-catalog-v2` existe en APIM con el sufijo
+`catalog-v2`, HTTPS y suscripción obligatoria. Su activación contempla
+`GET` y `POST /v1/publicaciones` y `GET` y `PUT /v1/publicaciones/{publicationId}`
+del [contrato de catálogo](../../contracts/openapi/catalog.json). El sufijo de
+APIM distingue el servicio de la API heredada y conserva las rutas v1 del contrato.
+
+La configuración de Cosmos del App Service de producción ya apunta a los
+contenedores vacíos. Para activar el servicio, verificar el emisor, la audiencia
+y el JWKS de producción, así como la consulta del perfil del vendedor. Las aprobaciones
+vigentes de identidad y delegación están delimitadas a staging en el
+[ADR-004](../../context/decisions/ADR-004-seguridad-autenticacion.md#aprobaciones-delimitadas-ms-users--ms-catalog--2026-11-10).
+
+Con esos valores verificados, desplegar el catálogo y aplicar en la API nueva
+la validación JWT y la protección de origen con credenciales de producción.
+Desde la raíz del repositorio, generar la política con los valores aprobados:
+
+```powershell
+python infra/apim/staging/build_catalog_policy.py --jwks $catalogJwks --issuer $catalogIssuer --audience $catalogAudience --gateway-named-value catalog-v2-backend-key --output $catalogPolicyFile
+```
+
+Configurar en APIM el valor secreto `catalog-v2-backend-key` con la misma
+credencial de origen que usa el App Service en `CATALOG_APIM_BACKEND_KEY`.
+Conectar únicamente el proxy de catálogo de SWA al sufijo de APIM mediante
+`MTEC_CATALOG_V2_UPSTREAM`, y configurar el build según la
+[guía de integración](../../context/integration/FRONTEND_BACKEND.md#despliegue-del-catálogo-con-auth-core-v2).
+Antes de dar el cambio por terminado, comprobar el rechazo de acceso directo y
+validar en producción con una cuenta autorizada el alta, el listado filtrado y
+la persistencia tras recargar. Registrar el artefacto SWA y los ajustes previos
+del proxy para poder restaurarlos si falla la validación.
 
 ### Validación en staging con credenciales reales
 
