@@ -51,38 +51,54 @@ async function assertAuthenticatedHttp(repositories: CatalogRepositories, endpoi
     await once(server, 'listening');
     const base = 'http://127.0.0.1:' + (server.address() as AddressInfo).port;
     const collection = base + '/v1/publicaciones';
-    const content = { categoria: 'Libros', subcategoria: '', titulo: 'HTTP test',
+    const content = { categoria: 'Libros', subcategoria: '', titulo: 'Álbum HTTP',
       descripcion: '', precio: 12, condicion: null, ubicacion: '' };
-    function write(url: string, method: 'POST' | 'PUT', token: string, titulo: string) {
+    function write(url: string, method: 'POST' | 'PUT', token: string, changes: Partial<typeof content> = {}) {
       return fetch(url, { method, headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...content, titulo }), signal: AbortSignal.timeout(15_000) });
+        body: JSON.stringify({ ...content, ...changes }), signal: AbortSignal.timeout(15_000) });
     }
-    const created = await write(collection, 'POST', ownerToken, content.titulo);
+    const created = await write(collection, 'POST', ownerToken);
     assert.equal(created.status, 201);
     const row = await created.json() as { id: string; vendedor: { userId: string; id: number | null } };
     assert.equal(row.vendedor.userId, 'http-owner');
     assert.equal(row.vendedor.id, null);
+    const second = await write(collection, 'POST', ownerToken, { titulo: 'Colección', descripcion: 'Álbum HTTP', precio: 18 });
+    assert.equal(second.status, 201);
+    const secondRow = await second.json() as { id: string };
+    for (const changes of [{ categoria: 'Arte' }, { precio: 19 }, { titulo: 'Sin coincidencia' }]) {
+      const outside = await write(collection, 'POST', ownerToken, changes);
+      assert.equal(outside.status, 201);
+      await outside.body?.cancel();
+    }
     const detail = collection + '/' + encodeURIComponent(row.id);
     const authorized = { Authorization: 'Bearer ' + ownerToken };
     const query = new URLSearchParams({
-      q: content.titulo, categoria: content.categoria, precioMin: '12', precioMax: '12',
+      q: ' áLBUM http ', categoria: content.categoria, precioMin: '1.2e+1', precioMax: '18',
       sortBy: 'precio', sortDirection: 'asc', page: '1', pageSize: '1',
     });
-    const list = await fetch(collection + '?' + query, { headers: authorized, signal: AbortSignal.timeout(15_000) });
-    assert.equal(list.status, 200);
-    const page = await list.json() as { items: { id: string }[]; totalRecords: number; page: number; pageSize: number };
-    assert.deepEqual({ totalRecords: page.totalRecords, page: page.page, pageSize: page.pageSize },
-      { totalRecords: 1, page: 1, pageSize: 1 });
-    assert.deepEqual(page.items.map(item => item.id), [row.id]);
-    const rejected = await write(detail, 'PUT', otherToken, 'bad');
+    async function assertPage(number: number, expectedIds: string[], totalRecords: number) {
+      query.set('page', String(number));
+      const list = await fetch(collection + '?' + query, { headers: authorized, signal: AbortSignal.timeout(15_000) });
+      assert.equal(list.status, 200);
+      const { items, ...metadata } = await list.json() as {
+        items: { id: string }[]; totalRecords: number; page: number; pageSize: number;
+      };
+      assert.deepEqual(metadata, { totalRecords, page: number, pageSize: 1 });
+      assert.deepEqual(items.map(item => item.id), expectedIds);
+    }
+    await assertPage(1, [row.id], 2);
+    await assertPage(2, [secondRow.id], 2);
+    await assertPage(3, [], 2);
+    const rejected = await write(detail, 'PUT', otherToken, { titulo: 'bad' });
     assert.equal(rejected.status, 403);
     await rejected.body?.cancel();
     const unchanged = await fetch(detail, { headers: authorized, signal: AbortSignal.timeout(15_000) });
     assert.equal(unchanged.status, 200);
     assert.equal((await unchanged.json()).titulo, content.titulo);
-    const updated = await write(detail, 'PUT', ownerToken, 'Updated');
+    const updated = await write(detail, 'PUT', ownerToken, { titulo: 'Updated' });
     assert.equal(updated.status, 200);
     await updated.body?.cancel();
+    await assertPage(1, [secondRow.id], 1);
     assert.ok(runtime.messaging);
     const buyer = { userId: 'http-other' };
     const chat = await runtime.messaging.start(buyer, row.id);

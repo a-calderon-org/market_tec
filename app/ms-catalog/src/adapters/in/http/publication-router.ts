@@ -40,7 +40,7 @@ function parseFilter(request: Request): PublicationFilter {
   const filter: Record<string, string | number> = {};
   for (const [key, value] of Object.entries(values)) {
     if (['page', 'pageSize', 'precioMin', 'precioMax'].includes(key)) {
-      const pattern = key === 'page' || key === 'pageSize' ? /^\d+$/ : /^\d+(?:\.\d+)?$/;
+      const pattern = key === 'page' || key === 'pageSize' ? /^\d+$/ : /^\d+(?:\.\d+)?(?:e[+-]?\d+)?$/i;
       if (!pattern.test(value)) invalid('Invalid numeric query parameter');
       filter[key] = Number(value);
     } else {

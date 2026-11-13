@@ -8,6 +8,7 @@ import { CosmosPublicationRepository } from '../src/adapters/out/cosmos/publicat
 import { CosmosStore, CosmosPersistenceError } from '../src/adapters/out/cosmos/store.js';
 import { CosmosMessageRepository } from '../src/adapters/out/cosmos/messaging-repositories.js';
 import { normalizeQuery } from '../src/domain/publication.js';
+import { catalogContainerDefinitions } from '../src/config/cosmos-catalog.js';
 import { assertCatalogRepositoryContract, publicationFixture } from './fixtures/catalog-repository-contract.js';
 
 const pk = 'test-pk';
@@ -46,6 +47,26 @@ test('Cosmos selects a partition, shares predicates across count/list and drains
   assert.doesNotMatch(list.query, /álbum/);
   assert.deepEqual(list.parameters?.slice(0, -2), count.parameters);
   assert.deepEqual(list.parameters?.slice(-2), [{ name: '@offset', value: 2 }, { name: '@limit', value: 2 }]);
+});
+
+test('Cosmos rejects an indexing policy that cannot serve the publication filters and sort orders', async () => {
+  const provisioned = catalogContainerDefinitions()[0]!.indexingPolicy!;
+  const paths = provisioned.includedPaths!.map(({ path }) => path);
+  const composites = provisioned.compositeIndexes!;
+  let policy = provisioned;
+  const store = new CosmosStore({
+    async read() { return response(200, { partitionKey: { kind: 'Hash', paths: ['/pk'] }, indexingPolicy: policy }); },
+  } as unknown as Container, pk);
+  const validate = () => store.validate(AbortSignal.timeout(1_000), { paths, composites });
+  await validate();
+  policy = { ...provisioned, includedPaths: [{ path: '/*' }], excludedPaths: [{ path: '/imagenes/*' }],
+    compositeIndexes: composites.map(index => index.map(({ path, order }) =>
+      ({ path, order: order === 'ascending' ? 'descending' : 'ascending' }))) };
+  await validate();
+  policy = { ...policy, excludedPaths: [{ path: '/"searchText"/*' }] };
+  await assert.rejects(validate, { name: 'CosmosPersistenceError', operation: 'validate' });
+  policy = { ...provisioned, compositeIndexes: composites.slice(1) };
+  await assert.rejects(validate, { name: 'CosmosPersistenceError', operation: 'validate' });
 });
 
 test('Cosmos conditions replacement on the read ETag and maps a 412 to the domain conflict', async () => {

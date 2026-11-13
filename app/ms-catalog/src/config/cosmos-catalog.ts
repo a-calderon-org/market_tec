@@ -54,11 +54,16 @@ function sort(field: string, order: 'ascending' | 'descending'): CompositePath {
   return { path: '/' + field, order };
 }
 
-export function catalogContainerDefinitions(names: CatalogContainers = defaultCatalogContainers): ContainerDefinition[] {
-  const stableId = sort('sortId', 'ascending');
-  const publicationOrders = ['createdAtMs', 'precio'].flatMap(field => [
+const stableId = sort('sortId', 'ascending');
+const indexedPaths = (...paths: string[]) => ['pk', 'kind', 'sortId', ...paths].map(path => '/' + path + '/?');
+const publicationIndexes = {
+  paths: indexedPaths('ownerId', 'categoria', 'precio', 'createdAtMs', 'searchText'),
+  composites: ['createdAtMs', 'precio'].flatMap(field => [
     [sort(field, 'ascending'), stableId], [sort(field, 'descending'), stableId],
-  ]);
+  ]),
+};
+
+export function catalogContainerDefinitions(names: CatalogContainers = defaultCatalogContainers): ContainerDefinition[] {
   function definition(id: string, paths: string[], compositeIndexes: CompositePath[][]): ContainerDefinition {
     return {
       id,
@@ -66,16 +71,16 @@ export function catalogContainerDefinitions(names: CatalogContainers = defaultCa
       indexingPolicy: {
         automatic: true,
         indexingMode: IndexingMode.consistent,
-        includedPaths: ['pk', 'kind', 'sortId', ...paths].map(path => ({ path: '/' + path + '/?' })),
+        includedPaths: paths.map(path => ({ path })),
         excludedPaths: [{ path: '/*' }],
         compositeIndexes,
       },
     };
   }
   return [
-    definition(names.publications, ['ownerId', 'categoria', 'precio', 'createdAtMs', 'searchText'], publicationOrders),
-    definition(names.chats, ['buyerId', 'sellerId', 'createdAt'], [[sort('createdAt', 'descending'), stableId]]),
-    definition(names.messages, ['chatId', 'sentAt', 'outboxAvailableAt'],
+    definition(names.publications, publicationIndexes.paths, publicationIndexes.composites),
+    definition(names.chats, indexedPaths('buyerId', 'sellerId', 'createdAt'), [[sort('createdAt', 'descending'), stableId]]),
+    definition(names.messages, indexedPaths('chatId', 'sentAt', 'outboxAvailableAt'),
       [[sort('chatId', 'ascending'), sort('sentAt', 'ascending'), stableId]]),
   ];
 }
@@ -92,8 +97,8 @@ export async function composeCosmosCatalog(client: CosmosClient, settings: Cosmo
   const chats = new CosmosStore(database.container(settings.containers.chats), partition.chats, metrics);
   const messages = new CosmosStore(database.container(settings.containers.messages), partition.messages, metrics);
   const signal = deadline();
-  await Promise.all([publications.validate(signal), chats.validate(signal),
-    messages.validate(signal, dispatchEvents ? outboxIndex : undefined)]);
+  await Promise.all([publications.validate(signal, publicationIndexes), chats.validate(signal),
+    messages.validate(signal, dispatchEvents ? { paths: [outboxIndex] } : undefined)]);
   return {
     publications: new CosmosPublicationRepository(publications),
     chats: new CosmosChatRepository(chats),

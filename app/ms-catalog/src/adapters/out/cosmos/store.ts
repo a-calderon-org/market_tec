@@ -1,4 +1,4 @@
-import type { Container, JSONObject, SqlParameter, SqlQuerySpec } from '@azure/cosmos';
+import type { CompositePath, Container, JSONObject, SqlParameter, SqlQuerySpec } from '@azure/cosmos';
 
 export type CosmosOperation = 'read' | 'create' | 'replace' | 'batch' | 'list' | 'count' | 'validate';
 export type CosmosMetrics = (metric: {
@@ -45,6 +45,15 @@ export interface StoredItem {
   etag: string | undefined;
 }
 
+interface RequiredIndexes {
+  paths: readonly string[];
+  composites?: readonly (readonly CompositePath[])[];
+}
+
+function unquoteIndexPath(path: string): string {
+  return path.replace(/^\/"([a-zA-Z0-9_]+)"(?=\/|$)/, '/$1');
+}
+
 export class CosmosStore {
   constructor(private readonly container: Container, readonly partitionKey: string,
     private readonly metrics?: CosmosMetrics) {}
@@ -70,20 +79,26 @@ export class CosmosStore {
     }
   }
 
-  async validate(signal: AbortSignal, requiredIndex?: string): Promise<void> {
+  async validate(signal: AbortSignal, requiredIndexes?: RequiredIndexes): Promise<void> {
     const response = await this.request('validate', () => this.container.read({ abortSignal: signal }));
     const definition = response.resource?.partitionKey;
     if (definition?.kind !== 'Hash' || definition.paths?.length !== 1 || definition.paths[0] !== '/pk' ||
         (response.resource?.defaultTtl !== undefined && response.resource.defaultTtl !== -1)) {
       throw new CosmosPersistenceError('validate');
     }
-    if (requiredIndex) {
+    if (requiredIndexes) {
       const policy = response.resource?.indexingPolicy;
-      const included = policy?.includedPaths?.map(({ path }) => path) ?? [];
-      const excluded = policy?.excludedPaths?.map(({ path }) => path) ?? [];
+      const included = policy?.includedPaths?.map(({ path }) => unquoteIndexPath(path)) ?? [];
+      const excluded = policy?.excludedPaths?.map(({ path }) => unquoteIndexPath(path)) ?? [];
+      const hasPath = (path: string) => included.includes(path) ||
+        (!excluded.includes(path) && (included.includes(path.replace('/?', '/*')) ||
+          (included.includes('/*') && !excluded.includes(path.replace('/?', '/*')))));
+      const hasComposite = (required: readonly CompositePath[]) => policy?.compositeIndexes?.some(index =>
+        index.length === required.length && index.every(({ path }, i) => unquoteIndexPath(path) === required[i]?.path) &&
+        (index.every(({ order }, i) => order === required[i]?.order) ||
+          index.every(({ order }, i) => order !== required[i]?.order)));
       if (policy?.indexingMode !== 'consistent' || policy.automatic === false ||
-          !(included.includes(requiredIndex) || (included.includes('/*') &&
-            !excluded.some(path => path === requiredIndex || path === requiredIndex.replace('/?', '/*'))))) {
+          !requiredIndexes.paths.every(hasPath) || !(requiredIndexes.composites ?? []).every(hasComposite)) {
         throw new CosmosPersistenceError('validate');
       }
     }
