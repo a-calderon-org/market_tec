@@ -239,11 +239,13 @@ describe('PublicationCreate', () => {
       {
         id: '1',
         name: 'one.jpg',
+        file: new File([], 'test.png', { type: 'image/png' }),
         previewUrl: 'one.jpg'
       },
       {
         id: '2',
         name: 'two.jpg',
+        file: new File([], 'test.png', { type: 'image/png' }),
         previewUrl: 'two.jpg'
       }
     ]);
@@ -258,11 +260,13 @@ describe('PublicationCreate', () => {
       {
         id: '1',
         name: 'one.jpg',
+        file: new File([], 'test.png', { type: 'image/png' }),
         previewUrl: 'one.jpg'
       },
       {
         id: '2',
         name: 'two.jpg',
+        file: new File([], 'test.png', { type: 'image/png' }),
         previewUrl: 'two.jpg'
       }
     ]);
@@ -277,11 +281,13 @@ describe('PublicationCreate', () => {
       {
         id: '1',
         name: 'one.jpg',
+        file: new File([], 'test.png', { type: 'image/png' }),
         previewUrl: 'one.jpg'
       },
       {
         id: '2',
         name: 'two.jpg',
+        file: new File([], 'test.png', { type: 'image/png' }),
         previewUrl: 'two.jpg'
       }
     ]);
@@ -304,6 +310,7 @@ describe('PublicationCreate', () => {
       {
         id: '1',
         name: 'one.jpg',
+        file: new File([], 'test.png', { type: 'image/png' }),
         previewUrl: 'one.jpg'
       }
     ]);
@@ -322,11 +329,13 @@ describe('PublicationCreate', () => {
       {
         id: '1',
         name: 'one.jpg',
+        file: new File([], 'test.png', { type: 'image/png' }),
         previewUrl: 'one.jpg'
       },
       {
         id: '2',
         name: 'two.jpg',
+        file: new File([], 'test.png', { type: 'image/png' }),
         previewUrl: 'two.jpg'
       }
     ]);

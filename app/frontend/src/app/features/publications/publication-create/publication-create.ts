@@ -3,7 +3,7 @@ import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
-import { catchError, EMPTY, map, switchMap } from 'rxjs';
+import { catchError, concatMap, EMPTY, from, map, of, switchMap, toArray } from 'rxjs';
 import { AuthSessionService, SessionIdentity } from '../../../core/auth/v2/auth-session.service';
 import { FEATURE_FLAGS } from '../../../core/feature-flags';
 import { CreatePublication, UpdatePublication } from '../models/publication-create.model';
@@ -22,6 +22,7 @@ type PublicationCondition =
   | 'para-repuesto';
 
 interface LocalImage {
+  file: File;
   id: string;
   name: string;
   previewUrl: string;
@@ -175,6 +176,7 @@ export class PublicationCreate {
     signal('');
 
   readonly maxImages = 5;
+  readonly imageUploads = inject(FEATURE_FLAGS).catalogInternalJwt === true;
 
   readonly remainingImages =
     computed(
@@ -343,9 +345,8 @@ export class PublicationCreate {
       files
         .filter(
           (file) =>
-            file.type.startsWith(
-              'image/'
-            )
+            ['image/jpeg', 'image/png', 'image/webp'].includes(file.type) &&
+            file.size > 0 && file.size <= 10 * 1024 * 1024
         )
         .slice(
           0,
@@ -474,10 +475,18 @@ export class PublicationCreate {
 
     this.submitting.set(true);
 
-    this.publicationService
-      .createPublication(
-        publication
-      )
+    const cover = this.coverImage();
+    const images = this.images();
+    const ordered = cover ? [cover, ...images.filter(image => image.id !== cover.id)] : images;
+    const save = this.imageUploads && ordered.length
+      ? from(ordered).pipe(
+          concatMap(image => this.publicationService.uploadImage(image.file)),
+          toArray(),
+          switchMap(imagenes => this.publicationService.createPublication({ ...publication, imagenes })),
+        )
+      : of(publication).pipe(switchMap(value => this.publicationService.createPublication(value)));
+
+    save.pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
           this.submitting.set(false);
@@ -556,6 +565,7 @@ export class PublicationCreate {
       }
 
       const image: LocalImage = {
+        file,
         id:
           `${Date.now()}-${file.name}-${Math.random()}`,
 

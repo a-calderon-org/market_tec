@@ -58,6 +58,73 @@ El campo adicional no convierte ADR-003 en Accepted.
 
 La interfaz HTTP y su configuración están en [MTEC-32](#mtec-32--api-http-de-publicaciones). Las imágenes se integran en MTEC-14.
 
+## MTEC-14 — Carga de imágenes
+
+1. Con el JWT interno, enviar `POST /v1/images/upload-url` con JSON
+   `{"filename":"portada.png","contentType":"image/png"}`. Admite
+   `image/jpeg`, `image/png` y `image/webp`. Responde `200` con
+   `{"data":{"uploadUrl":"…","publicUrl":"…","expiresAt":1790001800}}`.
+2. Enviar los bytes con `PUT` a `uploadUrl`, con `x-ms-blob-type: BlockBlob`
+   y el mismo `Content-Type`. Esperar el `201` de Blob Storage. La SAS vence
+   a los cinco minutos y permite crear un único blob privado.
+3. Enviar `publicUrl` en `imagenes` de `POST /v1/publicaciones` o
+   `PUT /v1/publicaciones/{id}`. El servicio verifica que las URLs correspondan al
+   propietario autenticado, comprueba los blobs y decodifica y recodifica las
+   imágenes antes de guardar el registro. Admite hasta cinco URLs distintas, con
+   un máximo de 10 MiB por archivo y 16 megapíxeles. La URL pública está lista
+   cuando la escritura de la publicación responde con éxito. El detalle conserva
+   el orden en `imagenes` y expone la primera en `imagen`.
+
+Usar la configuración de publicaciones con Cosmos y las variables
+`CATALOG_BLOB_*` de [`.env.example`](.env.example). El arranque comprueba los
+contenedores aprovisionados. Usar uno privado para carga y otro con acceso
+anónimo de nivel `blob` para las imágenes publicadas. La identidad administrada
+necesita permisos de lectura y escritura de datos en ambos contenedores y
+`Microsoft.Storage/storageAccounts/blobServices/generateUserDelegationKey/action`
+en la cuenta. Por ejemplo, asignar `Storage Blob Data Contributor` en cada
+contenedor y `Storage Blob Delegator` en la cuenta.
+
+Para el navegador, configurar CORS de Blob para el origen de la SPA con `PUT`
+y los encabezados `content-type` y `x-ms-blob-type`. La ruta de emisión utiliza
+el mismo JWT interno y la protección de gateway de publicaciones cuando está
+configurada. Angular usa el proxy de catálogo con JWT interno. La operación
+está documentada en el [OpenAPI compartido](../../contracts/openapi/catalog.json).
+
+La SAS limita el destino, permiso y tiempo. Blob Storage recibe el archivo
+antes de que catálogo valide tamaño y contenido. Aplicar una política de ciclo
+de vida al contenedor privado para retirar cargas abandonadas, por ejemplo
+después de un día. Conservar los blobs públicos mientras puedan estar
+referenciados. Una escritura de catálogo fallida puede dejar un blob público
+validado disponible para reintentar.
+
+En staging d04, APIM registra `issuePublicationImageUpload` en
+`markettec-catalog-stg-v1` y el proxy `/api/catalog-v2` reenvía la operación.
+La cuenta dedicada de staging permite CORS de carga desde d04 y elimina
+las cargas privadas abandonadas después de un día. El arranque de catálogo
+con Cosmos y Blob habilitados y el preflight CORS se verificaron en Azure.
+
+### Verificación con Azurite
+
+Iniciar Azurite Blob 3.37.0 en loopback en una terminal:
+
+```powershell
+npm exec --yes --package=azurite@3.37.0 -- azurite-blob --blobHost 127.0.0.1 --inMemoryPersistence --skipApiVersionCheck --silent --disableTelemetry
+```
+
+En otra terminal, ejecutar desde `app/ms-catalog`:
+
+```powershell
+$env:CATALOG_TEST_BLOB_ENDPOINT = 'http://127.0.0.1:10000/devstoreaccount1'
+$env:CATALOG_TEST_BLOB_KEY = '<clave de la cuenta de Azurite>'
+npm run test:blob
+```
+
+La prueba aprovisiona contenedores efímeros y usa JWT firmado, HTTP y el SDK
+de Blob. Verifica SAS, acceso público, formatos, propiedad y escritura de
+publicaciones. Usa repositorio de publicaciones en memoria y un doble de
+ms-users. Azure con identidad administrada, Cosmos, APIM y el navegador se
+validan en sus entornos de integración.
+
 ## Persistencia Cosmos — MTEC-29
 
 Con `CATALOG_PUBLICATIONS_STORE=cosmos`, `npm start` compone publicaciones

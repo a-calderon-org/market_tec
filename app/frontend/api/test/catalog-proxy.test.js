@@ -29,6 +29,23 @@ function upstream(status = 200, body = '{"items":[]}', hang = false) {
 
 test('deadline fits the 45 s Static Web Apps limit', () => assert.ok(DEADLINE_MS <= 40000));
 
+test('only the internal JWT proxy forwards POST for an image upload grant', async () => {
+  const up = upstream();
+  const config = { ...CONFIG, mode: 'internal-jwt', upstream: CONFIG.upstream + '/catalog-stg' };
+  const headers = { origin: ORIGIN, 'sec-fetch-site': 'same-origin', 'content-type': 'application/json',
+    'x-mtec-authorization': 'Bearer internal.jwt.value' };
+  const path = '/api/catalog-v2/v1/images/upload-url';
+  const body = '{"filename":"a.png","contentType":"image/png"}';
+  assert.equal((await handle(req('GET', path, headers), config, up.deps)).status, 405);
+  assert.equal((await handle(req('POST', path + '?other=1', headers, body), config, up.deps)).status, 400);
+  assert.equal((await handle(req('POST', path.replace('catalog-v2', 'catalog'), headers, body), CONFIG, up.deps)).status, 404);
+  const response = await handle(req('POST', path, headers, body), config, up.deps);
+  assert.equal(response.status, 200);
+  assert.equal(up.calls.length, 1);
+  assert.equal(String(up.calls[0].url), config.upstream + '/v1/images/upload-url');
+  assert.equal(new Headers(up.calls[0].init.headers).get('authorization'), 'Bearer internal.jwt.value');
+});
+
 test('lists publications with the server-side key and the Google token, never cookies or the internal JWT', async () => {
   const up = upstream();
   const res = await handle(req('GET', '/api/catalog/v1/publicaciones?page=1&pageSize=12', {
@@ -133,6 +150,19 @@ test('internal-jwt mode forwards only the internal JWT to the ms-catalog upstrea
     assert.deepEqual(call.init.headers, { authorization: INTERNAL, 'content-type': 'application/json' });
   }
   assert.equal(up.calls[2].init.body, '{"titulo":"y"}');
+});
+
+test('internal-jwt list forwards encoded filters and rejects repeated or unknown query keys', async () => {
+  const up = upstream();
+  const path = '/api/catalog-v2/v1/publicaciones';
+  const headers = { 'x-mtec-authorization': INTERNAL };
+  const query = '?page=2&pageSize=12&categoria=Tutor%C3%ADa&q=C%2B%2B%20%26%20c%C3%A1lculo&sortBy=precio&sortDirection=asc&precioMin=0&precioMax=1e%2B6';
+  assert.equal((await handle(req('GET', path + query, headers), V2, up.deps)).status, 200);
+  assert.equal(up.calls[0].url, `${V2.upstream}/v1/publicaciones${query}`);
+  for (const invalid of ['?q=a&%71=b', '?sortDir=asc', '?q=' + 'a'.repeat(4000)]) {
+    assert.equal((await handle(req('GET', path + invalid, headers), V2, up.deps)).status, 400);
+  }
+  assert.equal(up.calls.length, 1);
 });
 
 test('internal-jwt mode adds an optional APIM key and accepts an API base path upstream', async () => {

@@ -14,13 +14,16 @@
     "start": "node dist/src/server.js",
     "test": "npm run build && node --test dist/tests/*.test.js",
     "test:cosmos": "npm run build && node --test dist/tests/cosmos.integration.js",
+    "test:blob": "npm run build && node --test dist/tests/blob-images.integration.js",
     "check": "npm run typecheck && npm test"
   },
   "dependencies": {
     "@azure/cosmos": "4.10.2",
     "@azure/identity": "4.14.1",
+    "@azure/storage-blob": "12.34.0",
     "@azure/storage-queue": "12.32.0",
-    "express": "5.3.0"
+    "express": "5.3.0",
+    "sharp": "0.35.5"
   },
   "devDependencies": {
     "@types/express": "5.0.6",

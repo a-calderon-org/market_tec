@@ -23,13 +23,15 @@
 const PUBLICATIONS = '(\\/v1\\/publicaciones(?:\\/[A-Za-z0-9_-]{1,64})?)$';
 const LIST = /^\/v1\/publicaciones$/;
 const DETAIL = /^\/v1\/publicaciones\/[A-Za-z0-9_-]{1,64}$/;
+const IMAGE_UPLOAD = '/v1/images/upload-url';
 const MODES = {
   google: { path: new RegExp(`^\\/api\\/catalog${PUBLICATIONS}`), credentialHeader: 'x-mtec-google-authorization',
     keyRequired: true, update: false, basePath: false },
-  'internal-jwt': { path: new RegExp(`^\\/api\\/catalog-v2${PUBLICATIONS}`), credentialHeader: 'x-mtec-authorization',
+  'internal-jwt': { path: /^\/api\/catalog-v2(\/v1\/(?:publicaciones(?:\/[A-Za-z0-9_-]{1,64})?|images\/upload-url))$/, credentialHeader: 'x-mtec-authorization',
     keyRequired: false, update: true, basePath: true },
 };
 const QUERY = /^\?[A-Za-z0-9=&._-]{1,256}$/;
+const FILTER_QUERY_KEYS = new Set(['page', 'pageSize', 'q', 'categoria', 'sortBy', 'sortDirection', 'precioMin', 'precioMax']);
 const BEARER = /^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 const REQUEST_HEADERS = ['accept', 'content-type'];
 const RESPONSE_HEADERS = ['content-type', 'www-authenticate', 'retry-after'];
@@ -90,9 +92,21 @@ function validUpstream(value, allowBasePath) {
 
 /** Exact allow-list: list (GET, POST) and detail (GET; PUT only in internal-jwt mode). */
 function allowed(method, path, mode) {
+  if (path === IMAGE_UPLOAD) return mode.update && method === 'POST';
   if (method === 'GET') return true;
   if (method === 'PUT') return mode.update && DETAIL.test(path);
   return method === 'POST' && LIST.test(path);
+}
+
+function validListQuery(url, internalJwt) {
+  if (!internalJwt) return QUERY.test(url.search);
+  if (url.search.length > 4000) return false;
+  const seen = new Set();
+  for (const key of url.searchParams.keys()) {
+    if (!FILTER_QUERY_KEYS.has(key) || seen.has(key)) return false;
+    seen.add(key);
+  }
+  return true;
 }
 
 async function handle(req, config, deps = { fetch: globalThis.fetch, deadlineMs: DEADLINE_MS }) {
@@ -112,7 +126,7 @@ async function handle(req, config, deps = { fetch: globalThis.fetch, deadlineMs:
   if (!match || url.hash) return json(404, 'ROUTE_NOT_FOUND');
   const path = match[1];
   if (!allowed(req.method, path, mode)) return json(405, 'METHOD_NOT_ALLOWED');
-  if (url.search && !(req.method === 'GET' && LIST.test(path) && QUERY.test(url.search))) {
+  if (url.search && !(req.method === 'GET' && LIST.test(path) && validListQuery(url, config.mode === 'internal-jwt'))) {
     return json(400, 'INVALID_REQUEST');
   }
   const fetchSite = header(req, 'sec-fetch-site');

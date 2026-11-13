@@ -1,5 +1,6 @@
 import { cosmosOrigin, defaultCatalogContainers, type CosmosConnectionSettings } from './cosmos-catalog.js';
 import { isUuid } from '../domain/messaging.js';
+import { loadBlobImageSettings, type BlobImageSettings } from './blob-images.js';
 
 export interface Settings {
   readonly port: number;
@@ -10,6 +11,7 @@ export interface Settings {
   readonly cosmos?: CosmosConnectionSettings;
   readonly messageQueue?: MessageQueueSettings;
   readonly gatewayKey?: string;
+  readonly blobImages?: BlobImageSettings;
 }
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'silent';
@@ -158,6 +160,7 @@ export function loadSettings(environment: NodeJS.ProcessEnv = process.env): Sett
   const publications = loadPublicationSettings(environment);
   const cosmos = loadCosmosSettings(environment, publications?.store);
   const messageQueue = loadMessageQueue(environment, cosmos);
+  const blobImages = loadBlobImageSettings(environment, publications !== undefined);
   const gatewayKey = environment.CATALOG_APIM_BACKEND_KEY?.trim();
   if (gatewayKey && (!publications || !/^[A-Za-z0-9_-]{43}$/.test(gatewayKey))) {
     throw new Error('CATALOG_APIM_BACKEND_KEY requires publications and a 32-byte base64url key');
@@ -169,6 +172,7 @@ export function loadSettings(environment: NodeJS.ProcessEnv = process.env): Sett
     ...(publications ? { publications } : {}),
     ...(cosmos ? { cosmos } : {}),
     ...(messageQueue ? { messageQueue } : {}),
+    ...(blobImages ? { blobImages } : {}),
     ...(gatewayKey ? { gatewayKey } : {}),
   };
 }
