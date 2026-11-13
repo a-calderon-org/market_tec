@@ -245,7 +245,7 @@
               </span>
 
               <span>
-                {{ images().length }} / {{ maxImages }} subidas
+                {{ images().length }} / {{ maxImages }} seleccionadas
               </span>
             </div>
 
@@ -315,14 +315,14 @@
               #fileInput
               class="image-input"
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp"
               multiple
+              [disabled]="submitting()"
               (change)="onImagesSelected($event)"
             >
 
             <small class="field-hint">
-              Puedes seleccionar hasta 5 imágenes. Las fotografías
-              se utilizan únicamente como vista previa durante esta sesión.
+              Hasta 5 fotos JPEG, PNG o WebP de 10 MiB cada una.
             </small>
           </div>
           }

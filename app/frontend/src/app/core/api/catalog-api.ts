@@ -34,6 +34,7 @@ const CATALOG_OPERATIONS: readonly { readonly method: string; readonly route: Re
 /** Solo el ms-catalog propio (JWT interno) admite actualizar una publicación propia. */
 const INTERNAL_JWT_OPERATIONS: readonly { readonly method: string; readonly route: RegExp }[] = [
   ...CATALOG_OPERATIONS,
+  { method: 'POST', route: /^\/images\/upload-url$/ },
   { method: 'PUT', route: new RegExp(`^/publicaciones/${SEGMENT}$`) },
 ];
 

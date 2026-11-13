@@ -7,6 +7,7 @@ import {
   map,
   Observable,
   reduce,
+  switchMap,
   throwError
 } from 'rxjs';
 import { PublicationDetail } from '../models/publication-detail.model';
@@ -21,6 +22,25 @@ import { CreatePublication, UpdatePublication } from '../models/publication-crea
 })
 export class PublicationService {
   private readonly apiClient = inject(ApiClientService);
+
+  uploadImage(file: File): Observable<string> {
+    return this.apiClient.post<{ data: { uploadUrl: string; publicUrl: string } }>(
+      '/images/upload-url', { filename: file.name, contentType: file.type },
+    ).pipe(switchMap(async ({ data }) => {
+      const upload = new URL(data.uploadUrl);
+      const published = new URL(data.publicUrl);
+      if (upload.protocol !== 'https:' || upload.origin !== published.origin ||
+          !/^[a-z0-9]{3,24}\.blob\.core\.windows\.net$/.test(upload.hostname) ||
+          upload.username || upload.password || published.username || published.password ||
+          published.search || published.hash) {
+        throw new Error('Invalid Blob upload destination');
+      }
+      const result = await fetch(upload, { method: 'PUT', body: file, credentials: 'omit', redirect: 'error',
+        signal: AbortSignal.timeout(60_000), headers: { 'Content-Type': file.type, 'x-ms-blob-type': 'BlockBlob' } });
+      if (result.status !== 201) throw new Error('Image upload failed');
+      return published.href;
+    }));
+  }
 
   getPublications(page: number, pageSize: number): Observable<PaginatedResponse<Publication>> {
     const params = new HttpParams()

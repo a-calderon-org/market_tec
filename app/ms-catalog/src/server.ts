@@ -46,6 +46,7 @@ async function start() {
     publications: settings.publications ? { store: settings.publications.store,
       persistent: settings.publications.store === 'cosmos' } : 'disabled',
     messageDelivery: settings.messageQueue ? 'enabled' : 'disabled',
+    imageUploads: settings.blobImages ? 'enabled' : 'disabled',
     timestamp: Math.floor(Date.now() / 1000),
   }));
 }

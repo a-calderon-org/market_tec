@@ -6,8 +6,7 @@ export interface CreatePublication {
   precio: number;
   condicion: string | null;
   ubicacion: string;
-}
-
-export interface UpdatePublication extends CreatePublication {
   imagenes?: string[];
 }
+
+export type UpdatePublication = CreatePublication;

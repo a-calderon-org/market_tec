@@ -54,6 +54,61 @@
         }
       }
     },
+    "/v1/images/upload-url": {
+      "post": {
+        "operationId": "issuePublicationImageUpload",
+        "summary": "Autorizar la carga directa de una imagen",
+        "description": "Con Blob configurado, devuelve una SAS de creación para un blob privado. El cliente envía PUT con x-ms-blob-type: BlockBlob y el Content-Type declarado. publicUrl estará disponible después de guardar una publicación con esa URL en imagenes.",
+        "x-implementation-status": "proposed",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["filename", "contentType"],
+                "properties": {
+                  "filename": { "type": "string", "minLength": 1, "maxLength": 255 },
+                  "contentType": { "enum": ["image/jpeg", "image/png", "image/webp"] }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Autorización temporal de carga",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": ["uploadUrl", "publicUrl", "expiresAt"],
+                      "properties": {
+                        "uploadUrl": { "type": "string", "format": "uri" },
+                        "publicUrl": { "type": "string", "format": "uri" },
+                        "expiresAt": { "type": "integer", "description": "Vencimiento en segundos Unix" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "description": "Se requiere el gateway configurado" },
+          "413": { "description": "Cuerpo demasiado grande" },
+          "415": { "description": "Codificación del cuerpo no admitida" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
     "/v1/publicaciones": {
         "post": {
           "operationId": "createPublication",
