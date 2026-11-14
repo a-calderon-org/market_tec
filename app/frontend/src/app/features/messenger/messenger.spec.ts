@@ -385,6 +385,23 @@ describe('Messenger', () => {
     ).not.toHaveBeenCalled();
   });
 
+  it('sends with Enter from the textarea and keeps Shift+Enter for a new line', () => {
+    chatServiceMock.sendMessage.mockReturnValue(of(undefined));
+    fixture.detectChanges();
+    const textarea: HTMLTextAreaElement = fixture.nativeElement.querySelector('textarea[formControlName="texto"]');
+    component.messageForm.controls.texto.setValue('Hola');
+
+    const shiftEnter = new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, cancelable: true });
+    textarea.dispatchEvent(shiftEnter);
+    expect(shiftEnter.defaultPrevented).toBe(false);
+    expect(chatServiceMock.sendMessage).not.toHaveBeenCalled();
+
+    const enter = new KeyboardEvent('keydown', { key: 'Enter', cancelable: true });
+    textarea.dispatchEvent(enter);
+    expect(enter.defaultPrevented).toBe(true);
+    expect(chatServiceMock.sendMessage).toHaveBeenCalledWith('CHAT-001', { texto: 'Hola' });
+  });
+
   it('should send a valid message', () => {
     chatServiceMock
       .sendMessage

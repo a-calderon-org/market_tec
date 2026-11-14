@@ -414,6 +414,14 @@ export class Messenger implements OnInit {
     );
   }
 
+  /** Enter envía el mensaje; Shift+Enter inserta un salto de línea. No interrumpe la composición de un IME. */
+  onComposerKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+
+    event.preventDefault();
+    this.sendMessage();
+  }
+
   sendMessage(): void {
     this.sendError.set(false);
     this.sendErrorMessage.set('');
