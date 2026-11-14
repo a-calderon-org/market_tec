@@ -1,0 +1,89 @@
+/* Búsquedas recientes: mismo patrón que «Explorar». */
+.chat-search-box {
+  position: relative;
+}
+
+.recent-searches {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 6px);
+  right: 0;
+  left: 0;
+
+  padding: 10px;
+
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e3e7ee);
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgb(23 32 51 / 14%);
+}
+
+.recent-searches__header,
+.recent-searches li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.recent-searches__header {
+  padding: 2px 4px 8px;
+
+  color: var(--text-muted, #667080);
+  font-size: 0.75rem;
+}
+
+.recent-searches__header button,
+.recent-searches__query,
+.recent-searches__remove {
+  color: inherit;
+  font: inherit;
+
+  cursor: pointer;
+
+  background: transparent;
+  border: 0;
+}
+
+.recent-searches__header button {
+  color: var(--danger-text, #b42d2d);
+}
+
+.recent-searches ul {
+  margin: 0;
+  padding: 0;
+
+  list-style: none;
+}
+
+.recent-searches li {
+  color: var(--text, #182035);
+  font-size: 0.78rem;
+
+  border-radius: 7px;
+}
+
+.recent-searches li:hover,
+.recent-searches li:focus-within {
+  background: var(--surface-muted, #f2f4f7);
+}
+
+.recent-searches__query {
+  flex: 1;
+  min-width: 0;
+
+  padding: 8px;
+
+  overflow: hidden;
+
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-searches__remove {
+  padding: 6px 10px;
+
+  color: var(--text-muted, #667080);
+  font-size: 1rem;
+}

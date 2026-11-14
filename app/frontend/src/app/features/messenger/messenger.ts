@@ -1,8 +1,9 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, DestroyRef, inject, OnInit, signal } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Chat, SessionMessage } from './models/chat.model';
 import { ChatService } from './services/chat.service';
+import { RecentChatSearchService } from './services/recent-chat-search.service';
 
 @Component({
   selector: 'app-messenger',
@@ -12,7 +13,7 @@ import { ChatService } from './services/chat.service';
     RouterLink
   ],
   templateUrl: './messenger.html',
-  styleUrl: './messenger.scss'
+  styleUrls: ['./messenger.scss', './recent-chat-searches.scss']
 })
 export class Messenger implements OnInit {
   private readonly chatService =
@@ -22,6 +23,9 @@ export class Messenger implements OnInit {
 
   private readonly route =
     inject(ActivatedRoute);
+
+  private readonly destroyRef =
+    inject(DestroyRef);
 
   private readonly formBuilder =
     inject(NonNullableFormBuilder);
@@ -326,6 +330,58 @@ export class Messenger implements OnInit {
     this.searchTerm.set(
       target.value
     );
+    this.scheduleRecentSearchRecord();
+  }
+
+  // ---- Búsquedas recientes --------------------------------------------------------------------------------------
+
+  private readonly recentChatSearches = inject(RecentChatSearchService);
+  readonly recentSearches = this.recentChatSearches.searches;
+  readonly showRecentSearches = signal(false);
+  private recentSearchTimer: ReturnType<typeof setTimeout> | undefined;
+  private readonly releaseRecentSearchTimer = this.destroyRef.onDestroy(() => clearTimeout(this.recentSearchTimer));
+
+  /** La lista se filtra al escribir: la búsqueda se guarda como reciente tras una pausa. */
+  private scheduleRecentSearchRecord(): void {
+    clearTimeout(this.recentSearchTimer);
+    this.recentSearchTimer = setTimeout(() => {
+      const query = this.searchTerm().trim().replace(/\s+/g, ' ');
+      if (query.length >= 2) this.recentChatSearches.record(query);
+    }, 1200);
+  }
+
+  openRecentSearches(): void {
+    this.showRecentSearches.set(true);
+  }
+
+  closeRecentSearches(): void {
+    this.showRecentSearches.set(false);
+  }
+
+  /** Cierra la lista solo si el foco sale del buscador (no al pulsar una de sus opciones). */
+  onSearchFocusOut(event: FocusEvent): void {
+    const container = event.currentTarget as HTMLElement;
+    const next = event.relatedTarget as Node | null;
+    if (!next || !container.contains(next)) this.showRecentSearches.set(false);
+  }
+
+  selectRecentSearch(query: string, input: HTMLInputElement): void {
+    clearTimeout(this.recentSearchTimer);
+    this.searchTerm.set(query);
+    this.recentChatSearches.record(query);
+    input.focus(); // Dispara focusin (abre la lista): se cierra después.
+    this.showRecentSearches.set(false);
+  }
+
+  removeRecentSearch(query: string, input: HTMLInputElement): void {
+    this.recentChatSearches.remove(query);
+    input.focus();
+  }
+
+  clearRecentSearches(input: HTMLInputElement): void {
+    this.recentChatSearches.clear();
+    input.focus();
+    this.showRecentSearches.set(false);
   }
 
   showAllChats(): void {
