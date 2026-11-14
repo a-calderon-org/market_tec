@@ -323,6 +323,7 @@
               maxlength="500"
               aria-label="Mensaje"
               placeholder="Escribe un mensaje..."
+              (keydown)="onComposerKeydown($event)"
             ></textarea>
 
             <button
