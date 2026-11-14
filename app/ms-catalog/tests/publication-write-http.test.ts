@@ -91,6 +91,25 @@ test('other principal cannot update; missing publication is 404', async () => {
   assert.deepEqual(await unchanged.json(), created);
 });
 
+test('DELETE requires the owner and removes the publication from detail and list', async () => {
+  const created = await create();
+  const url = `${base}/${created.id}`;
+  const remove = (authorization?: string) => fetch(url, {
+    method: 'DELETE', headers: authorization ? { Authorization: authorization } : {},
+  });
+  assert.equal((await remove()).status, 401);
+  assert.equal((await remove('Bearer other-test')).status, 403);
+  const before = await (await fetch(base, { headers })).json();
+  const deleted = await remove(headers.Authorization);
+  assert.equal(deleted.status, 204);
+  assert.equal(await deleted.text(), '');
+  assert.equal((await fetch(url, { headers })).status, 404);
+  assert.equal((await remove(headers.Authorization)).status, 404);
+  const after = await (await fetch(base, { headers })).json();
+  assert.equal(after.totalRecords, before.totalRecords - 1);
+  assert.ok(after.items.every((item: { id: string }) => item.id !== created.id));
+});
+
 test('write authentication precedes parsing even malformed JSON', async () => {
   for (const method of ['POST', 'PUT']) {
     const response = await fetch(method === 'POST' ? base : `${base}/missing`, {

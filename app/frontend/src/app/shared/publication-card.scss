@@ -40,22 +40,6 @@
   background: #00628f;
 }
 
-.publication-card__favorite {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-
-  width: 36px;
-  height: 36px;
-
-  font-size: 1.25rem;
-
-  background: var(--surface-overlay, rgb(255 255 255 / 90%));
-  border: none;
-  border-radius: 50%;
-  cursor: pointer;
-}
-
 .publication-card__content {
   padding: 14px;
 }

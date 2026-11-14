@@ -35,9 +35,11 @@ import { Publication } from '../models/publication.model';
 describe('MyPublications con el catálogo interno', () => {
   it('muestra solo publicaciones del usuario de la sesión y reconoce el estado activo del catálogo', () => {
     const catalog = new Subject<Publication[]>();
+    const deletion = new Subject<void>();
     const identity = { userId: 'usr-propietario', epoch: 1 };
     const service = {
       getPublicationCatalog: vi.fn(() => catalog),
+      deletePublication: vi.fn(() => deletion),
       getUserPublications: vi.fn(),
     };
     const session = {
@@ -75,6 +77,24 @@ describe('MyPublications con el catálogo interno', () => {
     expect(view.publications().map(item => item.id)).toEqual(['monitor']);
     expect(view.totalRecords()).toBe(1);
     expect(view.activeCount()).toBe(1);
+
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
+    try {
+      const own = view.publications()[0]!;
+      view.deletePublication(own);
+      expect(service.deletePublication).not.toHaveBeenCalled();
+      view.deletePublication(own);
+      expect(service.deletePublication).toHaveBeenCalledExactlyOnceWith(own.id);
+      expect(view.deletingId()).toBe(own.id);
+      deletion.next();
+      deletion.complete();
+      expect(view.publications()).toEqual([]);
+      expect(view.totalRecords()).toBe(0);
+      expect(view.activeCount()).toBe(0);
+      expect(view.deletingId()).toBeNull();
+    } finally {
+      confirm.mockRestore();
+    }
 
     view.loadPublications();
     session.isCurrentIdentity.mockReturnValue(false);

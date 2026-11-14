@@ -140,6 +140,10 @@ export class PublicationService {
     );
   }
 
+  deletePublication(id: string): Observable<void> {
+    return this.apiClient.delete<void>(`/publicaciones/${encodeURIComponent(id)}`);
+  }
+
   /** Solo con el ms-catalog propio (JWT interno): reemplaza el contenido de una publicación propia. */
   updatePublication(
     id: string,

@@ -1,7 +1,7 @@
 import { Component, computed, DestroyRef, inject, OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
-import { map, Subscription } from 'rxjs';
+import { finalize, map, Subscription } from 'rxjs';
 import { AuthSessionService } from '../../../core/auth/v2/auth-session.service';
 import { FEATURE_FLAGS } from '../../../core/feature-flags';
 import { UserPublication } from '../models/my-publications.model';
@@ -41,6 +41,8 @@ export class MyPublications implements OnInit {
   private readonly currentUserId = 'USR-001';
 
   readonly unavailable = signal(false);
+  readonly deletingId = signal<string | null>(null);
+  readonly deleteError = signal(false);
 
   private readonly allPublications =
     signal<UserPublication[]>([]);
@@ -258,6 +260,29 @@ export class MyPublications implements OnInit {
           this.loading.set(false);
         }
       });
+  }
+
+  deletePublication(publication: UserPublication): void {
+    const session = this.session;
+    const identity = session?.currentIdentity();
+    if (!session || !identity || this.deletingId() || !this.allPublications().includes(publication)) return;
+    if (!window.confirm(`¿Eliminar «${publication.titulo}»?`) || !session.isCurrentIdentity(identity)) return;
+
+    this.deleteError.set(false);
+    this.deletingId.set(publication.id);
+    this.publicationService.deletePublication(publication.id).pipe(
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => this.deletingId.set(null)),
+    ).subscribe({
+      next: () => {
+        if (!session.isCurrentIdentity(identity)) return;
+        this.allPublications.update(items => items.filter(item => item.id !== publication.id));
+        this.totalRecords.set(this.allPublications().length);
+      },
+      error: () => {
+        if (session.isCurrentIdentity(identity)) this.deleteError.set(true);
+      },
+    });
   }
 
   selectStatus(

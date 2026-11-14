@@ -152,6 +152,18 @@ test('internal-jwt mode forwards only the internal JWT to the ms-catalog upstrea
   assert.equal(up.calls[2].init.body, '{"titulo":"y"}');
 });
 
+test('internal-jwt mode forwards DELETE on detail without a request body', async () => {
+  const up = upstream(204, null);
+  const path = '/v1/publicaciones/PUB-1';
+  const response = await handle(req('DELETE', '/api/catalog-v2' + path,
+    { 'x-mtec-authorization': INTERNAL }), V2, up.deps);
+  assert.equal(response.status, 204);
+  assert.equal(up.calls[0].url, V2.upstream + path);
+  assert.equal(up.calls[0].init.method, 'DELETE');
+  assert.equal(up.calls[0].init.headers.authorization, INTERNAL);
+  assert.equal(up.calls[0].init.body, undefined);
+});
+
 test('internal-jwt list forwards encoded filters and rejects repeated or unknown query keys', async () => {
   const up = upstream();
   const path = '/api/catalog-v2/v1/publicaciones';
@@ -183,7 +195,7 @@ test('modes never cross: each route and credential header belongs to exactly one
     [CONFIG, 'GET', '/api/catalog-v2/v1/publicaciones', { 'x-mtec-google-authorization': GOOGLE }, 404],
     [V2, 'GET', '/api/catalog-v2/v1/publicaciones', { 'x-mtec-authorization': INTERNAL, 'x-user-id': 'u' }, 504],
     [V2, 'PUT', '/api/catalog-v2/v1/publicaciones', { 'x-mtec-authorization': INTERNAL }, 405],
-    [V2, 'DELETE', '/api/catalog-v2/v1/publicaciones/PUB-1', { 'x-mtec-authorization': INTERNAL }, 405],
+    [V2, 'DELETE', '/api/catalog-v2/v1/publicaciones', { 'x-mtec-authorization': INTERNAL }, 405],
     [V2, 'GET', '/api/catalog-v2/v1/chats', { 'x-mtec-authorization': INTERNAL }, 404],
     [V2, 'GET', '/api/catalog-v2/v1/publicaciones', { origin: 'https://evil.example', 'x-mtec-authorization': INTERNAL }, 403],
     [{ ...V2, upstream: 'https://ca-ms-catalog.example.test/' }, 'GET', '/api/catalog-v2/v1/publicaciones',

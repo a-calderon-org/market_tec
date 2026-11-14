@@ -59,16 +59,26 @@ export class PublicationService implements Publications {
   async get(id: string): Promise<PublicationView> { return view(await this.find(id), this.placeholderImageUrl); }
 
   async update(actor: Pick<PublicationActor, 'userId'>, id: string, content: PublicationContent): Promise<PublicationView> {
+    const current = await this.findOwned(actor, id);
+    const data = copyContent(content);
+    await this.images.assertUsableBy(current.ownerId, data.imagenes);
+    const updated: Publication = { ...current, ...data, revision: current.revision + 1 };
+    await this.repository.replace(updated, current.revision);
+    return view(updated, this.placeholderImageUrl);
+  }
+
+  async delete(actor: Pick<PublicationActor, 'userId'>, id: string): Promise<void> {
+    const current = await this.findOwned(actor, id);
+    await this.repository.delete(current.id, current.ownerId, current.revision);
+  }
+
+  private async findOwned(actor: Pick<PublicationActor, 'userId'>, id: string): Promise<Publication> {
     if (!actor || typeof actor !== 'object' || Array.isArray(actor)) invalid('Invalid actor');
     validateText(actor.userId, 'userId', 64, true);
     const ownerId = actor.userId;
     const current = await this.find(id);
-    if (current.ownerId !== ownerId) throw new PublicationError('PUBLICATION_FORBIDDEN', 'Only the owner can update this publication');
-    const data = copyContent(content);
-    await this.images.assertUsableBy(ownerId, data.imagenes);
-    const updated: Publication = { ...current, ...data, revision: current.revision + 1 };
-    await this.repository.replace(updated, current.revision);
-    return view(updated, this.placeholderImageUrl);
+    if (current.ownerId !== ownerId) throw new PublicationError('PUBLICATION_FORBIDDEN', 'Only the owner can modify this publication');
+    return current;
   }
 
   async list(filter: PublicationFilter = {}) { return this.search(filter); }

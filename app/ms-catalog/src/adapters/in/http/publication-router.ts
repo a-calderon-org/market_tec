@@ -5,7 +5,7 @@ import { PublicationError, invalid, validateContent } from '../../../domain/publ
 import type { PublicationFilter, PublicationContent } from '../../../domain/publication.js';
 
 export interface PublicationWrites {
-  readonly publications: Pick<Publications, 'create' | 'update'>;
+  readonly publications: Pick<Publications, 'create' | 'update' | 'delete'>;
   readonly resolveActor: (principal: AuthenticatedPrincipal) => Promise<PublicationActor>;
 }
 
@@ -88,6 +88,11 @@ export function createPublicationRouter(dependencies: PublicationHttpDependencie
       // Ownership uses only the verified subject; ms-users is not consulted on updates.
       const owner = { userId: identities.get(request)!.userId };
       response.json(await writes.publications.update(owner, request.params.publicationId as string, content));
+    });
+    router.delete('/:publicationId', async (request, response) => {
+      const owner = { userId: identities.get(request)!.userId };
+      await writes.publications.delete(owner, request.params.publicationId as string);
+      response.status(204).end();
     });
   }
   router.get('/', async (request, response) => {

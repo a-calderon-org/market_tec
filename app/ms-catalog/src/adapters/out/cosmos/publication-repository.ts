@@ -47,6 +47,26 @@ export class CosmosPublicationRepository implements PublicationRepository {
     }
   }
 
+  async delete(id: string, ownerId: string, expectedRevision: number): Promise<void> {
+    const signal = deadline();
+    const key = physicalId('publication', id);
+    const row = await this.store.read(key, signal);
+    if (!row) conflict();
+    const current = readPublication(row.document, this.store.partitionKey);
+    if (current.ownerId !== ownerId || current.revision !== expectedRevision) conflict();
+    if (!row.etag) throw new CosmosPersistenceError('read');
+    try {
+      await this.store.delete(key, row.etag, signal);
+    } catch (error) {
+      if (hasStatus(error, 409, 412)) conflict();
+      if (hasStatus(error, 404)) {
+        await this.store.validate(signal);
+        conflict();
+      }
+      throw error;
+    }
+  }
+
   async search(query: PublicationQuery) {
     const clauses = ["c.kind = 'publication'", 'c.precio >= @min'];
     const parameters: SqlParameter[] = [{ name: '@min', value: query.precioMin }];

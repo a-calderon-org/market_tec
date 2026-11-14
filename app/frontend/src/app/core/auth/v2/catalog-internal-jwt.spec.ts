@@ -77,10 +77,12 @@ describe('catalogInternalJwt: publicaciones del ms-catalog propio con el JWT int
     api.get('/publicaciones/PUB-001').subscribe();
     api.post('/publicaciones', { titulo: 'x' }).subscribe();
     api.put('/publicaciones/PUB-001', { titulo: 'y' }).subscribe();
+    api.delete('/publicaciones/PUB-001').subscribe();
     await settle();
 
     for (const [method, url] of [['GET', `${CATALOG_V2}/publicaciones`], ['GET', `${CATALOG_V2}/publicaciones/PUB-001`],
-      ['POST', `${CATALOG_V2}/publicaciones`], ['PUT', `${CATALOG_V2}/publicaciones/PUB-001`]]) {
+      ['POST', `${CATALOG_V2}/publicaciones`], ['PUT', `${CATALOG_V2}/publicaciones/PUB-001`],
+      ['DELETE', `${CATALOG_V2}/publicaciones/PUB-001`]]) {
       const request = httpTesting.expectOne((r) => r.method === method && r.url === url);
       expect(request.request.headers.get('X-MTEC-Authorization')).toMatch(/^Bearer mock-access-/);
       expect(request.request.headers.has('X-MTEC-Google-Authorization')).toBe(false);
@@ -107,7 +109,7 @@ describe('catalogInternalJwt: publicaciones del ms-catalog propio con el JWT int
     const http = TestBed.inject(HttpClient);
     http.get(`${USERS}/v1/me/profile`).subscribe();
     const blocked: unknown[] = [];
-    for (const call of [http.get(`${CATALOG_V2}/chats`), http.delete(`${CATALOG_V2}/publicaciones/PUB-001`),
+    for (const call of [http.get(`${CATALOG_V2}/chats`), http.delete(`${CATALOG_V2}/publicaciones`),
       http.put(`${CATALOG_V2}/publicaciones`, {})]) {
       call.subscribe({ error: (error: unknown) => blocked.push(error) });
     }
