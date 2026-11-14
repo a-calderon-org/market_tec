@@ -1,17 +1,18 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, Signal, signal, WritableSignal } from '@angular/core';
 
 const RECENT_SEARCHES_KEY = 'markettec.recent-searches';
 const RECENT_SEARCHES_LIMIT = 10;
 
-@Injectable({
-  providedIn: 'root'
-})
-export class RecentSearchService {
-  private readonly searchesState = signal<string[]>(
-    this.readStoredSearches()
-  );
+/** Historial de búsquedas recientes persistido en `localStorage` bajo su propia clave. */
+export class RecentSearchHistory {
+  private readonly searchesState: WritableSignal<string[]>;
 
-  readonly searches = this.searchesState.asReadonly();
+  readonly searches: Signal<string[]>;
+
+  constructor(private readonly storageKey: string) {
+    this.searchesState = signal<string[]>(this.readStoredSearches());
+    this.searches = this.searchesState.asReadonly();
+  }
 
   record(query: string): void {
     const normalizedQuery = this.normalize(query);
@@ -50,7 +51,7 @@ export class RecentSearchService {
   private readStoredSearches(): string[] {
     try {
       const storedValue = globalThis.localStorage?.getItem(
-        RECENT_SEARCHES_KEY
+        this.storageKey
       );
 
       if (!storedValue) {
@@ -97,7 +98,7 @@ export class RecentSearchService {
 
     try {
       globalThis.localStorage?.setItem(
-        RECENT_SEARCHES_KEY,
+        this.storageKey,
         JSON.stringify(searches)
       );
     } catch {
@@ -111,5 +112,15 @@ export class RecentSearchService {
 
   private comparisonKey(query: string): string {
     return this.normalize(query).toLocaleLowerCase('es');
+  }
+}
+
+/** Búsquedas recientes de publicaciones en «Explorar». */
+@Injectable({
+  providedIn: 'root'
+})
+export class RecentSearchService extends RecentSearchHistory {
+  constructor() {
+    super(RECENT_SEARCHES_KEY);
   }
 }

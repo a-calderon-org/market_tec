@@ -19,20 +19,69 @@
           }
         </div>
 
-        <label class="chat-search">
-          <svg aria-hidden="true" viewBox="0 0 24 24">
-            <circle cx="11" cy="11" r="7"></circle>
-            <path d="m20 20-4-4"></path>
-          </svg>
+        <div
+          class="chat-search-box"
+          (focusin)="openRecentSearches()"
+          (focusout)="onSearchFocusOut($event)"
+          (keydown.escape)="closeRecentSearches()"
+        >
+          <label class="chat-search">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="7"></circle>
+              <path d="m20 20-4-4"></path>
+            </svg>
 
-          <input
-            type="search"
-            aria-label="Buscar en mensajes o publicaciones"
-            placeholder="Buscar conversación o publicación"
-            [value]="searchTerm()"
-            (input)="onSearch($event)"
-          >
-        </label>
+            <input
+              #chatSearchInput
+              type="search"
+              aria-label="Buscar en mensajes o publicaciones"
+              aria-controls="recent-chat-searches"
+              [attr.aria-expanded]="showRecentSearches() && recentSearches().length > 0"
+              placeholder="Buscar conversación o publicación"
+              [value]="searchTerm()"
+              (input)="onSearch($event)"
+            >
+          </label>
+
+          @if (showRecentSearches() && recentSearches().length > 0) {
+            <section
+              id="recent-chat-searches"
+              class="recent-searches"
+              aria-label="Búsquedas recientes"
+            >
+              <div class="recent-searches__header">
+                <strong>Búsquedas recientes</strong>
+
+                <button type="button" (click)="clearRecentSearches(chatSearchInput)">
+                  Limpiar
+                </button>
+              </div>
+
+              <ul>
+                @for (query of recentSearches(); track query) {
+                  <li>
+                    <button
+                      class="recent-searches__query"
+                      type="button"
+                      (click)="selectRecentSearch(query, chatSearchInput)"
+                    >
+                      {{ query }}
+                    </button>
+
+                    <button
+                      class="recent-searches__remove"
+                      type="button"
+                      [attr.aria-label]="'Eliminar búsqueda ' + query"
+                      (click)="removeRecentSearch(query, chatSearchInput)"
+                    >
+                      ×
+                    </button>
+                  </li>
+                }
+              </ul>
+            </section>
+          }
+        </div>
 
         <div class="chat-list__filters" aria-label="Filtros de conversaciones">
           <button
