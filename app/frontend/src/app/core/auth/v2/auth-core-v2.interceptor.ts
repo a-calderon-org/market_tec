@@ -8,6 +8,7 @@ import {
   catalogApiBase,
   isCatalogOperation,
 } from '../../api/catalog-api';
+import { isNotificationsOperation, notificationsApiBase } from '../../api/notifications-api';
 import { GoogleCatalogCredential } from './google-catalog-credential';
 import { isBearerRoute } from './bearer-routes';
 import { blockedOwnOriginPath, isExplicitStaticRead } from './business-destination';
@@ -66,6 +67,14 @@ export const authCoreV2Interceptor: HttpInterceptorFn = (req, next) => {
   // interno de ms-users (sesión Google o Magic Link) y solo hacia `catalogApiBaseUrl`. Nunca el ID Token de Google.
   if (transport !== 'blocked' && catalogInternalJwt && isCatalogOperation(req.url, req.method, catalogBase, true)) {
     return sendWithInternalJwt(req, next, bearerHeaderName(catalogBase));
+  }
+
+  // Notificaciones (ms-notifications, junto al ms-catalog propio): lista exacta de operaciones, solo con el JWT
+  // interno y solo hacia su proxy same-origin. Es una consulta periódica en segundo plano: un 401 suyo no se trata
+  // como pérdida de sesión (lo decide el resto de la SPA), solo se propaga.
+  const notificationsBase = catalogInternalJwt ? notificationsApiBase(catalogBase) : null;
+  if (transport !== 'blocked' && isNotificationsOperation(req.url, req.method, notificationsBase)) {
+    return sendWithInternalJwt(req, next, bearerHeaderName(notificationsBase), false);
   }
 
   // Publicaciones (proxy same-origin del catálogo heredado): lista exacta de operaciones, solo con el ID Token de
@@ -128,6 +137,7 @@ function sendWithInternalJwt(
   req: Parameters<HttpInterceptorFn>[0],
   next: Parameters<HttpInterceptorFn>[1],
   headerName: string,
+  reportUnauthorized = true,
 ): ReturnType<HttpInterceptorFn> {
   const session = inject(AuthSessionService);
 
@@ -153,7 +163,7 @@ function sendWithInternalJwt(
         catchError((error: unknown) => {
           // `INVALID_CREDENTIALS` (cambio de contraseña con la actual errónea): ms-users ya aceptó el JWT y solo
           // rechazó la contraseña escrita; no es una pérdida de sesión.
-          if (error instanceof HttpErrorResponse && error.status === 401
+          if (reportUnauthorized && error instanceof HttpErrorResponse && error.status === 401
             && error.error?.error?.code !== 'INVALID_CREDENTIALS') {
             session.handleBusinessUnauthorized(token);
           }

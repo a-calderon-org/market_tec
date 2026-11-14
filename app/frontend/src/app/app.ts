@@ -4,12 +4,13 @@ import { filter } from 'rxjs';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { ThemeService } from './core/theme.service';
 import { GoogleAuthService } from './features/auth/services/google-auth.service';
+import { NotificationBell } from './features/notifications/notification-bell/notification-bell';
 import { Profile } from './features/profile/profile';
 import { PublicationFeedbackService } from './features/publications/services/publication-feedback.service';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterLink, RouterLinkActive, RouterOutlet, Profile],
+  imports: [RouterLink, RouterLinkActive, RouterOutlet, Profile, NotificationBell],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })

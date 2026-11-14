@@ -1,6 +1,8 @@
 import { Component, computed, DestroyRef, inject, OnInit, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { filter, map, skip } from 'rxjs';
 import { Chat, SessionMessage } from './models/chat.model';
 import { ChatService } from './services/chat.service';
 import { RecentChatSearchService } from './services/recent-chat-search.service';
@@ -192,6 +194,12 @@ export class Messenger implements OnInit {
 
   ngOnInit(): void {
     this.loadChats();
+
+    // Al abrir una notificación estando ya en Mensajes, Angular reutiliza el componente: se selecciona el chat
+    // indicado, o se recarga la lista si es una conversación que aún no estaba en ella.
+    this.route.queryParamMap
+      .pipe(skip(1), map(params => params.get('chat')), filter(Boolean), takeUntilDestroyed(this.destroyRef))
+      .subscribe(chatId => this.chats().some(chat => chat.id === chatId) ? this.selectChat(chatId) : this.loadChats());
   }
 
   loadChats(): void {
@@ -215,6 +223,16 @@ export class Messenger implements OnInit {
             this.route.snapshot
               .queryParamMap
               .get('vendedor');
+
+          // Destino de una notificación de mensaje (`?chat=<chatId>`).
+          const notifiedChat = response.items.find(
+            chat => chat.id === this.route.snapshot.queryParamMap.get('chat'),
+          );
+          if (notifiedChat) {
+            this.selectChat(notifiedChat.id);
+            this.loading.set(false);
+            return;
+          }
 
           if (this.catalogMessaging && requestedPublicationId) {
             this.chatService.startChat(requestedPublicationId).subscribe({

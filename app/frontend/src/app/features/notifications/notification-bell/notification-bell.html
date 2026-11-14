@@ -1,0 +1,71 @@
+<button
+  class="bell-button"
+  type="button"
+  (click)="toggle()"
+  [attr.aria-expanded]="open()"
+  aria-haspopup="true"
+  aria-controls="notification-panel"
+  [attr.aria-label]="label()"
+  [title]="label()"
+>
+  <svg aria-hidden="true" viewBox="0 0 24 24">
+    <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path>
+    <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path>
+  </svg>
+  @if (badge(); as badge) {
+    <span class="bell-button__badge" aria-hidden="true">{{ badge }}</span>
+  }
+</button>
+
+@if (open()) {
+  <section id="notification-panel" class="notification-panel" aria-label="Notificaciones">
+    <header class="notification-panel__header">
+      <h2>Notificaciones</h2>
+      @if (notifications.unreadCount() > 0) {
+        <button type="button" class="notification-panel__link" (click)="notifications.markAllAsRead()">
+          Marcar todas como leídas
+        </button>
+      }
+    </header>
+
+    @if (!notifications.enabled) {
+      <p class="notification-panel__state">Las notificaciones no están disponibles por ahora.</p>
+    } @else if (notifications.error() && !notifications.loaded()) {
+      <div class="notification-panel__state notification-panel__state--error">
+        <p>No fue posible cargar las notificaciones.</p>
+        <button type="button" class="notification-panel__link" (click)="notifications.refresh()">Reintentar</button>
+      </div>
+    } @else if (!notifications.loaded()) {
+      <p class="notification-panel__state">Cargando…</p>
+    } @else if (notifications.items().length === 0) {
+      <p class="notification-panel__state">No tienes notificaciones.</p>
+    } @else {
+      <ul class="notification-list">
+        @for (notification of notifications.items(); track notification.notificationId) {
+          <li>
+            <button
+              type="button"
+              class="notification-item"
+              [class.notification-item--unread]="!notification.isRead"
+              (click)="openNotification(notification)"
+            >
+              <span class="notification-item__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path d="M21 12a8.5 8.5 0 0 1-12.4 7.5L3 21l1.5-5.6A8.5 8.5 0 1 1 21 12Z"></path>
+                </svg>
+              </span>
+              <span class="notification-item__body">
+                <strong>Nuevo mensaje</strong>
+                <span>Recibiste un mensaje en una conversación.</span>
+                <time>{{ relativeTime(notification.occurredAt) }}</time>
+              </span>
+              @if (!notification.isRead) {
+                <span class="notification-item__dot" aria-label="Sin leer"></span>
+              }
+            </button>
+          </li>
+        }
+      </ul>
+    }
+  </section>
+}

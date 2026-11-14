@@ -76,3 +76,17 @@ participantes por su ID interno. La bandeja muestra el nombre del vendedor
 cuando está disponible en la publicación y un rol genérico para el comprador.
 El filtro de no leídos se oculta en este modo hasta contar con estado de lectura.
 **No determinado:** recorrido autenticado con dos cuentas a través de APIM.
+
+Notificaciones de mensajes (MTEC-25) en modo `internal-jwt`: la campana del header
+consulta `GET /v1/notifications?pageSize=20` cada 30 s mientras la pestaña está
+visible, y al abrir el panel; marcar una notificación usa
+`PATCH /v1/notifications/{id}/read`. La base se deriva del proxy del catálogo
+(`https://<swa>/api/notifications/v1`) y no requiere variable de build. El JWT
+interno viaja en `X-MTEC-Authorization`; la Function
+`app/frontend/api/notifications-proxy` lo reenvía como `Authorization` a
+`MTEC_NOTIFICATIONS_UPSTREAM` (API `notifications` de APIM) y descarta cookies,
+CSRF y cualquier otra cabecera. Sin el destino responde 503 `PROXY_UNCONFIGURED`.
+Un 401 de notificaciones no cierra la sesión: solo muestra el error en el panel.
+El stream SSE no pasa por el proxy (límite de 45 s de Static Web Apps). Al abrir
+una notificación se navega a `/mensajes?chat=<chatId>`.
+**No determinado:** recorrido autenticado con dos cuentas en producción.
