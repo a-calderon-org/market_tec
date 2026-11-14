@@ -27,6 +27,7 @@ La SPA no apunta automáticamente a `app/backend`. Todas las peticiones feature 
 | Método y ruta relativa | Solicitud | Respuesta esperada | Consumidor |
 |---|---|---|---|
 | `GET /publicaciones?page&pageSize` | enteros; Home solicita inicialmente 100 y continúa con el tamaño efectivo indicado por `pageSize` hasta completar | `PaginatedResponse<Publication>` | Home |
+| `DELETE /publicaciones/{id}` (catálogo con JWT interno) | id string | `204` sin cuerpo | Mis publicaciones |
 | `GET /publicaciones/{id}` | id string | `PublicationDetail` | Detalle |
 | `POST /publicaciones` | `CreatePublication` | cuerpo ignorado (`void`) | Alta |
 | `GET /usuarios/{id}/publicaciones` | id string | `PaginatedResponse<UserPublication>` | Mis publicaciones en el flujo legado |

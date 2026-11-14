@@ -23,6 +23,14 @@ export class InMemoryPublicationRepository implements PublicationRepository {
     this.publications.set(publication.id, structuredClone(publication));
   }
 
+  async delete(id: string, ownerId: string, expectedRevision: number): Promise<void> {
+    const current = this.publications.get(id);
+    if (!current || current.ownerId !== ownerId || current.revision !== expectedRevision) {
+      throw new PublicationError('PUBLICATION_CONFLICT', 'Publication changed concurrently');
+    }
+    this.publications.delete(id);
+  }
+
   async search(query: PublicationQuery): Promise<{ items: Publication[]; totalRecords: number }> {
     const needle = query.q.trim().toLocaleLowerCase('es');
     const items = [...this.publications.values()].filter(publication =>

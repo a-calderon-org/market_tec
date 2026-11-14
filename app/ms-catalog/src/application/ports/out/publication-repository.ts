@@ -5,5 +5,6 @@ export interface PublicationRepository {
   insert(publication: Publication): Promise<void>;
   // Must atomically compare the stored revision before replacing, or throw conflict.
   replace(publication: Publication, expectedRevision: number): Promise<void>;
+  delete(id: string, ownerId: string, expectedRevision: number): Promise<void>;
   search(query: PublicationQuery): Promise<{ items: Publication[]; totalRecords: number }>;
 }

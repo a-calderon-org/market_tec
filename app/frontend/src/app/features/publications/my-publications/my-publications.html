@@ -125,6 +125,9 @@
       </section>
 
       <section class="publications-panel">
+        @if (deleteError()) {
+          <p class="publication-delete-error" role="alert">No se pudo eliminar la publicación. Actualiza la lista antes de volver a intentarlo.</p>
+        }
 
         <div class="panel-toolbar">
 
@@ -341,6 +344,15 @@
                         >
                           Editar
                         </a>
+                        <button
+                          class="view-action delete-action"
+                          type="button"
+                          [disabled]="deletingId() !== null"
+                          [attr.aria-label]="'Eliminar ' + publication.titulo"
+                          (click)="deletePublication(publication)"
+                        >
+                          {{ deletingId() === publication.id ? 'Eliminando…' : 'Eliminar' }}
+                        </button>
                       }
                     </td>
 

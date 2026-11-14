@@ -90,11 +90,11 @@ function validUpstream(value, allowBasePath) {
   }
 }
 
-/** Exact allow-list: list (GET, POST) and detail (GET; PUT only in internal-jwt mode). */
+/** Exact allow-list: list (GET, POST) and detail (GET; PUT and DELETE only in internal-jwt mode). */
 function allowed(method, path, mode) {
   if (path === IMAGE_UPLOAD) return mode.update && method === 'POST';
   if (method === 'GET') return true;
-  if (method === 'PUT') return mode.update && DETAIL.test(path);
+  if (method === 'PUT' || method === 'DELETE') return mode.update && DETAIL.test(path);
   return method === 'POST' && LIST.test(path);
 }
 

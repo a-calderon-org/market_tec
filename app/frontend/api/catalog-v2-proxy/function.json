@@ -1,7 +1,7 @@
 {
   "bindings": [
     { "authLevel": "anonymous", "type": "httpTrigger", "direction": "in", "name": "req",
-      "methods": ["get", "post", "put"], "route": "catalog-v2/{*path}" },
+      "methods": ["get", "post", "put", "delete"], "route": "catalog-v2/{*path}" },
     { "type": "http", "direction": "out", "name": "res" }
   ]
 }

@@ -116,5 +116,11 @@ export async function assertCatalogRepositoryContract(repositories: CatalogRepos
   const latePage = { page: 999, pageSize: 2 };
   assert.deepEqual(await messages.listByChat(chat.id, latePage), { ...latePage, items: [], totalRecords: 3 });
 
+  await assert.rejects(publications.delete(first.id, 'other', first.revision), { code: 'PUBLICATION_CONFLICT' });
+  await assert.rejects(publications.delete(first.id, first.ownerId, first.revision + 1), { code: 'PUBLICATION_CONFLICT' });
+  await publications.delete(first.id, first.ownerId, first.revision);
+  assert.equal(await publications.findById(first.id), undefined);
+  assert.equal((await catalog.listOwned(owner)).totalRecords, 3);
+
   return { originalId: original.id, chatId: chat.id };
 }

@@ -364,6 +364,68 @@
       }
     },
     "/v1/publicaciones/{publicationId}": {
+      "delete": {
+          "operationId": "deletePublication",
+          "summary": "Eliminar una publicación propia",
+          "x-implementation-status": "implemented",
+          "description": "Solo el propietario identificado por el sub del JWT interno verificado puede eliminar la publicación del catálogo.",
+          "security": [
+            {
+              "bearerAuth": [],
+              "apimSubscriptionKey": []
+            }
+          ],
+          "parameters": [
+            {
+              "$ref": "#/components/parameters/CorrelationId"
+            },
+            {
+              "$ref": "#/components/parameters/PublicationId"
+            }
+          ],
+          "responses": {
+            "204": {
+              "description": "Publicación eliminada",
+              "headers": {
+                "X-Correlation-ID": {
+                  "$ref": "#/components/headers/CorrelationId"
+                }
+              }
+            },
+            "400": {
+              "$ref": "#/components/responses/BadRequest"
+            },
+            "401": {
+              "$ref": "#/components/responses/Unauthorized"
+            },
+            "403": {
+              "description": "Solo el propietario puede eliminar",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorEnvelope"
+                  }
+                }
+              }
+            },
+            "404": {
+              "$ref": "#/components/responses/NotFound"
+            },
+            "409": {
+              "description": "Conflicto concurrente",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorEnvelope"
+                  }
+                }
+              }
+            },
+            "500": {
+              "$ref": "#/components/responses/InternalError"
+            }
+          }
+        },
         "put": {
           "operationId": "updatePublication",
           "summary": "Actualizar contenido completo de una publicación",

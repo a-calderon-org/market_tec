@@ -88,6 +88,29 @@ test('Cosmos conditions replacement on the read ETag and maps a 412 to the domai
   await assert.rejects(repo.replace({ ...publicationFixture, revision: 2 }, 1), { code: 'PUBLICATION_CONFLICT' });
 });
 
+test('Cosmos conditions deletion on the read ETag and maps a stale ETag to conflict', async () => {
+  let stale = true;
+  const store = new CosmosStore({
+    item(id: string, partition: string) {
+      assert.equal(id, document.id);
+      assert.equal(partition, pk);
+      return {
+        async read() { return response(200, { ...document, _etag: 'known' }); },
+        async delete(options: { accessCondition: unknown }) {
+          assert.deepEqual(options.accessCondition, { type: 'IfMatch', condition: 'known' });
+          if (stale) throw { code: 412 };
+          return response(204);
+        },
+      };
+    },
+  } as unknown as Container, pk);
+  const repo = new CosmosPublicationRepository(store);
+  const { id, ownerId, revision } = publicationFixture;
+  await assert.rejects(repo.delete(id, ownerId, revision), { code: 'PUBLICATION_CONFLICT' });
+  stale = false;
+  await repo.delete(id, ownerId, revision);
+});
+
 test('Cosmos distinguishes missing items from missing containers and sanitizes upstream failures', async () => {
   let containerExists = true;
   let status = 404;

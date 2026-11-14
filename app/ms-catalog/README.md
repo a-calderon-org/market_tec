@@ -495,6 +495,9 @@ La API independiente `markettec-catalog-v2` existe en APIM con el sufijo
 `GET` y `POST /v1/publicaciones` y `GET` y `PUT /v1/publicaciones/{publicationId}`
 del [contrato de catálogo](../../contracts/openapi/catalog.json). El sufijo de
 APIM distingue el servicio de la API heredada y conserva las rutas v1 del contrato.
+Al desplegar la eliminación, registrar `DELETE /v1/publicaciones/{publicationId}`
+en APIM con la autenticación de `PUT`. El servicio devuelve `204` tras eliminar
+el registro propio. Los archivos de imagen y las conversaciones se conservan.
 
 La configuración de Cosmos del App Service de producción ya apunta a los
 contenedores vacíos. Para activar el servicio, verificar el emisor, la audiencia

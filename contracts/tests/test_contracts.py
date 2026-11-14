@@ -237,6 +237,7 @@ class OpenApiContractsTest(unittest.TestCase):
         ("catalog.json", "/v1/publicaciones", "post"),
         ("catalog.json", "/v1/publicaciones/{publicationId}", "get"),
         ("catalog.json", "/v1/publicaciones/{publicationId}", "put"),
+        ("catalog.json", "/v1/publicaciones/{publicationId}", "delete"),
     }
 
     def test_only_health_and_catalog_publications_are_marked_implemented(self) -> None:

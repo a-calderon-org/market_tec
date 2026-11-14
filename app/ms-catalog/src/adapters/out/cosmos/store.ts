@@ -1,6 +1,6 @@
 import type { CompositePath, Container, JSONObject, SqlParameter, SqlQuerySpec } from '@azure/cosmos';
 
-export type CosmosOperation = 'read' | 'create' | 'replace' | 'batch' | 'list' | 'count' | 'validate';
+export type CosmosOperation = 'read' | 'create' | 'replace' | 'delete' | 'batch' | 'list' | 'count' | 'validate';
 export type CosmosMetrics = (metric: {
   operation: CosmosOperation;
   durationMs: number;
@@ -130,6 +130,14 @@ export class CosmosStore {
     }));
     if (response.statusCode !== 200) throw new CosmosPersistenceError('replace', response.statusCode);
     return response.etag || response.resource?._etag || '';
+  }
+
+  async delete(id: string, etag: string, signal: AbortSignal): Promise<void> {
+    const response = await this.request('delete', () => this.container.item(id, this.partitionKey).delete({
+      accessCondition: { type: 'IfMatch', condition: etag },
+      abortSignal: signal,
+    }));
+    if (response.statusCode !== 204) throw new CosmosPersistenceError('delete', response.statusCode);
   }
 
   async batchCreate(documents: StoredDocument[], signal: AbortSignal): Promise<void> {

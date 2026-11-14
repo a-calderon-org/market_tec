@@ -293,11 +293,11 @@
   border-radius: 8px;
 }
 
-.publication-actions a + a {
+.publication-actions .view-action + .view-action {
   margin-inline-start: 8px;
 }
 
-.panel-footer {
+.publication-actions .view-action + .view-action {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -387,7 +387,24 @@
     grid-template-columns: 1fr;
   }
 
-  .panel-footer {
+  .delete-action {
+  color: var(--danger-text, #a32121);
+  background: var(--danger-surface, #fff1f1);
+  border: 0;
+  cursor: pointer;
+}
+
+.delete-action:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.publication-delete-error {
+  margin: 1rem;
+  color: var(--danger-text, #a32121);
+}
+
+.panel-footer {
     align-items: flex-start;
     flex-direction: column;
   }

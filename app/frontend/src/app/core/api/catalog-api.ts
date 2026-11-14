@@ -31,11 +31,12 @@ const CATALOG_OPERATIONS: readonly { readonly method: string; readonly route: Re
   { method: 'GET', route: new RegExp(`^/publicaciones/${SEGMENT}$`) },
   { method: 'POST', route: /^\/publicaciones$/ },
 ];
-/** Solo el ms-catalog propio (JWT interno) admite actualizar una publicación propia. */
+/** Solo el ms-catalog propio (JWT interno) admite modificar o eliminar publicaciones propias. */
 const INTERNAL_JWT_OPERATIONS: readonly { readonly method: string; readonly route: RegExp }[] = [
   ...CATALOG_OPERATIONS,
   { method: 'POST', route: /^\/images\/upload-url$/ },
   { method: 'PUT', route: new RegExp(`^/publicaciones/${SEGMENT}$`) },
+  { method: 'DELETE', route: new RegExp(`^/publicaciones/${SEGMENT}$`) },
 ];
 
 /** ¿Es la petición una operación de publicaciones autorizada hacia la base del catálogo? */
