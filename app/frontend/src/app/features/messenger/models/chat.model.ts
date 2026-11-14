@@ -15,15 +15,15 @@ export interface ChatPublication {
   id: string;
   titulo: string;
   imagen: string;
-  precio: number;
+  precio: number | null;
 }
 
 export interface Chat {
   id: string;
   participante: ChatParticipant;
   publicacion: ChatPublication;
-  ultimoMensaje: ChatLastMessage;
-  mensajesNoLeidos: number;
+  ultimoMensaje: ChatLastMessage | null;
+  mensajesNoLeidos: number | null;
 }
 
 export interface SendMessage {

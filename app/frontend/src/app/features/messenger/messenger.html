@@ -44,6 +44,7 @@
             Todos
           </button>
 
+          @if (!catalogMessaging) {
           <button
             type="button"
             [class.chat-filter--active]="unreadOnly()"
@@ -52,6 +53,7 @@
           >
             No leídos
           </button>
+          }
         </div>
       </header>
 
@@ -95,8 +97,8 @@
               <div class="chat-preview__body">
                 <div class="chat-preview__heading">
                   <strong>{{ chat.participante.nombre }}</strong>
-                  <time [attr.datetime]="chat.ultimoMensaje.fecha">
-                    {{ formatTime(chat.ultimoMensaje.fecha) }}
+                  <time [attr.datetime]="chat.ultimoMensaje?.fecha">
+                    {{ formatTime(chat.ultimoMensaje?.fecha ?? '') }}
                   </time>
                 </div>
 
@@ -108,18 +110,20 @@
                   >
 
                   <span>{{ chat.publicacion.titulo }}</span>
-                  <strong>{{ formatPrice(chat.publicacion.precio) }}</strong>
+                  @if (chat.publicacion.precio !== null) {
+                    <strong>{{ formatPrice(chat.publicacion.precio) }}</strong>
+                  }
                 </div>
 
                 <div class="chat-preview__message">
                   <span>
-                    @if (chat.ultimoMensaje.enviadoPorMi) {
+                    @if (chat.ultimoMensaje?.enviadoPorMi) {
                       Tú:
                     }
-                    {{ chat.ultimoMensaje.texto }}
+                    {{ chat.ultimoMensaje?.texto }}
                   </span>
 
-                  @if (chat.mensajesNoLeidos > 0) {
+                  @if ((chat.mensajesNoLeidos ?? 0) > 0) {
                     <strong aria-label="Mensajes no leídos">
                       {{ chat.mensajesNoLeidos }}
                     </strong>
@@ -200,7 +204,9 @@
             <div>
               <span>Publicación asociada</span>
               <strong>{{ chat.publicacion.titulo }}</strong>
-              <small>{{ formatPrice(chat.publicacion.precio) }}</small>
+              @if (chat.publicacion.precio !== null) {
+                <small>{{ formatPrice(chat.publicacion.precio) }}</small>
+              }
             </div>
 
             <svg aria-hidden="true" viewBox="0 0 24 24">
@@ -221,29 +227,35 @@
             </span>
           </div>
 
+          @if (!catalogMessaging) {
           <div class="history-notice">
             El historial completo no está disponible temporalmente. Se muestra el último
             mensaje registrado y los mensajes enviados durante esta sesión.
           </div>
+          } @else if (historyError()) {
+            <div class="history-notice" role="alert">No fue posible cargar los mensajes.</div>
+          }
 
+          @if (!catalogMessaging && chat.ultimoMensaje; as lastMessage) {
           <article
             class="message"
-            [class.message--mine]="chat.ultimoMensaje.enviadoPorMi"
+            [class.message--mine]="lastMessage.enviadoPorMi"
           >
             <span class="message__author">
-              {{ chat.ultimoMensaje.enviadoPorMi ? 'Tú' : chat.participante.nombre }}
+              {{ lastMessage.enviadoPorMi ? 'Tú' : chat.participante.nombre }}
             </span>
 
-            <div class="message__bubble">{{ chat.ultimoMensaje.texto }}</div>
+            <div class="message__bubble">{{ lastMessage.texto }}</div>
 
-            <time [attr.datetime]="chat.ultimoMensaje.fecha">
-              {{ formatTime(chat.ultimoMensaje.fecha) }}
+            <time [attr.datetime]="lastMessage.fecha">
+              {{ formatTime(lastMessage.fecha) }}
             </time>
           </article>
+          }
 
           @for (message of selectedSessionMessages(); track message.id) {
-            <article class="message message--mine">
-              <span class="message__author">Tú</span>
+            <article class="message" [class.message--mine]="message.enviadoPorMi">
+              <span class="message__author">{{ message.enviadoPorMi ? 'Tú' : chat.participante.nombre }}</span>
               <div class="message__bubble">{{ message.texto }}</div>
               <time [attr.datetime]="message.fecha">{{ formatTime(message.fecha) }}</time>
             </article>

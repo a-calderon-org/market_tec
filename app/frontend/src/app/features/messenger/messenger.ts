@@ -17,6 +17,8 @@ import { ChatService } from './services/chat.service';
 export class Messenger implements OnInit {
   private readonly chatService =
     inject(ChatService);
+  readonly catalogMessaging = this.chatService.catalogMessaging === true;
+  readonly historyError = signal(false);
 
   private readonly route =
     inject(ActivatedRoute);
@@ -116,8 +118,7 @@ export class Messenger implements OnInit {
           (chat) => {
             if (
               unread &&
-              chat.mensajesNoLeidos ===
-                0
+              !chat.mensajesNoLeidos
             ) {
               return false;
             }
@@ -133,7 +134,7 @@ export class Messenger implements OnInit {
               chat.publicacion.titulo
                 .toLowerCase()
                 .includes(term) ||
-              chat.ultimoMensaje.texto
+              !!chat.ultimoMensaje?.texto
                 .toLowerCase()
                 .includes(term)
             );
@@ -150,7 +151,7 @@ export class Messenger implements OnInit {
             chat
           ) =>
             total +
-            chat.mensajesNoLeidos,
+            (chat.mensajesNoLeidos ?? 0),
           0
         )
     );
@@ -211,6 +212,23 @@ export class Messenger implements OnInit {
               .queryParamMap
               .get('vendedor');
 
+          if (this.catalogMessaging && requestedPublicationId) {
+            this.chatService.startChat(requestedPublicationId).subscribe({
+              next: chat => {
+                this.chats.update(chats => [chat, ...chats.filter(current => current.id !== chat.id)]);
+                this.selectChat(chat.id);
+                this.loading.set(false);
+              },
+              error: () => {
+                this.error.set(this.chats().length === 0);
+                this.sendError.set(true);
+                this.sendErrorMessage.set('No fue posible iniciar la conversación para esta publicación.');
+                this.loading.set(false);
+              },
+            });
+            return;
+          }
+
           const requestedChat =
             response.items.find(
               (chat) =>
@@ -243,6 +261,7 @@ export class Messenger implements OnInit {
             this.selectedChatId.set(
               response.items[0].id
             );
+            if (this.catalogMessaging) this.loadMessages(response.items[0].id);
           }
 
           this.loading.set(false);
@@ -270,6 +289,25 @@ export class Messenger implements OnInit {
     this.sendError.set(
         false
     );
+    if (this.catalogMessaging) this.loadMessages(chatId);
+  }
+
+  private loadMessages(chatId: string): void {
+    this.historyError.set(false);
+    this.chatService.getMessages(chatId).subscribe({
+      next: history => {
+        this.sessionMessages.update(messages => {
+          const ids = new Set(history.map(message => message.id));
+          return { ...messages, [chatId]: [...history, ...(messages[chatId] ?? []).filter(message => !ids.has(message.id))] };
+        });
+        const latest = this.sessionMessages()[chatId]?.at(-1);
+        if (latest) this.chats.update(chats => chats.map(chat => chat.id === chatId
+          ? { ...chat, ultimoMensaje: latest } : chat));
+      },
+      error: () => {
+        if (this.selectedChatId() === chatId) this.historyError.set(true);
+      },
+    });
   }
 
   closeConversation(): void {
@@ -335,14 +373,14 @@ export class Messenger implements OnInit {
         }
       )
       .subscribe({
-        next: () => {
-          const now =
-            new Date();
+        next: (result) => {
+          const saved = this.catalogMessaging && result ? result.data : undefined;
+          const now = saved ? new Date(saved.createdAt * 1000) : new Date();
 
           const message:
             SessionMessage = {
               id:
-                `session-${now.getTime()}`,
+                saved?.id ?? `session-${now.getTime()}`,
 
               texto,
 
@@ -363,7 +401,7 @@ export class Messenger implements OnInit {
                     messages[
                       chat.id
                     ] ?? []
-                  ),
+                  ).filter(existing => existing.id !== message.id),
                   message
                 ]
               })

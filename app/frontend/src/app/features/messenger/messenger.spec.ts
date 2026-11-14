@@ -115,6 +115,9 @@ describe('Messenger', () => {
     ];
 
   const chatServiceMock = {
+    catalogMessaging: false,
+    startChat: vi.fn(),
+    getMessages: vi.fn(),
     getChats:
       vi.fn(),
 
@@ -130,6 +133,9 @@ describe('Messenger', () => {
   };
 
   beforeEach(async () => {
+    chatServiceMock.catalogMessaging = false;
+    chatServiceMock.startChat.mockReset();
+    chatServiceMock.getMessages.mockReset();
     chatServiceMock
       .getChats
       .mockReset();
@@ -196,6 +202,34 @@ describe('Messenger', () => {
     expect(
       component
     ).toBeTruthy();
+  });
+
+  it('opens a new catalog chat from a publication and shows persisted messages', () => {
+    chatServiceMock.catalogMessaging = true;
+    activatedRouteMock.snapshot.queryParamMap = convertToParamMap({ publicacion: 'pub-new' });
+    const chat = {
+      ...chats[0],
+      id: 'chat-new',
+      publicacion: { ...chats[0].publicacion, id: 'pub-new' },
+      ultimoMensaje: null,
+      mensajesNoLeidos: null,
+    };
+    chatServiceMock.startChat.mockReturnValue(of(chat));
+    chatServiceMock.getMessages.mockReturnValue(of([
+      { id: 'received', texto: 'Mensaje recibido', fecha: '2026-11-13T12:00:00Z', enviadoPorMi: false },
+    ]));
+    chatServiceMock.sendMessage.mockReturnValue(of({ data: { id: 'sent', createdAt: 1794571200 } }));
+    const catalogFixture = TestBed.createComponent(Messenger);
+    catalogFixture.detectChanges();
+    const messenger = catalogFixture.componentInstance;
+
+    expect(chatServiceMock.startChat).toHaveBeenCalledWith('pub-new');
+    expect(chatServiceMock.getMessages).toHaveBeenCalledWith('chat-new');
+    expect(messenger.selectedSessionMessages()[0]?.enviadoPorMi).toBe(false);
+    messenger.messageForm.controls.texto.setValue('Respuesta');
+    messenger.sendMessage();
+    expect(chatServiceMock.sendMessage).toHaveBeenCalledWith('chat-new', { texto: 'Respuesta' });
+    expect(messenger.selectedSessionMessages().map(message => message.id)).toEqual(['received', 'sent']);
   });
 
   it('should load chats on initialization', () => {

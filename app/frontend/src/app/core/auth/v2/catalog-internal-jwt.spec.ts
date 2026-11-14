@@ -109,7 +109,9 @@ describe('catalogInternalJwt: publicaciones del ms-catalog propio con el JWT int
     const http = TestBed.inject(HttpClient);
     http.get(`${USERS}/v1/me/profile`).subscribe();
     const blocked: unknown[] = [];
-    for (const call of [http.get(`${CATALOG_V2}/chats`), http.delete(`${CATALOG_V2}/publicaciones`),
+    http.get(`${CATALOG_V2}/chats?pageSize=100`).subscribe();
+    http.post(`${CATALOG_V2}/chats/chat-1/mensajes`, { texto: 'Hola' }).subscribe();
+    for (const call of [http.delete(`${CATALOG_V2}/chats/chat-1/mensajes`), http.delete(`${CATALOG_V2}/publicaciones`),
       http.put(`${CATALOG_V2}/publicaciones`, {})]) {
       call.subscribe({ error: (error: unknown) => blocked.push(error) });
     }
@@ -118,6 +120,11 @@ describe('catalogInternalJwt: publicaciones del ms-catalog propio con el JWT int
     const profile = httpTesting.expectOne(`${USERS}/v1/me/profile`);
     expect(profile.request.headers.get('X-MTEC-Authorization')).toMatch(/^Bearer mock-access-/);
     profile.flush({});
+    for (const path of ['/chats?pageSize=100', '/chats/chat-1/mensajes']) {
+      const chat = httpTesting.expectOne(CATALOG_V2 + path);
+      expect(chat.request.headers.get('X-MTEC-Authorization')).toMatch(/^Bearer mock-access-/);
+      chat.flush({});
+    }
     expect(blocked).toHaveLength(3);
     for (const error of blocked) expect(error).toBeInstanceOf(BusinessTransportBlockedError);
   });

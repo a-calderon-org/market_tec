@@ -66,3 +66,13 @@ La solicitud de Magic Link pasa el dominio del correo a minúsculas y conserva l
 Publicaciones con `authCoreV2`: `ApiClientService` usa `environment.catalogApiBaseUrl` (proxy same-origin `/api/catalog/v1`, `app/frontend/api/catalog-proxy`) en lugar de `apiBaseUrl` (ms-users). Solo salen `GET /publicaciones`, `GET /publicaciones/{id}` y `POST /publicaciones`, con el ID Token de Google retenido en memoria en `X-MTEC-Google-Authorization`; nunca el JWT interno. El proxy añade la clave APIM desde `MTEC_CATALOG_SUBSCRIPTION_KEY`, reenvía a `MTEC_CATALOG_UPSTREAM` (`markettec-api-v1`) y descarta cookies, CSRF y `X-MTEC-Authorization`. Tras recargar la página no hay token de Google: publicaciones exige volver a iniciar sesión con Google. Una sesión institucional por Magic Link (sin Google) no tiene ese token: publicaciones para esos usuarios requiere adaptar el microservicio dueño del catálogo. «Mis publicaciones» y chats siguen bloqueados (el mock de APIM no conoce la identidad interna).
 
 El catálogo interno está habilitado en staging `d04`. Con `catalogInternalJwt` y `catalogApiBaseUrl` en `https://<swa>/api/catalog-v2/v1`, el listado, detalle, alta y edición envían el JWT interno de Auth Core V2 en `X-MTEC-Authorization`. La Function `app/frontend/api/catalog-v2-proxy` lo reenvía como `Authorization` a `MTEC_CATALOG_V2_UPSTREAM` y descarta cookies, CSRF y la cabecera Google. Sin el destino configurado responde 503 `PROXY_UNCONFIGURED`. En esta API, `vendedor.id` puede ser `null`. La prueba E2E de propiedad con dos cuentas sigue pendiente. [Guía de ms-catalog](../../app/ms-catalog/README.md#validación-en-staging-con-credenciales-reales)
+
+
+En modo `internal-jwt`, la bandeja usa `GET` y `POST` en `/v1/chats` y
+`/v1/chats/{chatId}/mensajes` a través del mismo proxy. El acceso desde el
+detalle de publicación solicita el chat idempotente y la conversación carga
+la última página de mensajes persistidos. El catálogo identifica a los
+participantes por su ID interno. La bandeja muestra el nombre del vendedor
+cuando está disponible en la publicación y un rol genérico para el comprador.
+El filtro de no leídos se oculta en este modo hasta contar con estado de lectura.
+**No determinado:** recorrido autenticado con dos cuentas a través de APIM.

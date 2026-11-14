@@ -196,7 +196,10 @@ test('modes never cross: each route and credential header belongs to exactly one
     [V2, 'GET', '/api/catalog-v2/v1/publicaciones', { 'x-mtec-authorization': INTERNAL, 'x-user-id': 'u' }, 504],
     [V2, 'PUT', '/api/catalog-v2/v1/publicaciones', { 'x-mtec-authorization': INTERNAL }, 405],
     [V2, 'DELETE', '/api/catalog-v2/v1/publicaciones', { 'x-mtec-authorization': INTERNAL }, 405],
-    [V2, 'GET', '/api/catalog-v2/v1/chats', { 'x-mtec-authorization': INTERNAL }, 404],
+    [CONFIG, 'GET', '/api/catalog/v1/chats', { 'x-mtec-google-authorization': GOOGLE }, 404],
+    [V2, 'GET', '/api/catalog-v2/v1/chats', { 'x-mtec-google-authorization': GOOGLE }, 401],
+    [V2, 'DELETE', '/api/catalog-v2/v1/chats', { 'x-mtec-authorization': INTERNAL }, 405],
+    [V2, 'GET', '/api/catalog-v2/v1/chats?page=1&page=2', { 'x-mtec-authorization': INTERNAL }, 400],
     [V2, 'GET', '/api/catalog-v2/v1/publicaciones', { origin: 'https://evil.example', 'x-mtec-authorization': INTERNAL }, 403],
     [{ ...V2, upstream: 'https://ca-ms-catalog.example.test/' }, 'GET', '/api/catalog-v2/v1/publicaciones',
       { 'x-mtec-authorization': INTERNAL }, 503],
@@ -210,4 +213,23 @@ test('modes never cross: each route and credential header belongs to exactly one
   assert.equal(hanging.calls.length, 1);
   assert.deepEqual(hanging.calls[0].init.headers, { authorization: INTERNAL });
   assert.equal(up.calls.length, 0);
+});
+
+test('forwards chat pagination and writes only through the internal catalog proxy', async () => {
+  const up = upstream();
+  for (const [method, path, body] of [
+    ['GET', '/v1/chats?pageSize=100'],
+    ['POST', '/v1/chats', '{"publicationId":"pub-1"}'],
+    ['GET', '/v1/chats/chat-1/mensajes?page=2&pageSize=100'],
+    ['POST', '/v1/chats/chat-1/mensajes', '{"texto":"Hola"}'],
+  ]) {
+    const result = await handle(req(method, '/api/catalog-v2' + path, {
+      'x-mtec-authorization': INTERNAL,
+    }, body), V2, up.deps);
+    assert.equal(result.status, 200);
+    const call = up.calls.at(-1);
+    assert.equal(call.url, V2.upstream + path);
+    assert.equal(call.init.headers.authorization, INTERNAL);
+    assert.equal(call.init.body, body);
+  }
 });

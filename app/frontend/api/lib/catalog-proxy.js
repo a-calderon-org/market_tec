@@ -27,7 +27,7 @@ const IMAGE_UPLOAD = '/v1/images/upload-url';
 const MODES = {
   google: { path: new RegExp(`^\\/api\\/catalog${PUBLICATIONS}`), credentialHeader: 'x-mtec-google-authorization',
     keyRequired: true, update: false, basePath: false },
-  'internal-jwt': { path: /^\/api\/catalog-v2(\/v1\/(?:publicaciones(?:\/[A-Za-z0-9_-]{1,64})?|images\/upload-url))$/, credentialHeader: 'x-mtec-authorization',
+  'internal-jwt': { path: /^\/api\/catalog-v2(\/v1\/(?:publicaciones(?:\/[A-Za-z0-9_-]{1,64})?|images\/upload-url|chats(?:\/[A-Za-z0-9_-]{1,128}\/mensajes)?))$/, credentialHeader: 'x-mtec-authorization',
     keyRequired: false, update: true, basePath: true },
 };
 const QUERY = /^\?[A-Za-z0-9=&._-]{1,256}$/;
@@ -92,6 +92,7 @@ function validUpstream(value, allowBasePath) {
 
 /** Exact allow-list: list (GET, POST) and detail (GET; PUT and DELETE only in internal-jwt mode). */
 function allowed(method, path, mode) {
+  if (path.startsWith('/v1/chats')) return mode.update && (method === 'GET' || method === 'POST');
   if (path === IMAGE_UPLOAD) return mode.update && method === 'POST';
   if (method === 'GET') return true;
   if (method === 'PUT' || method === 'DELETE') return mode.update && DETAIL.test(path);
@@ -126,7 +127,11 @@ async function handle(req, config, deps = { fetch: globalThis.fetch, deadlineMs:
   if (!match || url.hash) return json(404, 'ROUTE_NOT_FOUND');
   const path = match[1];
   if (!allowed(req.method, path, mode)) return json(405, 'METHOD_NOT_ALLOWED');
-  if (url.search && !(req.method === 'GET' && LIST.test(path) && validListQuery(url, config.mode === 'internal-jwt'))) {
+  const chatPagination = path.startsWith('/v1/chats') &&
+    /^\?(?:page|pageSize)=\d{1,16}(?:&(?:page|pageSize)=\d{1,16})?$/.test(url.search) &&
+    new Set(url.searchParams.keys()).size === [...url.searchParams.keys()].length;
+  if (url.search && !(req.method === 'GET' &&
+    (chatPagination || (LIST.test(path) && validListQuery(url, config.mode === 'internal-jwt'))))) {
     return json(400, 'INVALID_REQUEST');
   }
   const fetchSite = header(req, 'sec-fetch-site');
