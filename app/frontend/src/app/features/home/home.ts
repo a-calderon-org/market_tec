@@ -112,6 +112,7 @@ export class Home implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.catalogSubscription?.unsubscribe();
+    clearTimeout(this.recentSearchTimer);
   }
 
   loadPublications(): void {
@@ -154,6 +155,18 @@ export class Home implements OnInit, OnDestroy {
     this.searchDraft.set(input.value);
     this.searchTerm.set(input.value);
     this.page.set(1);
+    this.scheduleRecentSearchRecord();
+  }
+
+  /** Los resultados se filtran al escribir: la búsqueda se guarda como reciente tras una pausa, sin pulsar «Buscar». */
+  private recentSearchTimer: ReturnType<typeof setTimeout> | undefined;
+
+  private scheduleRecentSearchRecord(): void {
+    clearTimeout(this.recentSearchTimer);
+    this.recentSearchTimer = setTimeout(() => {
+      const query = this.searchDraft().trim().replace(/\s+/g, ' ');
+      if (query.length >= 2) this.recentSearchService.record(query);
+    }, 1200);
   }
 
   executeSearch(): void {

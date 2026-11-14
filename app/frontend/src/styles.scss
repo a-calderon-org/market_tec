@@ -74,6 +74,11 @@ button, input, select, textarea {
   color-scheme: light;
 }
 
+/* La «x» nativa que limpia los campos de búsqueda se comporta como un botón. */
+input[type='search']::-webkit-search-cancel-button {
+  cursor: pointer;
+}
+
 :focus-visible {
   outline: 2px solid var(--accent-text, #00628f);
   outline-offset: 3px;
