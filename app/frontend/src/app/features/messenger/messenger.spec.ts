@@ -4,7 +4,7 @@ import {
   convertToParamMap,
   provideRouter
 } from '@angular/router';
-import { of, throwError } from 'rxjs';
+import { BehaviorSubject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { Chat } from './models/chat.model';
 import { Messenger } from './messenger';
@@ -129,7 +129,8 @@ describe('Messenger', () => {
     snapshot: {
       queryParamMap:
         convertToParamMap({})
-    }
+    },
+    queryParamMap: new BehaviorSubject(convertToParamMap({}))
   };
 
   beforeEach(async () => {
@@ -158,6 +159,7 @@ describe('Messenger', () => {
     activatedRouteMock.snapshot
       .queryParamMap =
         convertToParamMap({});
+    activatedRouteMock.queryParamMap = new BehaviorSubject(convertToParamMap({}));
 
     await TestBed
       .configureTestingModule({
@@ -230,6 +232,20 @@ describe('Messenger', () => {
     messenger.sendMessage();
     expect(chatServiceMock.sendMessage).toHaveBeenCalledWith('chat-new', { texto: 'Respuesta' });
     expect(messenger.selectedSessionMessages().map(message => message.id)).toEqual(['received', 'sent']);
+  });
+
+  it('opens the chat of a notification (?chat=) on load and when the query changes', () => {
+    activatedRouteMock.snapshot.queryParamMap = convertToParamMap({ chat: 'CHAT-002' });
+    component.loadChats();
+    expect(component.selectedChatId()).toBe('CHAT-002');
+
+    component.selectChat('CHAT-001');
+    activatedRouteMock.queryParamMap.next(convertToParamMap({ chat: 'CHAT-002' }));
+    expect(component.selectedChatId()).toBe('CHAT-002');
+
+    chatServiceMock.getChats.mockClear();
+    activatedRouteMock.queryParamMap.next(convertToParamMap({ chat: 'CHAT-NEW' }));
+    expect(chatServiceMock.getChats).toHaveBeenCalledTimes(1);
   });
 
   it('should load chats on initialization', () => {
