@@ -345,13 +345,19 @@
                           Editar
                         </a>
                         <button
-                          class="view-action delete-action"
+                          class="delete-action"
                           type="button"
                           [disabled]="deletingId() !== null"
-                          [attr.aria-label]="'Eliminar ' + publication.titulo"
+                          [attr.aria-label]="(deletingId() === publication.id ? 'Eliminando ' : 'Eliminar ') + publication.titulo"
+                          [attr.aria-busy]="deletingId() === publication.id"
+                          title="Eliminar publicación"
                           (click)="deletePublication(publication)"
                         >
-                          {{ deletingId() === publication.id ? 'Eliminando…' : 'Eliminar' }}
+                          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24"
+                            fill="none" stroke="currentColor" stroke-width="1.8"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 4v5m4-5v5" />
+                          </svg>
                         </button>
                       }
                     </td>
