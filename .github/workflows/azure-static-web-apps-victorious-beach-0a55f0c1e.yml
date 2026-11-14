@@ -112,6 +112,11 @@ jobs:
         env:
           MARKET_TEC_API_URL: ${{ secrets.MARKET_TEC_API_URL }}
           MARKET_TEC_GOOGLE_CLIENT_ID: ${{ secrets.MARKET_TEC_GOOGLE_CLIENT_ID }}
+          MARKET_TEC_AUTH_CORE_V2: ${{ vars.MARKET_TEC_AUTH_CORE_V2 }}
+          MARKET_TEC_CATALOG_MODE: ${{ vars.MARKET_TEC_CATALOG_MODE }}
+          MARKET_TEC_CATALOG_API_URL: ${{ vars.MARKET_TEC_CATALOG_API_URL }}
+          MARKET_TEC_PASSWORD_AUTH: ${{ vars.MARKET_TEC_PASSWORD_AUTH }}
+          MARKET_TEC_EMAIL_LINK_AUTH: ${{ vars.MARKET_TEC_EMAIL_LINK_AUTH }}
         run: |
           test -n "$MARKET_TEC_API_URL"
           test -n "$MARKET_TEC_GOOGLE_CLIENT_ID"
@@ -125,6 +130,41 @@ jobs:
             apiBaseUrl: process.env.MARKET_TEC_API_URL,
             googleClientId: process.env.MARKET_TEC_GOOGLE_CLIENT_ID
           };
+
+          function flag(name, fallback) {
+            const value = process.env[name];
+            if (!value && fallback !== undefined) return fallback;
+            if (value !== 'true' && value !== 'false') throw new Error(`Invalid boolean: ${name}`);
+            return value === 'true';
+          }
+
+          const authCoreV2 = flag('MARKET_TEC_AUTH_CORE_V2', false);
+          const mode = process.env.MARKET_TEC_CATALOG_MODE;
+          const catalogBase = process.env.MARKET_TEC_CATALOG_API_URL;
+          const usersUrl = new URL(environment.apiBaseUrl);
+          if (/^\/api\/users(?:\/|$)/.test(usersUrl.pathname) && !authCoreV2) {
+            throw new Error('The ms-users proxy requires MARKET_TEC_AUTH_CORE_V2=true and an explicit catalog destination');
+          }
+          if (authCoreV2 || mode || catalogBase) {
+            if (!authCoreV2 || !['legacy-google', 'internal-jwt'].includes(mode) || !catalogBase) {
+              throw new Error('Auth Core V2 requires an explicit catalog mode and proxy URL');
+            }
+            const catalogUrl = new URL(catalogBase);
+            const proxyPath = mode === 'internal-jwt' ? '/api/catalog-v2/v1' : '/api/catalog/v1';
+            if (usersUrl.protocol !== 'https:' || catalogUrl.origin !== usersUrl.origin ||
+                catalogUrl.href !== usersUrl.origin + proxyPath) {
+              throw new Error(`Expected the same-origin HTTPS catalog proxy at ${proxyPath}`);
+            }
+            environment.catalogApiBaseUrl = catalogUrl.href;
+            environment.featureFlags = {
+              authCoreV2,
+              authCoreV2Adapter: 'http',
+              authCoreV2HttpTopologyVerified: true,
+              catalogInternalJwt: mode === 'internal-jwt',
+              passwordAuth: flag('MARKET_TEC_PASSWORD_AUTH'),
+              emailLinkAuth: flag('MARKET_TEC_EMAIL_LINK_AUTH')
+            };
+          }
 
           fs.writeFileSync(
             'src/environments/environment.ts',
