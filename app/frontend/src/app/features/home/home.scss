@@ -102,8 +102,7 @@
   display: grid;
   grid-template-columns:
     minmax(280px, 1fr)
-    minmax(220px, 0.75fr)
-    auto;
+    minmax(220px, 0.75fr);
   gap: 12px;
 }
 
@@ -231,8 +230,7 @@
   font-size: 1.1rem;
 }
 
-.sort-button,
-.view-toggle button {
+.sort-button {
   padding: 12px;
 
   color: var(--text-muted, #4f5562);
@@ -247,15 +245,6 @@
 
 .sort-button {
   width: 100%;
-}
-
-.view-toggle {
-  display: flex;
-  gap: 6px;
-}
-
-.view-toggle button {
-  min-width: 42px;
 }
 
 .toolbar__filters {
