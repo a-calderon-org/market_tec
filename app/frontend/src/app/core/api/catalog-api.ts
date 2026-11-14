@@ -34,6 +34,10 @@ const CATALOG_OPERATIONS: readonly { readonly method: string; readonly route: Re
 /** Solo el ms-catalog propio (JWT interno) admite modificar o eliminar publicaciones propias. */
 const INTERNAL_JWT_OPERATIONS: readonly { readonly method: string; readonly route: RegExp }[] = [
   ...CATALOG_OPERATIONS,
+  { method: 'GET', route: /^\/chats$/ },
+  { method: 'POST', route: /^\/chats$/ },
+  { method: 'GET', route: new RegExp('^/chats/[A-Za-z0-9_-]{1,128}/mensajes$') },
+  { method: 'POST', route: new RegExp('^/chats/[A-Za-z0-9_-]{1,128}/mensajes$') },
   { method: 'POST', route: /^\/images\/upload-url$/ },
   { method: 'PUT', route: new RegExp(`^/publicaciones/${SEGMENT}$`) },
   { method: 'DELETE', route: new RegExp(`^/publicaciones/${SEGMENT}$`) },
