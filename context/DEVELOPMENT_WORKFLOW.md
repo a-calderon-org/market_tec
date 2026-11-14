@@ -43,4 +43,4 @@ Angular standalone, servicios `providedIn: 'root'`, signals para estado y formul
 
 El job de publicación exige `workflow_dispatch` desde `main`, el SHA completo del commit aprobado, confirmación de compatibilidad con APIM y la variable de repositorio `MTEC41_SWA_DEPLOY_ENABLED=true`. Recompila en el entorno `swa-production` y rechaza referencias a la clave de suscripción en el artefacto público. El workflow no despliega `app/backend`.
 
-Con `MARKET_TEC_API_URL` apuntando a `/api/users`, la compilación requiere `MARKET_TEC_AUTH_CORE_V2=true`, `MARKET_TEC_CATALOG_MODE` y `MARKET_TEC_CATALOG_API_URL` con el proxy HTTPS del mismo origen. Las variables `MARKET_TEC_PASSWORD_AUTH` y `MARKET_TEC_EMAIL_LINK_AUTH` fijan la disponibilidad de contraseña y enlace por correo en el artefacto.
+Con `MARKET_TEC_AUTH_CORE_V2=true`, la compilación usa `MARKET_TEC_USERS_API_URL` para el proxy HTTPS `/api/users`. También requiere `MARKET_TEC_CATALOG_MODE` y `MARKET_TEC_CATALOG_API_URL` con el proxy HTTPS del mismo origen. Las variables `MARKET_TEC_PASSWORD_AUTH` y `MARKET_TEC_EMAIL_LINK_AUTH` fijan la disponibilidad de contraseña y enlace por correo en el artefacto.
