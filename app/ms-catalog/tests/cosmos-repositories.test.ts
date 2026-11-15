@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import type { Container, SqlQuerySpec } from '@azure/cosmos';
 import { InMemoryChatRepository, InMemoryMessageRepository } from '../src/adapters/out/in-memory-messaging-repository.js';
 import { InMemoryPublicationRepository } from '../src/adapters/out/in-memory-publication-repository.js';
-import { publicationDocument } from '../src/adapters/out/cosmos/documents.js';
+import { publicationDocument, readPublication } from '../src/adapters/out/cosmos/documents.js';
 import { CosmosPublicationRepository } from '../src/adapters/out/cosmos/publication-repository.js';
 import { CosmosStore, CosmosPersistenceError } from '../src/adapters/out/cosmos/store.js';
 import { CosmosMessageRepository } from '../src/adapters/out/cosmos/messaging-repositories.js';
@@ -13,6 +13,14 @@ import { assertCatalogRepositoryContract, publicationFixture } from './fixtures/
 
 const pk = 'test-pk';
 const document = publicationDocument(publicationFixture, pk);
+
+test('publication documents preserve status and default legacy records to active', () => {
+  const { estado: _status, ...legacy } = document;
+  assert.deepEqual(readPublication(legacy, pk), publicationFixture);
+  const paused = { ...publicationFixture, estado: 'pausada' } as const;
+  assert.deepEqual(readPublication(publicationDocument(paused, pk), pk), paused);
+  assert.throws(() => readPublication({ ...document, estado: null }, pk), CosmosPersistenceError);
+});
 const response = (statusCode: number, resource?: unknown) => ({ statusCode, resource });
 
 test('repository contract against in-memory baseline', async () => {

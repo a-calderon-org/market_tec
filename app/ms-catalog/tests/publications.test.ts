@@ -57,6 +57,25 @@ test('detail and update report missing publication', async () => {
   await assert.rejects(service.update(owner, 'missing', content), { code: 'PUBLICATION_NOT_FOUND' });
 });
 
+test('the owner can change status independently of publication content', async () => {
+  const { repository, service } = fixture();
+  const created = await service.create(owner, content);
+
+  await assert.rejects(service.changeStatus(other, created.id, 'pausada'), { code: 'PUBLICATION_FORBIDDEN' });
+  await assert.rejects(service.changeStatus(owner, created.id, 'invalid' as 'activo'), { code: 'INVALID_PUBLICATION' });
+  assert.equal((await repository.findById(created.id))?.revision, 1);
+
+  const paused = await service.changeStatus(owner, created.id, 'pausada');
+  assert.deepEqual(paused, { ...created, estado: 'pausada' });
+  assert.equal((await service.list()).items[0]?.estado, 'pausada');
+  await service.changeStatus(owner, created.id, 'pausada');
+  assert.equal((await repository.findById(created.id))?.revision, 2);
+
+  assert.equal((await service.changeStatus(owner, created.id, 'vendida')).estado, 'vendida');
+  assert.equal((await service.update(owner, created.id, { ...content, titulo: 'Nuevo título' })).estado, 'vendida');
+  assert.equal((await service.changeStatus(owner, created.id, 'activo')).estado, 'activo');
+});
+
 const invalidContents: Partial<PublicationContent>[] = [
   { titulo: '  ' }, { titulo: 'x'.repeat(201) }, { categoria: '' }, { subcategoria: 'x'.repeat(101) },
   { descripcion: 'x'.repeat(5001) }, { ubicacion: 'x'.repeat(201) }, { precio: -1 }, { precio: NaN },

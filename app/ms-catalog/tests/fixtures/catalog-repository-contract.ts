@@ -16,6 +16,7 @@ export interface CatalogRepositories {
 
 export const publicationFixture: Publication = {
   id: 'a/niño#01?', ownerId: 'seller', revision: 1, createdAt: new Date(1793966400001),
+  estado: 'activo',
   seller: { id: 1, nombre: 'Ana', carrera: '', verificado: true },
   categoria: 'Libros', subcategoria: '', titulo: 'ÁLBUM', descripcion: 'Ilustrado',
   precio: 20, condicion: null, ubicacion: '', imagenes: [],

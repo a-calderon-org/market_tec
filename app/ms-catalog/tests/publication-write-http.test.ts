@@ -91,6 +91,35 @@ test('other principal cannot update; missing publication is 404', async () => {
   assert.deepEqual(await unchanged.json(), created);
 });
 
+test('PUT accepts a status-only request from the owner and persists it in detail and list', async () => {
+  const created = await create();
+  const url = `${base}/${created.id}`;
+  const body = { estado: 'pausada' };
+  assert.equal(contract.paths['/v1/publicaciones/{publicationId}'].put.requestBody.content['application/json'].schema.$ref,
+    '#/components/schemas/PublicationUpdateRequest');
+  validates('PublicationUpdateRequest', content);
+  validates('PublicationUpdateRequest', body);
+  const put = (value: unknown, authorization = headers.Authorization) => fetch(url, {
+    method: 'PUT', headers: { ...headers, Authorization: authorization }, body: JSON.stringify(value),
+  });
+
+  assert.equal((await put(body, 'Bearer other-test')).status, 403);
+  for (const invalid of [{ estado: 'activa' }, { ...body, ...content }, { ...body, ownerId: 'usr-other' }]) {
+    assert.equal((await put(invalid)).status, 400);
+  }
+  assert.deepEqual(await (await fetch(url, { headers })).json(), created);
+
+  const changed = await put(body);
+  assert.equal(changed.status, 200);
+  const updated = await changed.json();
+  validates('PublicationDetailV1', updated);
+  assert.deepEqual(updated, { ...created, ...body });
+  assert.deepEqual(await (await fetch(url, { headers })).json(), updated);
+  const page = await (await fetch(base, { headers })).json();
+  assert.equal(page.items.find((item: { id: string }) => item.id === created.id)?.estado, 'pausada');
+  assert.equal((await (await put({ ...content, titulo: 'Editada' })).json()).estado, 'pausada');
+});
+
 test('DELETE requires the owner and removes the publication from detail and list', async () => {
   const created = await create();
   const url = `${base}/${created.id}`;

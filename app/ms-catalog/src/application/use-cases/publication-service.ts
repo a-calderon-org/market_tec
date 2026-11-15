@@ -1,5 +1,5 @@
-import { PublicationError, invalid, normalizeQuery, validateContent, validateImageUrl, validateText } from '../../domain/publication.js';
-import type { Publication, PublicationContent, PublicationFilter } from '../../domain/publication.js';
+import { PublicationError, invalid, isPublicationStatus, normalizeQuery, validateContent, validateImageUrl, validateText } from '../../domain/publication.js';
+import type { Publication, PublicationContent, PublicationFilter, PublicationStatus } from '../../domain/publication.js';
 import type { PublicationActor, Publications, PublicationView } from '../ports/in/publications.js';
 import type { PublicationRepository } from '../ports/out/publication-repository.js';
 import type { ImageStoragePort } from '../ports/out/image-storage-port.js';
@@ -23,7 +23,7 @@ function copyContent(content: PublicationContent): PublicationContent {
 function view(publication: Publication, placeholderImageUrl: string): PublicationView {
   return { ...copyContent(publication), id: publication.id,
     fechaPublicacion: publication.createdAt.toISOString(), createdAt: Math.floor(publication.createdAt.getTime() / 1000),
-    estado: 'activo', imagen: publication.imagenes[0] ?? placeholderImageUrl,
+    estado: publication.estado, imagen: publication.imagenes[0] ?? placeholderImageUrl,
     vendedor: { ...publication.seller, userId: publication.ownerId } };
 }
 
@@ -44,7 +44,7 @@ export class PublicationService implements Publications {
     const createdAt = new Date(this.now().getTime());
     if (!Number.isFinite(createdAt.getTime()) || createdAt.getTime() < 0 || createdAt.getTime() >= 10000000000000) invalid('Invalid creation time');
     await this.images.assertUsableBy(ownerId, data.imagenes);
-    const publication: Publication = { ...data, id, ownerId, seller, createdAt, revision: 1 };
+    const publication: Publication = { ...data, id, ownerId, seller, createdAt, estado: 'activo', revision: 1 };
     await this.repository.insert(publication);
     return view(publication, this.placeholderImageUrl);
   }
@@ -70,6 +70,16 @@ export class PublicationService implements Publications {
   async delete(actor: Pick<PublicationActor, 'userId'>, id: string): Promise<void> {
     const current = await this.findOwned(actor, id);
     await this.repository.delete(current.id, current.ownerId, current.revision);
+  }
+
+  async changeStatus(actor: Pick<PublicationActor, 'userId'>, id: string, status: PublicationStatus): Promise<PublicationView> {
+    const current = await this.findOwned(actor, id);
+    if (!isPublicationStatus(status)) invalid('Invalid estado');
+    if (current.estado === status) return view(current, this.placeholderImageUrl);
+
+    const updated: Publication = { ...current, estado: status, revision: current.revision + 1 };
+    await this.repository.replace(updated, current.revision);
+    return view(updated, this.placeholderImageUrl);
   }
 
   private async findOwned(actor: Pick<PublicationActor, 'userId'>, id: string): Promise<Publication> {

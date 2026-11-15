@@ -376,10 +376,48 @@
                 Estado
               </span>
 
-              <strong>
-                {{ formatCategory(item.estado) }}
+              <strong
+                class="publication-status__badge"
+                aria-live="polite"
+                [class.publication-status__badge--active]="item.estado === 'activo' || item.estado === 'activa'"
+                [class.publication-status__badge--paused]="item.estado === 'pausada'"
+                [class.publication-status__badge--sold]="item.estado === 'vendida'"
+              >
+                @switch (item.estado) {
+                  @case ('activo') { Activa }
+                  @case ('pausada') { En pausa }
+                  @default { {{ formatCategory(item.estado) }} }
+                }
               </strong>
             </div>
+            @if (canManagePublication()) {
+              <div class="publication-status__controls">
+                <select
+                  #statusSelect
+                  aria-label="Cambiar estado de la publicación"
+                  [disabled]="savingStatus()"
+                  (change)="selectStatus(statusSelect.value)"
+                >
+                  @for (option of statusOptions; track option.value) {
+                    <option [value]="option.value" [selected]="option.value === (selectedStatus() ?? item.estado)">
+                      {{ option.label }}
+                    </option>
+                  }
+                </select>
+                <button
+                  type="button"
+                  [disabled]="!selectedStatus() || selectedStatus() === item.estado || savingStatus()"
+                  (click)="saveStatus()"
+                >
+                  {{ savingStatus() ? 'Guardando…' : 'Guardar estado' }}
+                </button>
+              </div>
+              @if (statusError()) {
+                <p class="publication-status__error" role="alert">
+                  No se pudo guardar el estado. Intenta de nuevo.
+                </p>
+              }
+            }
           </section>
 
           <section class="seller-card">

@@ -11,6 +11,8 @@
 
 ## Estado por componente
 
+El indicador de estado del detalle se actualiza después de que el catálogo confirma el guardado.
+
 Signals y `computed` mantienen carga, error, filtros, selección y datos. Los formularios usan Reactive Forms. Las suscripciones HTTP completan tras una respuesta; no se observó store externo.
 
 ## Persistencia y sincronización

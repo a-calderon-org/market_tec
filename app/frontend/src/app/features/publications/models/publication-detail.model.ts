@@ -1,3 +1,5 @@
+export type PublicationStatus = 'activo' | 'pausada' | 'vendida';
+
 export interface PublicationSpecifications {
   procesador: string;
   memoriaRam: string;

@@ -30,6 +30,9 @@ import {
   PublicationService
 } from '../services/publication.service';
 
+import { AuthSessionService } from '../../../core/auth/v2/auth-session.service';
+import { FEATURE_FLAGS } from '../../../core/feature-flags';
+
 describe('PublicationDetail', () => {
   let fixture:
     ComponentFixture<PublicationDetail>;
@@ -38,7 +41,8 @@ describe('PublicationDetail', () => {
     PublicationDetail;
 
   const publicationServiceMock = {
-    getPublicationById: vi.fn()
+    getPublicationById: vi.fn(),
+    changePublicationStatus: vi.fn()
   };
 
   const activatedRouteMock = {
@@ -163,6 +167,57 @@ describe('PublicationDetail', () => {
 
     fixture.detectChanges();
   }
+
+  function showInternalCatalogPublication(userId: string): void {
+    const identity = { userId, epoch: 1 };
+    TestBed.overrideProvider(FEATURE_FLAGS, { useValue: { authCoreV2: true, catalogInternalJwt: true } });
+    TestBed.overrideProvider(AuthSessionService, { useValue: {
+      currentIdentity: () => identity,
+      isCurrentIdentity: (value: unknown) => value === identity,
+    } });
+    publicationServiceMock.getPublicationById.mockReturnValue(of({
+      ...publication, estado: 'activo', vendedor: { ...publication.vendedor, userId: 'owner' },
+    }));
+    publicationServiceMock.changePublicationStatus.mockReset();
+    createComponent();
+  }
+
+  it('only lets the owner manage the publication status', () => {
+    showInternalCatalogPublication('another-user');
+    expect(fixture.nativeElement.querySelector('.publication-status__controls')).toBeNull();
+    component.selectStatus('pausada');
+    component.saveStatus();
+    expect(publicationServiceMock.changePublicationStatus).not.toHaveBeenCalled();
+  });
+
+  it('keeps the confirmed status on failure and updates it after retrying', () => {
+    showInternalCatalogPublication('owner');
+    const element: HTMLElement = fixture.nativeElement;
+    const select = element.querySelector<HTMLSelectElement>('.publication-status__controls select')!;
+    const save = element.querySelector<HTMLButtonElement>('.publication-status__controls button')!;
+    const badge = element.querySelector('.publication-status__badge')!;
+    expect(select.value).toBe('activo');
+    expect(save.disabled).toBe(true);
+    select.value = 'pausada';
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    publicationServiceMock.changePublicationStatus
+      .mockReturnValueOnce(throwError(() => new Error('save failed')))
+      .mockReturnValueOnce(of({ ...component.publication(), estado: 'pausada' }));
+
+    save.click();
+    fixture.detectChanges();
+    expect(badge.textContent?.trim()).toBe('Activa');
+    expect(element.querySelector('[role="alert"]')).not.toBeNull();
+    expect(save.disabled).toBe(false);
+
+    save.click();
+    fixture.detectChanges();
+    expect(publicationServiceMock.changePublicationStatus).toHaveBeenLastCalledWith(publication.id, 'pausada');
+    expect(badge.textContent?.trim()).toBe('En pausa');
+    expect(element.querySelector('[role="alert"]')).toBeNull();
+    expect(save.disabled).toBe(true);
+  });
 
   it('should create the component', () => {
     createComponent();

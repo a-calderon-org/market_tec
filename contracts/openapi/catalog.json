@@ -428,9 +428,9 @@
         },
         "put": {
           "operationId": "updatePublication",
-          "summary": "Actualizar contenido completo de una publicación",
+          "summary": "Actualizar el contenido completo o el estado de una publicación",
           "x-implementation-status": "implemented",
-          "description": "Interfaces de escritura aprobadas el 2026-11-09. Solo el propietario (`sub` del JWT interno verificado) puede actualizar; se conservan propietario, fecha y snapshot vendedor originales y no se consulta ms-users. Propietario, vendedor, ID y fecha nunca proceden del body. imagenes omitido se interpreta como [] también en PUT; sin adaptador de imágenes solo se aceptan publicaciones sin imágenes (400).",
+          "description": "Solo el propietario (`sub` del JWT interno verificado) puede actualizar. El cuerpo admite el contenido completo o únicamente estado. El cambio de estado conserva el contenido y las imágenes. La edición de contenido conserva el estado e interpreta imagenes omitido como []. Se conservan propietario, fecha y snapshot vendedor y no se consulta ms-users.",
           "security": [
             {
               "bearerAuth": [],
@@ -450,7 +450,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PublicationWriteRequest"
+                  "$ref": "#/components/schemas/PublicationUpdateRequest"
                 }
               }
             }
@@ -742,6 +742,20 @@
       }
     },
     "schemas": {
+        "PublicationUpdateRequest": {
+          "oneOf": [
+            { "$ref": "#/components/schemas/PublicationWriteRequest" },
+            { "$ref": "#/components/schemas/PublicationStatusUpdateRequest" }
+          ]
+        },
+        "PublicationStatusUpdateRequest": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["estado"],
+          "properties": {
+            "estado": { "type": "string", "enum": ["activo", "pausada", "vendida"] }
+          }
+        },
         "PublicationWriteRequest": {
           "type": "object",
           "additionalProperties": false,

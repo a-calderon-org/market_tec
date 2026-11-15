@@ -17,7 +17,7 @@ async function fixture() {
   const messages = new InMemoryMessageRepository();
   const publications = new InMemoryPublicationRepository();
   for (const id of ['publication-1', 'publication-2']) {
-    await publications.insert({ id, ownerId: seller.userId, createdAt: new Date(timestamp * 1000), revision: 1,
+    await publications.insert({ id, ownerId: seller.userId, createdAt: new Date(timestamp * 1000), revision: 1, estado: 'activo',
       seller: { id: 1, nombre: 'Ana', carrera: '', verificado: true }, categoria: 'Libros', subcategoria: '',
       titulo: 'Libro', descripcion: '', precio: 1000, condicion: null, ubicacion: '', imagenes: [] });
   }

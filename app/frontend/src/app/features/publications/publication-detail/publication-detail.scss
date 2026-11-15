@@ -309,6 +309,7 @@
 .price-card__delivery,
 .publication-status {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 14px;
   margin-top: 18px;
@@ -325,6 +326,66 @@
 .price-card__delivery strong,
 .publication-status strong {
   text-align: right;
+  font-size: 0.78rem;
+}
+
+.publication-status__badge {
+  padding: 6px 12px;
+  border-radius: 999px;
+}
+
+.publication-status__badge--active {
+  color: var(--success-text, #087f6a);
+  background: var(--success-surface, #d9f8ef);
+}
+
+.publication-status__badge--paused {
+  color: var(--warning-text, #8a5a00);
+  background: var(--warning-surface, #fff0cf);
+}
+
+.publication-status__badge--sold {
+  color: var(--text-muted, #687080);
+  background: var(--surface-muted, #eaecf5);
+}
+
+.publication-status__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.publication-status__controls select,
+.publication-status__controls button {
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--border, #e8eaf0);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.78rem;
+  color: var(--text, #172033);
+  background: var(--surface, #fff);
+}
+
+.publication-status__controls select {
+  flex: 1 0 auto;
+}
+
+.publication-status__controls button {
+  color: var(--accent-text, #00628f);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.publication-status__controls button:disabled {
+  color: var(--text-muted, #687080);
+  cursor: default;
+}
+
+.publication-status__error {
+  margin: 8px 0 0;
+  color: var(--danger-text, #a12631);
   font-size: 0.78rem;
 }
 
