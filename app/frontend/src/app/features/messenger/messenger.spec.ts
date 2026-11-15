@@ -1,3 +1,4 @@
+import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import {
   ActivatedRoute,
@@ -9,6 +10,8 @@ import { vi } from 'vitest';
 import { Chat } from './models/chat.model';
 import { Messenger } from './messenger';
 import { ChatService } from './services/chat.service';
+import { AppNotification } from '../notifications/models/notification.model';
+import { NotificationService } from '../notifications/services/notification.service';
 
 describe('Messenger', () => {
   let fixture:
@@ -125,6 +128,16 @@ describe('Messenger', () => {
       vi.fn()
   };
 
+  const notificationServiceMock = {
+    items: signal<readonly AppNotification[]>([]),
+    loaded: signal(false),
+  };
+
+  const notification = (notificationId: string, chatId: string): AppNotification => ({
+    notificationId, chatId, eventId: notificationId, senderUserId: 'USR-002', messageId: `msg-${notificationId}`,
+    occurredAt: 1794571200, correlationId: notificationId, createdAt: 1794571200, isRead: false,
+  });
+
   const activatedRouteMock = {
     snapshot: {
       queryParamMap:
@@ -134,6 +147,8 @@ describe('Messenger', () => {
   };
 
   beforeEach(async () => {
+    notificationServiceMock.items.set([]);
+    notificationServiceMock.loaded.set(false);
     chatServiceMock.catalogMessaging = false;
     chatServiceMock.startChat.mockReset();
     chatServiceMock.getMessages.mockReset();
@@ -184,7 +199,9 @@ describe('Messenger', () => {
 
             useValue:
               chatServiceMock
-          }
+          },
+
+          { provide: NotificationService, useValue: notificationServiceMock }
         ]
       })
       .compileComponents();
@@ -245,6 +262,35 @@ describe('Messenger', () => {
 
     chatServiceMock.getChats.mockClear();
     activatedRouteMock.queryParamMap.next(convertToParamMap({ chat: 'CHAT-NEW' }));
+    expect(chatServiceMock.getChats).toHaveBeenCalledTimes(1);
+  });
+
+  it('reloads the conversation when a new message notification arrives', () => {
+    chatServiceMock.catalogMessaging = true;
+    chatServiceMock.getMessages.mockReturnValue(of([]));
+    notificationServiceMock.items.set([notification('n-1', 'CHAT-001')]);
+    notificationServiceMock.loaded.set(true);
+    const catalogFixture = TestBed.createComponent(Messenger);
+    catalogFixture.detectChanges();
+    const messenger = catalogFixture.componentInstance;
+    chatServiceMock.getMessages.mockClear();
+
+    // Una notificación ya existente al abrir Mensajes no provoca otra carga.
+    TestBed.tick();
+    expect(chatServiceMock.getMessages).not.toHaveBeenCalled();
+
+    chatServiceMock.getMessages.mockReturnValue(of([
+      { id: 'new', texto: 'Hola', fecha: '2026-11-14T12:00:00Z', enviadoPorMi: false },
+    ]));
+    notificationServiceMock.items.set([notification('n-2', 'CHAT-001'), notification('n-1', 'CHAT-001')]);
+    TestBed.tick();
+    expect(chatServiceMock.getMessages).toHaveBeenCalledWith('CHAT-001');
+    expect(messenger.selectedSessionMessages().map(message => message.id)).toContain('new');
+
+    // Una conversación que aún no está en la lista recarga la lista.
+    chatServiceMock.getChats.mockClear();
+    notificationServiceMock.items.set([notification('n-3', 'CHAT-NEW'), notification('n-2', 'CHAT-001')]);
+    TestBed.tick();
     expect(chatServiceMock.getChats).toHaveBeenCalledTimes(1);
   });
 

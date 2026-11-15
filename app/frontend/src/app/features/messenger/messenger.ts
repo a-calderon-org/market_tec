@@ -1,4 +1,4 @@
-import { Component, computed, DestroyRef, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, DestroyRef, effect, inject, OnInit, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -6,6 +6,7 @@ import { filter, map, skip } from 'rxjs';
 import { Chat, SessionMessage } from './models/chat.model';
 import { ChatService } from './services/chat.service';
 import { RecentChatSearchService } from './services/recent-chat-search.service';
+import { NotificationService } from '../notifications/services/notification.service';
 
 @Component({
   selector: 'app-messenger',
@@ -313,6 +314,42 @@ export class Messenger implements OnInit {
     );
     if (this.catalogMessaging) this.loadMessages(chatId);
   }
+
+  // ---- Mensajes nuevos avisados por notificación -------------------------------------------------------------------
+
+  private readonly notifications = inject(NotificationService);
+  /** Notificaciones ya vistas; null hasta la primera carga (lo existente ya llegó con `loadChats`). */
+  private seenNotificationIds: Set<string> | null = null;
+
+  /**
+   * Cuando llega una notificación nueva (consulta periódica de la campana), se recarga el historial de esa conversación
+   * para mostrar el mensaje sin tener que abrir la notificación. Si la conversación aún no está en la lista, se recarga
+   * la lista.
+   */
+  private readonly refreshOnNewNotifications = effect(() => {
+    const items = this.notifications.items();
+    if (!this.notifications.loaded()) return;
+
+    if (this.seenNotificationIds === null) {
+      this.seenNotificationIds = new Set(items.map(item => item.notificationId));
+      return;
+    }
+
+    const seen = this.seenNotificationIds;
+    const chatIds = new Set(items.filter(item => !seen.has(item.notificationId)).map(item => item.chatId));
+    items.forEach(item => seen.add(item.notificationId));
+    if (chatIds.size === 0) return;
+
+    untracked(() => {
+      if (!this.catalogMessaging || this.loading()) return;
+      const known = new Set(this.chats().map(chat => chat.id));
+      if ([...chatIds].some(chatId => !known.has(chatId))) {
+        this.loadChats();
+        return;
+      }
+      chatIds.forEach(chatId => this.loadMessages(chatId));
+    });
+  });
 
   private loadMessages(chatId: string): void {
     this.historyError.set(false);
