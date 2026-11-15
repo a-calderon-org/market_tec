@@ -24,7 +24,14 @@ export interface SellerSnapshot {
   readonly verificado: boolean;
 }
 
+export type PublicationStatus = 'activo' | 'pausada' | 'vendida';
+
+export function isPublicationStatus(value: unknown): value is PublicationStatus {
+  return value === 'activo' || value === 'pausada' || value === 'vendida';
+}
+
 export interface Publication extends PublicationContent {
+  readonly estado: PublicationStatus;
   readonly id: string;
   readonly ownerId: string;
   readonly seller: SellerSnapshot;

@@ -1,5 +1,5 @@
-import { validateContent, validateText } from '../../../domain/publication.js';
-import type { Publication } from '../../../domain/publication.js';
+import { isPublicationStatus, validateContent, validateText } from '../../../domain/publication.js';
+import type { Publication, PublicationContent } from '../../../domain/publication.js';
 import { messageText, messageTime } from '../../../domain/messaging.js';
 import type { Chat, Message, MessageSent } from '../../../domain/messaging.js';
 import { CosmosPersistenceError } from './store.js';
@@ -42,10 +42,10 @@ function logicalId(data: Record<string, unknown>, kind: string, property = 'logi
 
 export function publicationDocument(value: Publication, pk: string) {
   const { id, createdAt, revision, ownerId, seller, categoria, subcategoria, titulo, descripcion,
-    precio, condicion, ubicacion, imagenes } = value;
+    precio, condicion, ubicacion, imagenes, estado } = value;
   return {
     ...envelope('publication', id, pk), logicalId: id, sortId: sortId(id),
-    createdAtMs: createdAt.getTime(), revision, ownerId,
+    createdAtMs: createdAt.getTime(), revision, ownerId, estado,
     seller: { id: seller.id, nombre: seller.nombre, carrera: seller.carrera, verificado: seller.verificado },
     categoria, subcategoria, titulo, descripcion, precio, condicion, ubicacion, imagenes: [...imagenes],
     searchText: (titulo + '\n' + descripcion).toLocaleLowerCase('es'),
@@ -57,6 +57,8 @@ export function readPublication(value: unknown, pk: string): Publication {
   const id = logicalId(data, 'publication');
   const seller = fields(data.seller);
   const { createdAtMs, ownerId, revision } = data;
+  const { estado = 'activo' } = data;
+  if (!isPublicationStatus(estado)) corrupt();
   if (typeof createdAtMs !== 'number' || !Number.isSafeInteger(createdAtMs) || createdAtMs < 0 ||
       createdAtMs >= 10_000_000_000_000 || typeof revision !== 'number' || !Number.isSafeInteger(revision) ||
       revision < 1 || (seller.id !== null && (typeof seller.id !== 'number' || !Number.isSafeInteger(seller.id))) ||
@@ -65,7 +67,7 @@ export function readPublication(value: unknown, pk: string): Publication {
   const content = {
     categoria: data.categoria, subcategoria: data.subcategoria, titulo: data.titulo, descripcion: data.descripcion,
     precio: data.precio, condicion: data.condicion, ubicacion: data.ubicacion, imagenes: data.imagenes,
-  } as Publication;
+  } as PublicationContent;
   const { nombre, carrera } = seller;
   try {
     validateText(ownerId, 'ownerId', 64, true);
@@ -74,7 +76,7 @@ export function readPublication(value: unknown, pk: string): Publication {
     validateContent(content);
   } catch { return corrupt(); }
   if (data.sortId !== sortId(id) || data.searchText !== (content.titulo + '\n' + content.descripcion).toLocaleLowerCase('es')) corrupt();
-  return { ...content, imagenes: [...content.imagenes], id, ownerId, revision, createdAt: new Date(createdAtMs),
+  return { ...content, imagenes: [...content.imagenes], id, ownerId, revision, estado, createdAt: new Date(createdAtMs),
     seller: { id: seller.id, nombre, carrera, verificado: seller.verificado } };
 }
 

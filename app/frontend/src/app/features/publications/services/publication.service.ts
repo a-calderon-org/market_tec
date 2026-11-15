@@ -10,7 +10,7 @@ import {
   switchMap,
   throwError
 } from 'rxjs';
-import { PublicationDetail } from '../models/publication-detail.model';
+import { PublicationDetail, PublicationStatus } from '../models/publication-detail.model';
 import { ApiClientService } from '../../../core/api/api-client.service';
 import { PaginatedResponse } from '../../../shared/paginated-response.model';
 import { Publication } from '../models/publication.model';
@@ -142,6 +142,10 @@ export class PublicationService {
 
   deletePublication(id: string): Observable<void> {
     return this.apiClient.delete<void>(`/publicaciones/${encodeURIComponent(id)}`);
+  }
+
+  changePublicationStatus(id: string, estado: PublicationStatus): Observable<PublicationDetail> {
+    return this.apiClient.put<PublicationDetail>(`/publicaciones/${encodeURIComponent(id)}`, { estado });
   }
 
   /** Solo con el ms-catalog propio (JWT interno): reemplaza el contenido de una publicación propia. */

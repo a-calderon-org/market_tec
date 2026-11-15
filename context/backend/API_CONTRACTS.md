@@ -4,6 +4,10 @@
 
 `DELETE /v1/publicaciones/{id}` elimina la publicación propia y devuelve `204` sin cuerpo. La propiedad se obtiene del JWT interno. Una publicación inexistente devuelve `404` y un cambio concurrente devuelve `409`.
 
+`PUT /v1/publicaciones/{publicationId}` admite un cuerpo con solo `estado` para que
+el propietario cambie su publicación a `activo`, `pausada` o `vendida`. Devuelve el
+detalle actualizado y conserva el contenido y las imágenes.
+
 **Verificado en código:** `npm start` monta listado, detalle, alta y actualización
 con configuración explícita. El [contrato Catalog](../../contracts/openapi/catalog.json)
 define DTO, respuestas y filtros. La [guía de ms-catalog](../../app/ms-catalog/README.md#mtec-32--api-http-de-publicaciones)

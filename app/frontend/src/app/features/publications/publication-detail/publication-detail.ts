@@ -1,6 +1,10 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, DestroyRef, inject, OnInit, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { PublicationDetail as PublicationDetailModel } from '../models/publication-detail.model';
+import { finalize } from 'rxjs';
+import { AuthSessionService } from '../../../core/auth/v2/auth-session.service';
+import { FEATURE_FLAGS } from '../../../core/feature-flags';
+import { PublicationDetail as PublicationDetailModel, PublicationStatus } from '../models/publication-detail.model';
 import { PublicationService } from '../services/publication.service';
 
 @Component({
@@ -12,7 +16,13 @@ import { PublicationService } from '../services/publication.service';
 })
 export class PublicationDetail implements OnInit {
   private readonly route = inject(ActivatedRoute);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly publicationService = inject(PublicationService);
+
+  private readonly flags = inject(FEATURE_FLAGS);
+  private readonly session = this.flags.authCoreV2 && this.flags.catalogInternalJwt
+    ? inject(AuthSessionService)
+    : null;
 
   readonly publication = signal<PublicationDetailModel | null>(null);
   readonly selectedImage = signal<string>(
@@ -25,6 +35,49 @@ export class PublicationDetail implements OnInit {
 
   readonly loading = signal(true);
   readonly error = signal(false);
+
+  readonly statusOptions = [
+    { value: 'activo', label: 'Activa' },
+    { value: 'pausada', label: 'En pausa' },
+    { value: 'vendida', label: 'Vendida' }
+  ] as const;
+  readonly selectedStatus = signal<PublicationStatus | null>(null);
+  readonly savingStatus = signal(false);
+  readonly statusError = signal(false);
+  readonly canManagePublication = computed(() => {
+    const identity = this.session?.currentIdentity();
+    return !!identity && identity.userId === this.publication()?.vendedor.userId;
+  });
+
+  selectStatus(value: string): void {
+    const option = this.statusOptions.find(status => status.value === value);
+    this.selectedStatus.set(option?.value ?? null);
+    this.statusError.set(false);
+  }
+
+  saveStatus(): void {
+    const publication = this.publication();
+    const identity = this.session?.currentIdentity();
+    const status = this.selectedStatus();
+    if (!publication || !identity || identity.userId !== publication.vendedor.userId ||
+        !status || status === publication.estado || this.savingStatus()) return;
+
+    this.statusError.set(false);
+    this.savingStatus.set(true);
+    this.publicationService.changePublicationStatus(publication.id, status).pipe(
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => this.savingStatus.set(false))
+    ).subscribe({
+      next: (updated) => {
+        if (!this.session?.isCurrentIdentity(identity)) return;
+        this.publication.set(updated);
+        this.selectedStatus.set(null);
+      },
+      error: () => {
+        if (this.session?.isCurrentIdentity(identity)) this.statusError.set(true);
+      }
+    });
+  }
 
   ngOnInit(): void {
     const source =

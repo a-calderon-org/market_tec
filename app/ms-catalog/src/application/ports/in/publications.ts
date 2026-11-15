@@ -1,4 +1,4 @@
-import type { PublicationContent, PublicationFilter, SellerSnapshot } from '../../../domain/publication.js';
+import type { PublicationContent, PublicationFilter, PublicationStatus, SellerSnapshot } from '../../../domain/publication.js';
 
 // Principal produced by credential verification (internal JWT), never by request bodies or identity headers.
 export interface AuthenticatedPrincipal {
@@ -22,7 +22,7 @@ export interface PublicationView extends PublicationContent {
   readonly id: string;
   readonly fechaPublicacion: string;
   readonly createdAt: number;
-  readonly estado: string;
+  readonly estado: PublicationStatus;
   readonly imagen: string;
   readonly vendedor: SellerSnapshot & { readonly userId: string };
 }
@@ -39,6 +39,7 @@ export interface Publications {
   get(id: string): Promise<PublicationView>;
   // Only the owner id is needed: the original seller snapshot is preserved.
   update(actor: Pick<PublicationActor, 'userId'>, id: string, content: PublicationContent): Promise<PublicationView>;
+  changeStatus(actor: Pick<PublicationActor, 'userId'>, id: string, status: PublicationStatus): Promise<PublicationView>;
   delete(actor: Pick<PublicationActor, 'userId'>, id: string): Promise<void>;
   list(filter?: PublicationFilter): Promise<PublicationPage>;
   listOwned(actor: PublicationActor, filter?: PublicationFilter): Promise<PublicationPage>;

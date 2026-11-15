@@ -1,11 +1,11 @@
 import { Router, json, type Request } from 'express';
 import { ActorResolutionError } from '../../../application/ports/in/publications.js';
 import type { AuthenticatedPrincipal, Publications, PublicationActor } from '../../../application/ports/in/publications.js';
-import { PublicationError, invalid, validateContent } from '../../../domain/publication.js';
+import { PublicationError, invalid, isPublicationStatus, validateContent } from '../../../domain/publication.js';
 import type { PublicationFilter, PublicationContent } from '../../../domain/publication.js';
 
 export interface PublicationWrites {
-  readonly publications: Pick<Publications, 'create' | 'update' | 'delete'>;
+  readonly publications: Pick<Publications, 'create' | 'update' | 'changeStatus' | 'delete'>;
   readonly resolveActor: (principal: AuthenticatedPrincipal) => Promise<PublicationActor>;
 }
 
@@ -84,10 +84,16 @@ export function createPublicationRouter(dependencies: PublicationHttpDependencie
       response.location(`/v1/publicaciones/${encodeURIComponent(created.id)}`).status(201).json(created);
     });
     router.put('/:publicationId', async (request, response) => {
-      const content = parseContent(request.body);
       // Ownership uses only the verified subject; ms-users is not consulted on updates.
       const owner = { userId: identities.get(request)!.userId };
-      response.json(await writes.publications.update(owner, request.params.publicationId as string, content));
+      const id = request.params.publicationId as string;
+      const body: unknown = request.body;
+      if (body && typeof body === 'object' && 'estado' in body) {
+        if (Object.keys(body).length !== 1 || !isPublicationStatus(body.estado)) invalid('Invalid estado update');
+        response.json(await writes.publications.changeStatus(owner, id, body.estado));
+        return;
+      }
+      response.json(await writes.publications.update(owner, id, parseContent(body)));
     });
     router.delete('/:publicationId', async (request, response) => {
       const owner = { userId: identities.get(request)!.userId };
