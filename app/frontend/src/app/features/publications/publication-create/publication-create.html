@@ -84,7 +84,7 @@
               type="text"
               formControlName="titulo"
               [attr.maxlength]="limits.title"
-              placeholder="Ej. Monitor Dell UltraSharp 27” 4K USB-C"
+              [placeholder]="fields().titleExample"
             >
 
             @if (isControlInvalid('titulo')) {
@@ -96,7 +96,7 @@
 
           <div class="form-field">
             <label for="publication-subcategory">
-              Subcategoría
+              {{ fields().subcategoryLabel }}
               @if (!editing) { <span class="required">*</span> }
             </label>
 
@@ -105,12 +105,12 @@
               type="text"
               formControlName="subcategoria"
               [attr.maxlength]="limits.subcategory"
-              placeholder="Ej. monitores, laptops, programación..."
+              [placeholder]="fields().subcategoryExample"
             >
 
             @if (isControlInvalid('subcategoria')) {
               <small class="field-error">
-                Ingresa una subcategoría válida.
+                {{ fields().subcategoryError }}
               </small>
             }
           </div>
@@ -119,7 +119,7 @@
 
             <div class="form-field">
               <label for="publication-price">
-                Precio (₡ CRC)
+                {{ fields().priceLabel }}
                 <span class="required">*</span>
               </label>
 
@@ -145,7 +145,7 @@
 
             <div class="form-field">
               <label for="publication-location">
-                Punto de entrega en TEC SC
+                {{ fields().locationLabel }}
                 @if (!editing) { <span class="required">*</span> }
               </label>
 
@@ -154,12 +154,12 @@
                 type="text"
                 formControlName="ubicacion"
                 [attr.maxlength]="limits.location"
-                placeholder="Ej. Biblioteca TEC"
+                [placeholder]="fields().locationExample"
               >
 
               @if (isControlInvalid('ubicacion')) {
                 <small class="field-error">
-                  Indica un punto de entrega.
+                  {{ fields().locationError }}
                 </small>
               }
             </div>
@@ -167,74 +167,76 @@
           </div>
 
           <!-- Condición -->
-          <div class="form-field">
-            <span class="form-field__label">
-              Condición del artículo
-              @if (!editing) { <span class="required">*</span> }
-            </span>
+          @if (isElectronics()) {
+            <div class="form-field">
+              <span class="form-field__label">
+                Condición del artículo
+                @if (!editing) { <span class="required">*</span> }
+              </span>
 
-            <div class="condition-options">
+              <div class="condition-options">
 
-              @if (editing) {
+                @if (editing) {
+                  <button
+                    type="button"
+                    class="condition-option"
+                    [class.condition-option--active]="formValue().condicion === null"
+                    (click)="selectCondition(null)"
+                  >
+                    Sin condición
+                  </button>
+                  @if (formValue().condicion !== null && !['nuevo', 'como-nuevo', 'buen-estado', 'para-repuesto'].includes(formValue().condicion ?? '')) {
+                    <span class="condition-option condition-option--active">{{ formatLabel(formValue().condicion) }}</span>
+                  }
+                }
+
                 <button
                   type="button"
                   class="condition-option"
-                  [class.condition-option--active]="formValue().condicion === null"
-                  (click)="selectCondition(null)"
+                  [class.condition-option--active]="
+                    form.controls.condicion.value === 'nuevo'
+                  "
+                  (click)="selectCondition('nuevo')"
                 >
-                  Sin condición
+                  Nuevo
                 </button>
-                @if (formValue().condicion !== null && !['nuevo', 'como-nuevo', 'buen-estado', 'para-repuesto'].includes(formValue().condicion ?? '')) {
-                  <span class="condition-option condition-option--active">{{ formatLabel(formValue().condicion) }}</span>
-                }
-              }
 
-              <button
-                type="button"
-                class="condition-option"
-                [class.condition-option--active]="
-                  form.controls.condicion.value === 'nuevo'
-                "
-                (click)="selectCondition('nuevo')"
-              >
-                Nuevo
-              </button>
+                <button
+                  type="button"
+                  class="condition-option"
+                  [class.condition-option--active]="
+                    form.controls.condicion.value === 'como-nuevo'
+                  "
+                  (click)="selectCondition('como-nuevo')"
+                >
+                  Como nuevo
+                </button>
 
-              <button
-                type="button"
-                class="condition-option"
-                [class.condition-option--active]="
-                  form.controls.condicion.value === 'como-nuevo'
-                "
-                (click)="selectCondition('como-nuevo')"
-              >
-                Como nuevo
-              </button>
+                <button
+                  type="button"
+                  class="condition-option"
+                  [class.condition-option--active]="
+                    form.controls.condicion.value === 'buen-estado'
+                  "
+                  (click)="selectCondition('buen-estado')"
+                >
+                  Buen estado
+                </button>
 
-              <button
-                type="button"
-                class="condition-option"
-                [class.condition-option--active]="
-                  form.controls.condicion.value === 'buen-estado'
-                "
-                (click)="selectCondition('buen-estado')"
-              >
-                Buen estado
-              </button>
+                <button
+                  type="button"
+                  class="condition-option"
+                  [class.condition-option--active]="
+                    form.controls.condicion.value === 'para-repuesto'
+                  "
+                  (click)="selectCondition('para-repuesto')"
+                >
+                  Para repuesto
+                </button>
 
-              <button
-                type="button"
-                class="condition-option"
-                [class.condition-option--active]="
-                  form.controls.condicion.value === 'para-repuesto'
-                "
-                (click)="selectCondition('para-repuesto')"
-              >
-                Para repuesto
-              </button>
-
+              </div>
             </div>
-          </div>
+          }
 
           <!-- Fotografías -->
           @if (!editing) {
@@ -339,7 +341,7 @@
               rows="5"
               [attr.maxlength]="limits.description"
               formControlName="descripcion"
-              placeholder="Describe el estado, características principales y cualquier detalle importante..."
+              [placeholder]="fields().descriptionExample"
             ></textarea>
 
             <div class="description-meta">
@@ -349,7 +351,7 @@
                 </small>
               } @else {
                 <small>
-                  Describe claramente lo que estás ofreciendo.
+                  {{ fields().descriptionHint }}
                 </small>
               }
 
@@ -446,9 +448,11 @@
                 {{ formatLabel(formValue().categoria) }}
               </span>
 
-              <span class="preview-badge">
-                {{ formatLabel(formValue().condicion) }}
-              </span>
+              @if (isElectronics()) {
+                <span class="preview-badge">
+                  {{ formatLabel(formValue().condicion) }}
+                </span>
+              }
             </div>
           </div>
 
@@ -459,9 +463,11 @@
                 ₡ {{ formatPrice(formValue().precio || 0) }}
               </strong>
 
-              <span>
-                Negociable
-              </span>
+              @if (isElectronics()) {
+                <span>
+                  Negociable
+                </span>
+              }
             </div>
 
             <h2>
@@ -479,7 +485,7 @@
                 @if (formValue().ubicacion) {
                   {{ formValue().ubicacion }}
                 } @else {
-                  Punto de entrega
+                  {{ fields().previewLocation }}
                 }
               </span>
             </div>

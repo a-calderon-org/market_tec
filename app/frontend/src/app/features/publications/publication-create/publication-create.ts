@@ -21,6 +21,48 @@ type PublicationCondition =
   | 'buen-estado'
   | 'para-repuesto';
 
+const categoryFields = {
+  electronicos: {
+    titleExample: 'Ej. Monitor Dell UltraSharp 27” 4K USB-C',
+    subcategoryLabel: 'Subcategoría',
+    subcategoryExample: 'Ej. monitores, laptops, programación...',
+    subcategoryError: 'Ingresa una subcategoría válida.',
+    priceLabel: 'Precio (₡ CRC)',
+    locationLabel: 'Punto de entrega en TEC SC',
+    locationExample: 'Ej. Biblioteca TEC',
+    locationError: 'Indica un punto de entrega.',
+    previewLocation: 'Punto de entrega',
+    descriptionExample: 'Describe el estado, características principales y cualquier detalle importante...',
+    descriptionHint: 'Describe claramente lo que estás ofreciendo.'
+  },
+  alquiler: {
+    titleExample: 'Ej. Habitación amueblada cerca del TEC',
+    subcategoryLabel: 'Tipo de inmueble',
+    subcategoryExample: 'Ej. habitación, apartamento, casa',
+    subcategoryError: 'Indica el tipo de inmueble.',
+    priceLabel: 'Monto del alquiler (₡ CRC)',
+    locationLabel: 'Zona o barrio',
+    locationExample: 'Ej. Barrio Los Ángeles, Cartago',
+    locationError: 'Indica dónde se ubica el inmueble.',
+    previewLocation: 'Zona o barrio',
+    descriptionExample: 'Indica el período del precio, la disponibilidad, el depósito y los servicios incluidos.',
+    descriptionHint: 'Aclara si el monto es mensual o corresponde a otro período.'
+  },
+  tutoria: {
+    titleExample: 'Ej. Tutoría de Cálculo Diferencial',
+    subcategoryLabel: 'Materia o curso',
+    subcategoryExample: 'Ej. Cálculo, Física, Programación',
+    subcategoryError: 'Indica la materia o el curso.',
+    priceLabel: 'Tarifa de la tutoría (₡ CRC)',
+    locationLabel: 'Modalidad y lugar',
+    locationExample: 'Ej. Virtual o presencial en Biblioteca TEC',
+    locationError: 'Indica la modalidad y, si es presencial, el lugar.',
+    previewLocation: 'Modalidad y lugar',
+    descriptionExample: 'Indica los temas, el nivel, la duración de la sesión y los horarios disponibles.',
+    descriptionHint: 'Aclara si la tarifa es por hora o por sesión.'
+  }
+} satisfies Record<PublicationCategory, Record<string, string>>;
+
 interface LocalImage {
   file: File;
   id: string;
@@ -156,6 +198,15 @@ export class PublicationCreate {
         this.form.getRawValue()
     }
   );
+
+  readonly adaptiveCategory = computed(() => {
+    const category = this.formValue().categoria;
+    return !this.editing && (category === 'alquiler' || category === 'tutoria')
+      ? category
+      : 'electronicos';
+  });
+  readonly fields = computed(() => categoryFields[this.adaptiveCategory()]);
+  readonly isElectronics = computed(() => this.adaptiveCategory() === 'electronicos');
 
   readonly images =
     signal<LocalImage[]>([]);
@@ -467,7 +518,7 @@ export class PublicationCreate {
           value.precio,
 
         condicion:
-          value.condicion,
+          this.isElectronics() ? value.condicion : null,
 
         ubicacion:
           value.ubicacion.trim()

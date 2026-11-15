@@ -175,6 +175,37 @@ describe('PublicationCreate', () => {
     ).toBe('');
   });
 
+  it.each([
+    { category: 'alquiler', subcategory: 'Tipo de inmueble', location: 'Zona o barrio' },
+    { category: 'tutoria', subcategory: 'Materia o curso', location: 'Modalidad y lugar' }
+  ] as const)('should adapt the form and preview for $category', ({ category, subcategory, location }) => {
+    vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    component.selectCondition('nuevo');
+    component.selectCategory(category);
+    component.form.patchValue({
+      subcategoria: 'Ejemplo',
+      titulo: 'Título de ejemplo',
+      descripcion: 'Descripción del anuncio.',
+      precio: 5000,
+      ubicacion: 'Una ubicación'
+    });
+    fixture.detectChanges();
+
+    const element: HTMLElement = fixture.nativeElement;
+    expect(element.querySelector('label[for="publication-subcategory"]')?.textContent).toContain(subcategory);
+    expect(element.querySelector('label[for="publication-location"]')?.textContent).toContain(location);
+    expect(element.querySelector('.condition-options')).toBeNull();
+    expect(element.querySelector('.preview-badge:not(.preview-badge--category)')).toBeNull();
+
+    component.submit();
+    expect(publicationServiceMock.createPublication).toHaveBeenCalledWith(expect.objectContaining({
+      categoria: category,
+      condicion: null,
+      subcategoria: 'Ejemplo',
+      ubicacion: 'Una ubicación'
+    }));
+  });
+
   it('should select a condition', () => {
     component.selectCondition(
       'buen-estado'
