@@ -291,7 +291,7 @@ describe('Home', () => {
     expect(component.page()).toBe(1);
   });
 
-  it('shows an empty result and reset restores the catalog', () => {
+  it('shows an empty result and restores the catalog from the filter sidebar', () => {
     createComponent();
     component.searchDraft.set('sin coincidencias');
     component.executeSearch();
@@ -302,7 +302,9 @@ describe('Home', () => {
     expect(fixture.nativeElement.textContent)
       .toContain('No se encontraron publicaciones');
 
-    component.resetFilters();
+    const sidebarReset: HTMLButtonElement = fixture.nativeElement.querySelector('.filters__title button');
+    expect(sidebarReset.textContent?.trim()).toBe('Restablecer');
+    sidebarReset.click();
     expect(component.totalRecords()).toBe(3);
   });
 
