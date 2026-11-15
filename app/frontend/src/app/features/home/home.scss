@@ -247,28 +247,6 @@
   width: 100%;
 }
 
-.toolbar__filters {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-
-  margin-top: 15px;
-
-  font-size: 0.8rem;
-}
-
-.toolbar__filters button {
-  padding: 0;
-
-  color: var(--danger-text, #c62828);
-
-  cursor: pointer;
-
-  background: transparent;
-  border: 0;
-}
-
 /* =========================
    Marketplace layout
    ========================= */
@@ -534,11 +512,6 @@ button:disabled {
   .toolbar__top,
   .marketplace {
     grid-template-columns: 1fr;
-  }
-
-  .toolbar__filters {
-    align-items: flex-start;
-    flex-direction: column;
   }
 
   .filters {
