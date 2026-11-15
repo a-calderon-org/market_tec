@@ -89,6 +89,26 @@ async function assertAuthenticatedHttp(repositories: CatalogRepositories, endpoi
     await assertPage(1, [row.id], 2);
     await assertPage(2, [secondRow.id], 2);
     await assertPage(3, [], 2);
+    const paused = await fetch(collection + '/' + encodeURIComponent(secondRow.id), {
+      method: 'PUT', headers: { ...authorized, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ estado: 'pausada' }), signal: AbortSignal.timeout(15_000),
+    });
+    assert.equal(paused.status, 200);
+    await paused.body?.cancel();
+    const ownedQuery = new URLSearchParams({
+      propias: 'true', estado: 'pausada', q: 'libros', categoria: 'Libros', pageSize: '1',
+    });
+    const ownedUrl = collection + '?' + ownedQuery;
+    const owned = await fetch(ownedUrl, { headers: authorized, signal: AbortSignal.timeout(15_000) });
+    assert.equal(owned.status, 200);
+    const ownedPage = await owned.json() as { items: { id: string }[]; totalRecords: number };
+    assert.equal(ownedPage.totalRecords, 1);
+    assert.deepEqual(ownedPage.items.map(item => item.id), [secondRow.id]);
+    const otherOwned = await fetch(ownedUrl, {
+      headers: { Authorization: 'Bearer ' + otherToken }, signal: AbortSignal.timeout(15_000),
+    });
+    assert.equal(otherOwned.status, 200);
+    assert.equal((await otherOwned.json()).totalRecords, 0);
     const rejected = await write(detail, 'PUT', otherToken, { titulo: 'bad' });
     assert.equal(rejected.status, 403);
     await rejected.body?.cancel();

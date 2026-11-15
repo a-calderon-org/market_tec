@@ -42,5 +42,5 @@ export interface Publications {
   changeStatus(actor: Pick<PublicationActor, 'userId'>, id: string, status: PublicationStatus): Promise<PublicationView>;
   delete(actor: Pick<PublicationActor, 'userId'>, id: string): Promise<void>;
   list(filter?: PublicationFilter): Promise<PublicationPage>;
-  listOwned(actor: PublicationActor, filter?: PublicationFilter): Promise<PublicationPage>;
+  listOwned(actor: Pick<PublicationActor, 'userId'>, filter?: PublicationFilter): Promise<PublicationPage>;
 }

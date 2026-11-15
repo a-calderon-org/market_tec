@@ -36,7 +36,11 @@ export class InMemoryPublicationRepository implements PublicationRepository {
     const items = [...this.publications.values()].filter(publication =>
       (query.ownerId === undefined || publication.ownerId === query.ownerId) &&
       (!query.categoria || publication.categoria === query.categoria) &&
-      (!needle || `${publication.titulo}\n${publication.descripcion}`.toLocaleLowerCase('es').includes(needle)) &&
+      (!query.estado || publication.estado === query.estado) &&
+      (!needle || (query.searchOwnedFields
+        ? [publication.id, publication.titulo, publication.categoria, publication.subcategoria, publication.ubicacion].join(' ')
+        : `${publication.titulo}\n${publication.descripcion}`
+      ).toLocaleLowerCase('es').includes(needle)) &&
       publication.precio >= query.precioMin && publication.precio <= query.precioMax);
     items.sort((a, b) => {
       const difference = query.sortBy === 'precio' ? a.precio - b.precio : a.createdAt.getTime() - b.createdAt.getTime();

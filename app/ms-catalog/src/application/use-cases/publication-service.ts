@@ -93,8 +93,8 @@ export class PublicationService implements Publications {
 
   async list(filter: PublicationFilter = {}) { return this.search(filter); }
 
-  async listOwned(actor: PublicationActor, filter: PublicationFilter = {}) {
-    validateActor(actor);
+  async listOwned(actor: Pick<PublicationActor, 'userId'>, filter: PublicationFilter = {}) {
+    validateText(actor?.userId, 'userId', 64, true);
     return this.search(filter, actor.userId);
   }
 

@@ -69,6 +69,8 @@ export function validateContent(content: PublicationContent): void {
 }
 
 export interface PublicationFilter {
+  readonly searchOwnedFields?: boolean;
+  readonly estado?: PublicationStatus;
   readonly page?: number;
   readonly pageSize?: number;
   readonly q?: string;
@@ -80,6 +82,8 @@ export interface PublicationFilter {
 }
 
 export interface PublicationQuery {
+  readonly searchOwnedFields?: boolean;
+  readonly estado?: PublicationStatus;
   readonly page: number;
   readonly pageSize: number;
   readonly q: string;
@@ -97,7 +101,11 @@ export function normalizeQuery(filter: PublicationFilter, ownerId?: string): Pub
   if (!Number.isSafeInteger(page) || page < 1 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100 || !Number.isSafeInteger((page - 1) * pageSize)) invalid('Invalid pagination');
   validateText(q, 'q', 200);
   validateText(categoria, 'categoria', 100);
+  const { estado } = filter;
+  if (estado !== undefined && !isPublicationStatus(estado)) invalid('Invalid publication status');
   if (!['precio', 'fecha'].includes(sortBy) || !['asc', 'desc'].includes(sortDirection)) invalid('Invalid sorting');
   if (![precioMin, precioMax].every(value => typeof value === 'number' && Number.isFinite(value) && value >= 0) || precioMin > precioMax) invalid('Invalid price range');
-  return { page, pageSize, q, categoria, sortBy, sortDirection, precioMin, precioMax, ...(ownerId === undefined ? {} : { ownerId }) };
+  return { page, pageSize, q, categoria, sortBy, sortDirection, precioMin, precioMax,
+    ...(estado === undefined ? {} : { estado }), ...(ownerId === undefined ? {} : { ownerId }),
+    ...(ownerId !== undefined && filter.searchOwnedFields === true ? { searchOwnedFields: true } : {}) };
 }

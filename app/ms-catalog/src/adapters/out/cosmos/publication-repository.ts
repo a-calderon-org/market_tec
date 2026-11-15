@@ -84,15 +84,25 @@ export class CosmosPublicationRepository implements PublicationRepository {
       clauses.push('c.categoria = @category');
       parameters.push({ name: '@category', value: query.categoria });
     }
+    if (query.estado) {
+      clauses.push(query.estado === 'activo'
+        ? '(c.estado = @estado OR NOT IS_DEFINED(c.estado))'
+        : 'c.estado = @estado');
+      parameters.push({ name: '@estado', value: query.estado });
+    }
     const needle = query.q.trim().toLocaleLowerCase('es');
     if (needle) {
-      clauses.push('CONTAINS(c.searchText, @needle)');
+      clauses.push(query.searchOwnedFields
+        ? "CONTAINS(LOWER(CONCAT(c.logicalId, ' ', c.titulo, ' ', c.categoria, ' ', c.subcategoria, ' ', c.ubicacion)), @needle)"
+        : 'CONTAINS(c.searchText, @needle)');
       parameters.push({ name: '@needle', value: needle });
     }
     const field = query.sortBy === 'precio' ? 'c.precio' : 'c.createdAtMs';
     const direction = query.sortDirection === 'asc' ? 'ASC' : 'DESC';
+    // Existing containers exclude estado and some dashboard search fields from the index.
+    const enableScanInQuery = query.estado || (needle && query.searchOwnedFields) ? true : undefined;
     const { items, totalRecords } = await this.store.page(clauses.join(' AND '), parameters,
-      field + ' ' + direction + ', c.sortId ASC', query.page, query.pageSize, deadline());
+      field + ' ' + direction + ', c.sortId ASC', query.page, query.pageSize, deadline(), enableScanInQuery);
     return { items: items.map(item => readPublication(item, this.store.partitionKey)), totalRecords };
   }
 }

@@ -35,10 +35,11 @@ import { Publication } from '../models/publication.model';
 describe('MyPublications con el catálogo interno', () => {
   it('muestra solo publicaciones del usuario de la sesión y reconoce el estado activo del catálogo', () => {
     const catalog = new Subject<Publication[]>();
+    const filtered = new Subject<Publication[]>();
     const deletion = new Subject<void>();
     const identity = { userId: 'usr-propietario', epoch: 1 };
     const service = {
-      getPublicationCatalog: vi.fn(() => catalog),
+      getOwnedPublications: vi.fn((filters?: unknown) => filters ? filtered : catalog),
       deletePublication: vi.fn(() => deletion),
       getUserPublications: vi.fn(),
     };
@@ -77,6 +78,16 @@ describe('MyPublications con el catálogo interno', () => {
     expect(view.publications().map(item => item.id)).toEqual(['monitor']);
     expect(view.totalRecords()).toBe(1);
     expect(view.activeCount()).toBe(1);
+
+    view.selectStatus('pausada');
+    expect(service.getOwnedPublications).toHaveBeenLastCalledWith({
+      q: '', categoria: undefined, estado: 'pausada', sortBy: 'fecha', sortDirection: 'desc',
+    });
+    filtered.next([]);
+    filtered.complete();
+    expect(view.publications()).toEqual([]);
+    expect(view.activeCount()).toBe(1);
+    view.resetFilters();
 
     const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
     try {

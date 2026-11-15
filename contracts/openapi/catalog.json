@@ -246,9 +246,22 @@
             "$ref": "#/components/parameters/PageSize"
           },
           {
+            "name": "propias",
+            "in": "query",
+            "description": "Con true, limita los resultados al propietario identificado por el JWT interno. Si se omite, consulta el catálogo general.",
+            "schema": { "type": "boolean", "enum": [true] }
+          },
+          {
+            "name": "estado",
+            "in": "query",
+            "description": "Filtro por estado persistido, disponible únicamente con propias=true.",
+            "schema": { "type": "string", "enum": ["activo", "pausada", "vendida"] }
+          },
+          {
             "name": "q",
             "in": "query",
             "required": false,
+            "description": "Busca en título y descripción en el catálogo general. Con propias=true, busca en el identificador, título, categoría, subcategoría y ubicación.",
             "schema": {
               "type": "string",
               "maxLength": 200

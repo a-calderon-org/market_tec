@@ -5,7 +5,7 @@
 | `/` → `Home` | catálogo completo por lotes, búsqueda/filtros/orden previos a paginación local e historial de búsquedas | `PublicationService`, `HomeFilterService`, `RecentSearchService` |
 | `/login` → `Login` | Google GIS y, con `authCoreV2`, solicitud de Magic Link institucional | `GoogleAuthService`, `LoginService`, `AuthSessionService` |
 | `/acceso/correo` → `EmailLinkCallback` | Lee `#attempt&token`, borra el fragmento y confirma por POST; abre el perfil | `AuthSessionService` |
-| `/mis-publicaciones` → `MyPublications` | estadísticas y filtros propios. Con catálogo interno selecciona las publicaciones del usuario de la sesión y permite eliminarlas con confirmación desde la columna Acciones. | `PublicationService` |
+| `/mis-publicaciones` → `MyPublications` | estadísticas de publicaciones propias. Con catálogo interno, la búsqueda, el estado, la categoría y el orden se aplican en el servidor. Permite eliminar con confirmación desde la columna Acciones. | `PublicationService` |
 | `/publicaciones/nueva` → `PublicationCreate` | formulario por categoría, vista previa local y POST. Electrónicos pide condición y punto de entrega, alquiler pide tipo de inmueble y zona, y tutoría pide materia y modalidad o lugar. | `PublicationService`, `PublicationFeedbackService` |
 | `/publicaciones/:id/editar` → `PublicationCreate` | precarga para el propietario del catálogo interno, guarda mediante PUT y vuelve a Mis publicaciones | `PublicationService`, `AuthSessionService`, `PublicationFeedbackService` |
 | `/publicaciones/:id` → `PublicationDetail` | detalle, galería y enlace a mensajería | `PublicationService` |

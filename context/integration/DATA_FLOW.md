@@ -33,6 +33,8 @@ El documento existente afirma validación backend antes de navegar, pero `signIn
 El propietario guarda el estado desde el detalle mediante `PUT` con `{ estado }`.
 El servicio verifica la propiedad y persiste el cambio con control de revisión.
 
+«Mis publicaciones» consulta `GET /v1/publicaciones?propias=true` a través del proxy del catálogo interno. El servicio limita por el sujeto autenticado y aplica los filtros y el orden antes de generar la página.
+
 En «Mis publicaciones», el catálogo con JWT interno envía `DELETE /v1/publicaciones/{id}` a través del proxy de catálogo tras la confirmación. Al recibir `204`, retira la fila y actualiza los contadores sin perder los filtros. El servicio verifica la propiedad y elimina el registro con control de concurrencia. Los archivos de imagen y las conversaciones se conservan.
 
 El listado devuelve `{ totalRecords, page, pageSize, items }`. Home solicita la primera página con hasta 100 elementos y continúa con el tamaño efectivo informado por la respuesta hasta reunir el catálogo; una recarga cancela la suscripción anterior. Deduplica por `id`, rechaza paginación inválida o resultados incompletos, aplica búsqueda, categoría, precio y orden al conjunto completo, calcula el total filtrado y finalmente toma la ventana local de 12 elementos. El alta envía categoría, subcategoría, título, descripción, precio, condición y ubicación; no envía previews, archivos ni `usuarioId`.

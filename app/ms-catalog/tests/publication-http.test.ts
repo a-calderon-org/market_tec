@@ -19,12 +19,14 @@ before(async () => {
   for (const price of [20, 10, 30]) {
     const result = await service.create({ userId: 'usr-test', seller: { id: 101, nombre: 'Ana', carrera: 'Computación', verificado: true } },
       { categoria: 'Electrónica', subcategoria: '', titulo: `Laptop ${price}`, descripcion: 'Prueba', precio: price,
-        condicion: null, ubicacion: '', imagenes: [] });
+        condicion: null, ubicacion: 'Campus San Carlos', imagenes: [] });
     id = result.id;
   }
+  await service.changeStatus({ userId: 'usr-test' }, id, 'pausada');
   const app = createApp(settings, { publications: service, async authenticate(request) {
     // Fake authentication exists only in this test suite.
     if (request.headers.authorization === 'Bearer throw') throw new Error('secret-auth-details');
+    if (request.headers.authorization === 'Bearer other') return { userId: 'usr-other' };
     return request.headers.authorization === 'Bearer test-only' ? { userId: 'usr-test' } : undefined;
   } });
   server = app.listen(0, '127.0.0.1');
@@ -65,8 +67,23 @@ test('HTTP detail returns original compatibility fields and missing resource giv
   assert.equal(Number.isInteger(error.timestamp), true);
 });
 
+test('owned listing filters by verified subject, persisted status and the dashboard search fields', async () => {
+  const query = '?propias=true&estado=pausada&categoria=Electr%C3%B3nica&q=San%20Carlos&sortBy=precio';
+  const response = await fetch(base + query, { headers });
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.equal(result.totalRecords, 1);
+  assert.equal(result.items[0].id, id);
+  assert.equal(result.items[0].estado, 'pausada');
+
+  const other = await fetch(base + query, { headers: { Authorization: 'Bearer other', 'X-User-ID': 'usr-test' } });
+  assert.equal(other.status, 200);
+  assert.equal((await other.json()).totalRecords, 0);
+});
+
 for (const query of ['page=0', 'page=1.5', 'pageSize=101', 'page=1&page=2', 'page=', 'page=1e2', 'precioMin=NaN',
-  'precioMin=-1', 'precioMax=1e999', 'precioMin=30&precioMax=10', 'sortBy=bad', 'sortDirection=bad', 'sortDir=asc', 'q[x]=a', 'userId=usr-test']) {
+  'precioMin=-1', 'precioMax=1e999', 'precioMin=30&precioMax=10', 'sortBy=bad', 'sortDirection=bad', 'sortDir=asc', 'q[x]=a',
+  'userId=usr-test', 'propias=false', 'estado=activo', 'propias=true&estado=all', 'propias=true&propias=true']) {
   test(`HTTP rejects invalid query: ${query}`, async () => {
     const response = await fetch(`${base}?${query}`, { headers });
     assert.equal(response.status, 400);

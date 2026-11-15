@@ -35,9 +35,10 @@ test('Cosmos selects a partition, shares predicates across count/list and drains
   const calls: SqlQuerySpec[] = [];
   const store = new CosmosStore({
     items: {
-      query(spec: SqlQuerySpec, options: { partitionKey: string; abortSignal: AbortSignal }) {
+      query(spec: SqlQuerySpec, options: { partitionKey: string; abortSignal: AbortSignal; enableScanInQuery?: boolean }) {
         assert.equal(options.partitionKey, pk);
         assert.ok(options.abortSignal);
+        assert.equal(options.enableScanInQuery, true);
         calls.push(spec);
         const pages = spec.query.startsWith('SELECT VALUE') ? [[], [8]] : [[], [document]];
         return { hasMoreResults: () => pages.length > 0, async fetchNext() { return { resources: pages.shift() }; } };
@@ -45,7 +46,8 @@ test('Cosmos selects a partition, shares predicates across count/list and drains
     },
   } as unknown as Container, pk);
   const repo = new CosmosPublicationRepository(store);
-  const query = normalizeQuery({ q: " ÁLBUM' ", page: 2, pageSize: 2, precioMax: 20 }, 'seller');
+  const query = normalizeQuery({ q: " ÁLBUM' ", page: 2, pageSize: 2, precioMax: 20,
+    estado: 'activo', searchOwnedFields: true }, 'seller');
   const result = await repo.search(query);
   assert.deepEqual(result, { items: [publicationFixture], totalRecords: 8 });
   assert.equal(calls.length, 2);
@@ -53,6 +55,10 @@ test('Cosmos selects a partition, shares predicates across count/list and drains
   const list = calls[1]!;
   assert.equal(count.query.split(' WHERE ')[1], list.query.split(' WHERE ')[1]?.split(' ORDER BY ')[0]);
   assert.doesNotMatch(list.query, /álbum/);
+  assert.match(list.query, /c.ownerId = @owner/);
+  assert.match(list.query, /c.estado = @estado OR NOT IS_DEFINED\(c.estado\)/);
+  assert.match(list.query, /CONCAT\(c.logicalId.*c.ubicacion\)/);
+  assert.ok(list.parameters?.some(parameter => parameter.name === '@estado' && parameter.value === 'activo'));
   assert.deepEqual(list.parameters?.slice(0, -2), count.parameters);
   assert.deepEqual(list.parameters?.slice(-2), [{ name: '@offset', value: 2 }, { name: '@limit', value: 2 }]);
 });
