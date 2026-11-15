@@ -171,10 +171,13 @@ test('internal-jwt list forwards encoded filters and rejects repeated or unknown
   const query = '?page=2&pageSize=12&categoria=Tutor%C3%ADa&q=C%2B%2B%20%26%20c%C3%A1lculo&sortBy=precio&sortDirection=asc&precioMin=0&precioMax=1e%2B6';
   assert.equal((await handle(req('GET', path + query, headers), V2, up.deps)).status, 200);
   assert.equal(up.calls[0].url, `${V2.upstream}/v1/publicaciones${query}`);
+  const owned = '?propias=true&estado=vendida&q=San%20Carlos';
+  assert.equal((await handle(req('GET', path + owned, headers), V2, up.deps)).status, 200);
+  assert.equal(up.calls[1].url, `${V2.upstream}/v1/publicaciones${owned}`);
   for (const invalid of ['?q=a&%71=b', '?sortDir=asc', '?q=' + 'a'.repeat(4000)]) {
     assert.equal((await handle(req('GET', path + invalid, headers), V2, up.deps)).status, 400);
   }
-  assert.equal(up.calls.length, 1);
+  assert.equal(up.calls.length, 2);
 });
 
 test('internal-jwt mode adds an optional APIM key and accepts an API base path upstream', async () => {

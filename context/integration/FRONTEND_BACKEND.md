@@ -9,9 +9,13 @@ proxy `/api/catalog-v2` existe en `main` como destino del JWT interno. Su
 validación con APIM y sesiones reales sigue pendiente. Consultar la
 [guía de ms-catalog](../../app/ms-catalog/README.md#mtec-32--api-http-de-publicaciones).
 
-Con `catalogInternalJwt`, «Mis publicaciones» recorre las páginas del catálogo y
-selecciona las filas cuyo `vendedor.userId` coincide con la sesión activa. El
-total de la vista cuenta únicamente las coincidencias.
+Con `catalogInternalJwt`, «Mis publicaciones» recorre las páginas de
+`GET /v1/publicaciones?propias=true`. El catálogo obtiene el propietario del
+JWT interno y aplica búsqueda, estado, categoría y orden antes de paginar.
+La consulta propia sin filtros alimenta las estadísticas y las opciones de
+categoría, que se mantienen al filtrar la tabla.
+Para desplegar esta integración, actualizar primero ms-catalog y comprobar
+la consulta propia autenticada antes de publicar el frontend y su proxy.
 
 «Editar» abre `/publicaciones/:id/editar`. La vista carga el detalle y comprueba
 que `vendedor.userId` coincide con la sesión activa. Guardar envía el contenido
@@ -32,7 +36,8 @@ La SPA no apunta automáticamente a `app/backend`. Todas las peticiones feature 
 | `GET /publicaciones/{id}` | id string | `PublicationDetail` | Detalle |
 | `POST /publicaciones` | `CreatePublication` | cuerpo ignorado (`void`) | Alta |
 | `GET /usuarios/{id}/publicaciones` | id string | `PaginatedResponse<UserPublication>` | Mis publicaciones en el flujo legado |
-| `GET /v1/publicaciones` (catálogo interno) | JWT interno, página y tamaño | `PaginatedResponse<Publication>` | Explorar y Mis publicaciones |
+| `GET /v1/publicaciones` (catálogo interno) | JWT interno, página y tamaño | `PaginatedResponse<Publication>` | Explorar |
+| `GET /v1/publicaciones?propias=true` | JWT interno, paginación y filtros opcionales `q`, `categoria`, `estado`, `sortBy` y `sortDirection` | `PaginatedResponse<Publication>` | Mis publicaciones |
 | `GET /usuarios/{id}` | id string | `User` | Perfil |
 | `PUT /usuarios/{id}` | `UpdateUser` | `UpdateUserResponse` | Perfil |
 | `GET /v1/me/profile` (solo `authCoreV2` + adaptador `http`) | — (JWT interno) | `UserProfileV1` → `User` | Perfil |

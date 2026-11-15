@@ -17,6 +17,14 @@ import { Publication } from '../models/publication.model';
 import { UserPublication } from '../models/my-publications.model';
 import { CreatePublication, UpdatePublication } from '../models/publication-create.model';
 
+export interface OwnedPublicationFilters {
+  readonly q?: string;
+  readonly categoria?: string;
+  readonly estado?: 'activo' | 'pausada' | 'vendida';
+  readonly sortBy?: 'precio' | 'fecha';
+  readonly sortDirection?: 'asc' | 'desc';
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -43,7 +51,11 @@ export class PublicationService {
   }
 
   getPublications(page: number, pageSize: number): Observable<PaginatedResponse<Publication>> {
-    const params = new HttpParams()
+    return this.getPublicationPage(page, pageSize, new HttpParams());
+  }
+
+  private getPublicationPage(page: number, pageSize: number, filters: HttpParams): Observable<PaginatedResponse<Publication>> {
+    const params = filters
       .set('page', page)
       .set('pageSize', pageSize);
 
@@ -56,10 +68,24 @@ export class PublicationService {
   getPublicationCatalog(
     pageSize = 100
   ): Observable<Publication[]> {
+    return this.collectPublicationPages(pageSize, (page, size) => this.getPublications(page, size));
+  }
+
+  getOwnedPublications(filters: OwnedPublicationFilters = {}): Observable<Publication[]> {
+    let params = new HttpParams().set('propias', 'true');
+    for (const [key, value] of Object.entries(filters)) {
+      if (value) params = params.set(key, value);
+    }
+    return this.collectPublicationPages(100, (page, size) => this.getPublicationPage(page, size, params));
+  }
+
+  private collectPublicationPages(pageSize: number,
+    getPage: (page: number, size: number) => Observable<PaginatedResponse<Publication>>
+  ): Observable<Publication[]> {
     return defer(() => {
       const visitedPages = new Set<number>();
 
-      return this.getPublications(1, pageSize).pipe(
+      return getPage(1, pageSize).pipe(
         expand((response) => {
           if (
             response.pageSize <= 0 ||
@@ -78,10 +104,7 @@ export class PublicationService {
           );
 
           return response.page < totalPages
-            ? this.getPublications(
-                response.page + 1,
-                response.pageSize
-              )
+            ? getPage(response.page + 1, response.pageSize)
             : EMPTY;
         }),
         reduce(

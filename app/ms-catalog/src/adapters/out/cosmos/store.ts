@@ -157,10 +157,12 @@ export class CosmosStore {
     }
   }
 
-  private async query<T>(operation: 'list' | 'count', spec: SqlQuerySpec, signal: AbortSignal): Promise<T[]> {
+  private async query<T>(operation: 'list' | 'count', spec: SqlQuerySpec, signal: AbortSignal,
+    enableScanInQuery?: true): Promise<T[]> {
     const iterator = this.container.items.query<T>(spec, {
       partitionKey: this.partitionKey,
       abortSignal: signal,
+      ...(enableScanInQuery ? { enableScanInQuery } : {}),
     });
     const items: T[] = [];
     while (iterator.hasMoreResults()) {
@@ -175,13 +177,13 @@ export class CosmosStore {
   }
 
   async page(where: string, parameters: SqlParameter[], order: string, page: number, pageSize: number,
-    signal: AbortSignal): Promise<{ items: unknown[]; totalRecords: number }> {
+    signal: AbortSignal, enableScanInQuery?: true): Promise<{ items: unknown[]; totalRecords: number }> {
     const offset = (page - 1) * pageSize;
     if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
       throw new CosmosPersistenceError('list');
     }
     const from = ' FROM c WHERE ' + where;
-    const counts = await this.query<number>('count', { query: 'SELECT VALUE COUNT(1)' + from, parameters }, signal);
+    const counts = await this.query<number>('count', { query: 'SELECT VALUE COUNT(1)' + from, parameters }, signal, enableScanInQuery);
     const totalRecords = counts[0];
     if (counts.length !== 1 || typeof totalRecords !== 'number' || !Number.isSafeInteger(totalRecords) || totalRecords < 0) {
       throw new CosmosPersistenceError('count');
@@ -191,7 +193,7 @@ export class CosmosStore {
     const items = await this.query<unknown>('list', {
       query: 'SELECT *' + from + ' ORDER BY ' + order + ' OFFSET @offset LIMIT @limit',
       parameters: [...parameters, { name: '@offset', value: offset }, { name: '@limit', value: pageSize }],
-    }, signal);
+    }, signal, enableScanInQuery);
     if (items.length > pageSize) throw new CosmosPersistenceError('list');
     return { items, totalRecords };
   }

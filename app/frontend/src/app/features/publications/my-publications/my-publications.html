@@ -192,6 +192,7 @@
 
               <input
                 type="search"
+                maxlength="200"
                 placeholder="Buscar en mis publicaciones..."
                 [value]="searchTerm()"
                 (input)="onSearch($event)"
@@ -240,7 +241,9 @@
           </div>
         </div>
 
-        @if (publications().length > 0) {
+        @if (filtering()) {
+          <p class="state-message" role="status">Buscando tus publicaciones...</p>
+        } @else if (publications().length > 0) {
 
           <div class="table-wrapper">
             <table class="publications-table">

@@ -2,6 +2,10 @@
 
 ## API de publicaciones de ms-catalog
 
+`GET /v1/publicaciones?propias=true` devuelve la página de publicaciones del
+propietario identificado por el JWT interno. El filtro `estado` se admite en
+esta consulta, junto con búsqueda, categoría y orden.
+
 `DELETE /v1/publicaciones/{id}` elimina la publicación propia y devuelve `204` sin cuerpo. La propiedad se obtiene del JWT interno. Una publicación inexistente devuelve `404` y un cambio concurrente devuelve `409`.
 
 `PUT /v1/publicaciones/{publicationId}` admite un cuerpo con solo `estado` para que

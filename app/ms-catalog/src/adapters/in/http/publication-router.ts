@@ -10,7 +10,7 @@ export interface PublicationWrites {
 }
 
 export interface PublicationHttpDependencies {
-  readonly publications: Pick<Publications, 'list' | 'get'>;
+  readonly publications: Pick<Publications, 'list' | 'listOwned' | 'get'>;
   // Must verify credentials before returning an opaque internal userId.
   // This callback is trusted server composition, never a browser identity header.
   readonly authenticate: (request: Request) => Promise<AuthenticatedPrincipal | undefined>;
@@ -27,9 +27,9 @@ function parseContent(body: unknown): PublicationContent {
   return content;
 }
 
-const allowedKeys = new Set(['page', 'pageSize', 'q', 'categoria', 'sortBy', 'sortDirection', 'precioMin', 'precioMax']);
+const allowedKeys = new Set(['page', 'pageSize', 'q', 'categoria', 'sortBy', 'sortDirection', 'precioMin', 'precioMax', 'propias', 'estado']);
 
-function parseFilter(request: Request): PublicationFilter {
+function parseFilter(request: Request): { filter: PublicationFilter; owned: boolean } {
   // URLSearchParams retains duplicates even if Express changes its query parser.
   const params = new URL(request.originalUrl, 'http://catalog.invalid').searchParams;
   const values: Record<string, string> = {};
@@ -37,8 +37,11 @@ function parseFilter(request: Request): PublicationFilter {
     if (!allowedKeys.has(key) || Object.hasOwn(values, key)) invalid('Unknown or repeated query parameter');
     values[key] = value;
   }
+  const { propias, ...filters } = values;
+  if (propias !== undefined && propias !== 'true') invalid('Invalid ownership scope');
+  if (filters.estado !== undefined && propias !== 'true') invalid('Status requires the ownership scope');
   const filter: Record<string, string | number> = {};
-  for (const [key, value] of Object.entries(values)) {
+  for (const [key, value] of Object.entries(filters)) {
     if (['page', 'pageSize', 'precioMin', 'precioMax'].includes(key)) {
       const pattern = key === 'page' || key === 'pageSize' ? /^\d+$/ : /^\d+(?:\.\d+)?(?:e[+-]?\d+)?$/i;
       if (!pattern.test(value)) invalid('Invalid numeric query parameter');
@@ -48,7 +51,7 @@ function parseFilter(request: Request): PublicationFilter {
     }
   }
   // Enum and range checks remain owned by the application/domain.
-  return filter as PublicationFilter;
+  return { filter: filter as PublicationFilter, owned: propias === 'true' };
 }
 
 export function createPublicationRouter(dependencies: PublicationHttpDependencies): Router {
@@ -102,7 +105,10 @@ export function createPublicationRouter(dependencies: PublicationHttpDependencie
     });
   }
   router.get('/', async (request, response) => {
-    response.json(await dependencies.publications.list(parseFilter(request)));
+    const { filter, owned } = parseFilter(request);
+    response.json(owned
+      ? await dependencies.publications.listOwned({ userId: identities.get(request)!.userId }, { ...filter, searchOwnedFields: true })
+      : await dependencies.publications.list(filter));
   });
   router.get('/:publicationId', async (request, response) => {
     response.json(await dependencies.publications.get(request.params.publicationId as string));

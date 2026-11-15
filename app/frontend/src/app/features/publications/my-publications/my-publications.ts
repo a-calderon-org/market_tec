@@ -1,10 +1,11 @@
 import { Component, computed, DestroyRef, inject, OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
-import { finalize, map, Subscription } from 'rxjs';
+import { finalize, map, of, Subscription, switchMap, timer } from 'rxjs';
 import { AuthSessionService } from '../../../core/auth/v2/auth-session.service';
 import { FEATURE_FLAGS } from '../../../core/feature-flags';
 import { UserPublication } from '../models/my-publications.model';
+import { Publication } from '../models/publication.model';
 import { PublicationService } from '../services/publication.service';
 
 type PublicationStatusFilter =
@@ -36,6 +37,9 @@ export class MyPublications implements OnInit {
   private readonly session = this.useInternalCatalog ? inject(AuthSessionService) : null;
   private readonly destroyRef = inject(DestroyRef);
   private request?: Subscription;
+  private filteredRequest?: Subscription;
+  private readonly ownedResults = signal<UserPublication[] | null>(null);
+  readonly filtering = signal(false);
 
   /** Solo flujo legado (authCoreV2=false). Con authCoreV2 nunca se usa. */
   private readonly currentUserId = 'USR-001';
@@ -120,6 +124,7 @@ export class MyPublications implements OnInit {
   );
 
   readonly publications = computed(() => {
+    if (this.useInternalCatalog) return this.ownedResults() ?? this.allPublications();
     const search =
       this.searchTerm()
         .trim()
@@ -196,6 +201,9 @@ export class MyPublications implements OnInit {
 
   loadPublications(): void {
     this.request?.unsubscribe();
+    this.filteredRequest?.unsubscribe();
+    this.ownedResults.set(null);
+    this.filtering.set(false);
     this.loading.set(true);
     this.error.set(false);
     this.unavailable.set(false);
@@ -212,14 +220,9 @@ export class MyPublications implements OnInit {
     }
 
     const result = identity
-      ? this.publicationService.getPublicationCatalog().pipe(
+      ? this.publicationService.getOwnedPublications().pipe(
           map(catalog => {
-            const items = catalog
-              .filter(publication => publication.vendedor?.userId === identity.userId)
-              .map(publication => ({
-                ...publication,
-                estado: publication.estado === 'activo' ? 'activa' : publication.estado,
-              }));
+            const items = this.toOwnedRows(catalog, identity.userId);
             return { items, totalRecords: items.length, page: 1, pageSize: Math.max(10, items.length) };
           }),
         )
@@ -251,6 +254,7 @@ export class MyPublications implements OnInit {
           );
 
           this.loading.set(false);
+          if (identity) this.loadOwnedResults();
         },
 
         error: () => {
@@ -262,10 +266,64 @@ export class MyPublications implements OnInit {
       });
   }
 
+  private toOwnedRows(items: Publication[], userId: string): UserPublication[] {
+    return items
+      .filter(item => item.vendedor?.userId === userId)
+      .map(item => ({ ...item, estado: item.estado === 'activo' ? 'activa' : item.estado }));
+  }
+
+  private loadOwnedResults(delay = 0): void {
+    if (!this.useInternalCatalog || this.loading()) return;
+    this.filteredRequest?.unsubscribe();
+    const session = this.session;
+    const identity = session?.currentIdentity();
+    const q = this.searchTerm().trim();
+    const categoria = this.selectedCategory();
+    const status = this.selectedStatus();
+    const sort = this.sortBy();
+    if (identity && !q && !categoria && status === 'all' && sort === 'recent') {
+      this.ownedResults.set(null);
+      this.filtering.set(false);
+      return;
+    }
+    if (!identity) {
+      this.loadPublications();
+      return;
+    }
+
+    this.filtering.set(true);
+    this.filteredRequest = (delay ? timer(delay) : of(0)).pipe(
+      switchMap(() => this.publicationService.getOwnedPublications({
+        q,
+        categoria: categoria ?? undefined,
+        estado: status === 'all' ? undefined : status === 'activa' ? 'activo' : status,
+        sortBy: sort.startsWith('price') ? 'precio' : 'fecha',
+        sortDirection: sort === 'oldest' || sort === 'price-asc' ? 'asc' : 'desc'
+      })),
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => this.filtering.set(false))
+    ).subscribe({
+      next: items => {
+        if (!session?.isCurrentIdentity(identity)) {
+          this.ownedResults.set([]);
+          this.allPublications.set([]);
+          this.totalRecords.set(0);
+          this.error.set(true);
+          return;
+        }
+        this.ownedResults.set(this.toOwnedRows(items, identity.userId));
+      },
+      error: () => {
+        this.ownedResults.set([]);
+        this.error.set(true);
+      }
+    });
+  }
+
   deletePublication(publication: UserPublication): void {
     const session = this.session;
     const identity = session?.currentIdentity();
-    if (!session || !identity || this.deletingId() || !this.allPublications().includes(publication)) return;
+    if (!session || !identity || this.deletingId() || !this.publications().includes(publication)) return;
     if (!window.confirm(`¿Eliminar «${publication.titulo}»?`) || !session.isCurrentIdentity(identity)) return;
 
     this.deleteError.set(false);
@@ -278,6 +336,8 @@ export class MyPublications implements OnInit {
         if (!session.isCurrentIdentity(identity)) return;
         this.allPublications.update(items => items.filter(item => item.id !== publication.id));
         this.totalRecords.set(this.allPublications().length);
+        this.ownedResults.update(items => items?.filter(item => item.id !== publication.id) ?? null);
+        if (this.filtering()) this.loadOwnedResults();
       },
       error: () => {
         if (session.isCurrentIdentity(identity)) this.deleteError.set(true);
@@ -289,6 +349,7 @@ export class MyPublications implements OnInit {
     status: PublicationStatusFilter
   ): void {
     this.selectedStatus.set(status);
+    this.loadOwnedResults();
   }
 
   onSearch(event: Event): void {
@@ -298,6 +359,7 @@ export class MyPublications implements OnInit {
     this.searchTerm.set(
       input.value
     );
+    this.loadOwnedResults(250);
   }
 
   onCategoryChange(
@@ -309,6 +371,7 @@ export class MyPublications implements OnInit {
     this.selectedCategory.set(
       select.value || null
     );
+    this.loadOwnedResults();
   }
 
   onSortChange(
@@ -320,6 +383,7 @@ export class MyPublications implements OnInit {
     this.sortBy.set(
       select.value as PublicationSortOption
     );
+    this.loadOwnedResults();
   }
 
   resetFilters(): void {
@@ -327,6 +391,7 @@ export class MyPublications implements OnInit {
     this.selectedStatus.set('all');
     this.selectedCategory.set(null);
     this.sortBy.set('recent');
+    this.loadOwnedResults();
   }
 
   formatPrice(

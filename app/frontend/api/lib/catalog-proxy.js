@@ -31,7 +31,7 @@ const MODES = {
     keyRequired: false, update: true, basePath: true },
 };
 const QUERY = /^\?[A-Za-z0-9=&._-]{1,256}$/;
-const FILTER_QUERY_KEYS = new Set(['page', 'pageSize', 'q', 'categoria', 'sortBy', 'sortDirection', 'precioMin', 'precioMax']);
+const FILTER_QUERY_KEYS = new Set(['page', 'pageSize', 'q', 'categoria', 'sortBy', 'sortDirection', 'precioMin', 'precioMax', 'propias', 'estado']);
 const BEARER = /^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 const REQUEST_HEADERS = ['accept', 'content-type'];
 const RESPONSE_HEADERS = ['content-type', 'www-authenticate', 'retry-after'];

@@ -338,7 +338,9 @@ pueden combinar.
 | Parámetro | Comportamiento |
 |---|---|
 | `categoria` | Coincidencia exacta, hasta 100 caracteres. Vacío omite el filtro. |
-| `q` | Subcadena en el título y la descripción, hasta 200 caracteres. Quita espacios en los extremos e ignora mayúsculas. Conserva los acentos. |
+| `propias` | `true` limita la consulta al propietario identificado por el JWT interno. |
+| `estado` | Con `propias=true`, filtra por `activo`, `pausada` o `vendida`. Los registros antiguos sin estado cuentan como activos. |
+| `q` | Subcadena de hasta 200 caracteres. En el catálogo general busca en título y descripción. Con `propias=true`, busca en identificador, título, categoría, subcategoría y ubicación. Ignora mayúsculas y conserva los acentos. |
 | `precioMin`, `precioMax` | Límites inclusivos y no negativos. Aceptan decimales y notación científica. |
 | `sortBy`, `sortDirection` | `fecha` o `precio`, `asc` o `desc`. Predeterminado `fecha` descendente. Los empates se resuelven por ID ascendente. |
 | `page`, `pageSize` | Enteros positivos. Predeterminados `1` y `12`. Tamaño máximo `100`. |
