@@ -4,6 +4,8 @@
 
 `main.ts` usa `bootstrapApplication(App, appConfig)`. `app.config.ts` configura router, `HttpClient`, interceptor y `provideZonelessChangeDetection`. Las rutas se cargan de forma eager y el wildcard vuelve a `/`.
 
+Pantalla de carga inicial: `src/index.html` contiene `#mtec-boot` (marca, spinner y `role="status"`, CSS en línea) visible desde el primer pintado. `core/boot/boot-splash.ts` (`BootSplash`, registrado con `provideAppInitializer`) la retira al terminar la primera navegación —que en rutas con `authGuard`/`guestGuard` espera a `restoreSession()`—, avisa de arranque lento a los 5 s y ofrece «Reintentar» a los 60 s (`BOOT_SPLASH_TIMING`). Reintentar repite la navegación inicial y se une a la demanda en vuelo del `SessionCoordinator`. Si Angular no llega a arrancar, un respaldo en línea de `index.html` muestra el error a los 20 s y su «Reintentar» recarga el documento.
+
 ## Capas observadas
 
 ```text
