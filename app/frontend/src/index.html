@@ -25,8 +25,115 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=3" />
     <link rel="icon" type="image/x-icon" sizes="16x16 32x32 48x48" href="/favicon.ico?v=3" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=3" />
+    <!-- Pantalla de carga inicial: CSS en línea para pintarse antes de descargar Angular (ver core/boot/boot-splash.ts). -->
+    <style>
+      .mtec-boot {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px 16px;
+        background: #f8f7fc;
+        color: #172033;
+        font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        opacity: 1;
+        transition: opacity 0.2s ease;
+      }
+      :root[data-theme='dark'] .mtec-boot { background: #131314; color: #f1f3f4; }
+      .mtec-boot[data-state='done'] { opacity: 0; pointer-events: none; }
+      .mtec-boot__panel {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 20px;
+        width: 100%;
+        max-width: 360px;
+        text-align: center;
+      }
+      .mtec-boot__brand { display: inline-flex; gap: 11px; align-items: center; }
+      .mtec-boot__logo { width: 52px; height: 46px; flex: 0 0 auto; overflow: visible; }
+      .mtec-boot__wordmark { font-size: 1.6rem; font-weight: 800; line-height: 1; letter-spacing: -0.045em; }
+      .mtec-boot__wordmark span { color: #18a8d8; }
+      .mtec-boot__spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid rgb(3 151 196 / 18%);
+        border-top-color: #0397c4;
+        border-radius: 50%;
+        animation: mtec-boot-spin 0.8s linear infinite;
+      }
+      :root[data-theme='dark'] .mtec-boot__spinner { border-color: rgb(168 199 250 / 18%); border-top-color: #18a8d8; }
+      .mtec-boot__message { margin: 0; font-size: 1rem; line-height: 1.5; }
+      .mtec-boot__retry {
+        display: none;
+        padding: 10px 22px;
+        border: 0;
+        border-radius: 999px;
+        background: #00628f;
+        color: #fff;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      :root[data-theme='dark'] .mtec-boot__retry { background: #a8c7fa; color: #062e6f; }
+      .mtec-boot__retry:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+      .mtec-boot[data-state='failed'] .mtec-boot__spinner { display: none; }
+      .mtec-boot[data-state='failed'] .mtec-boot__retry { display: inline-block; }
+      @keyframes mtec-boot-spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) {
+        .mtec-boot { transition: none; }
+        .mtec-boot__spinner { animation-duration: 2.4s; }
+      }
+    </style>
   </head>
   <body>
+    <div id="mtec-boot" class="mtec-boot" data-state="loading" aria-busy="true">
+      <div class="mtec-boot__panel">
+        <span class="mtec-boot__brand" aria-hidden="true">
+          <svg class="mtec-boot__logo" viewBox="0 0 52 46">
+            <defs>
+              <linearGradient id="mtec-boot-logo-gradient" x1="6" y1="5" x2="43" y2="42">
+                <stop offset="0" stop-color="#0397c4"></stop>
+                <stop offset="1" stop-color="#00897f"></stop>
+              </linearGradient>
+            </defs>
+            <path
+              fill="url(#mtec-boot-logo-gradient)"
+              d="M8 10h8V6.5A4.5 4.5 0 0 1 20.5 2h11A4.5 4.5 0 0 1 36 6.5V10h3a7 7 0 0 1 7 7v20a7 7 0 0 1-7 7H8a7 7 0 0 1-7-7V17a7 7 0 0 1 7-7Zm13-3.5V10h10V6.5a.5.5 0 0 0-.5-.5h-9a.5.5 0 0 0-.5.5Z"
+            ></path>
+            <path fill="#fff" d="M23.5 17c.6 5.8 3.2 8.4 9 9-5.8.6-8.4 3.2-9 9-.6-5.8-3.2-8.4-9-9 5.8-.6 8.4-3.2 9-9Z"></path>
+            <circle cx="41" cy="8" r="6" fill="#8fbd36"></circle>
+            <circle cx="43" cy="6" r="2.5" fill="#b7d84b" opacity=".8"></circle>
+          </svg>
+          <span class="mtec-boot__wordmark">Market<span>Tec</span></span>
+        </span>
+        <div class="mtec-boot__spinner" aria-hidden="true"></div>
+        <p class="mtec-boot__message" role="status" aria-live="polite" data-boot-message>Cargando MarketTEC...</p>
+        <button class="mtec-boot__retry" type="button" data-boot-retry>Reintentar</button>
+      </div>
+    </div>
+    <script>
+      // Respaldo previo a Angular: si el bundle no llega a ejecutarse, no se deja un spinner indefinido.
+      // Cuando Angular arranca marca data-owner="app" y asume el control (tiempos y «Reintentar»).
+      (() => {
+        const PRE_BOOT_FAILURE_MS = 20000;
+        const boot = document.getElementById('mtec-boot');
+        if (!boot) return;
+        const ownedByApp = () => boot.dataset.owner === 'app';
+        setTimeout(() => {
+          if (ownedByApp() || boot.dataset.state !== 'loading') return;
+          boot.dataset.state = 'failed';
+          boot.setAttribute('aria-busy', 'false');
+          boot.querySelector('[data-boot-message]').textContent =
+            'Estamos teniendo problemas para conectar con los servicios. Inténtalo nuevamente.';
+        }, PRE_BOOT_FAILURE_MS);
+        boot.querySelector('[data-boot-retry]').addEventListener('click', () => {
+          if (!ownedByApp()) window.location.reload();
+        });
+      })();
+    </script>
     <app-root></app-root>
   </body>
 </html>
